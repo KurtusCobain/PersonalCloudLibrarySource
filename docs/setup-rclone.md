@@ -75,11 +75,18 @@ For Google Drive or OneDrive, use the remote name you created in `rclone config`
 
 The provider settings screen maps directly to these rclone values: executable path, remote name, manifest path, optional content root, and timeout.
 
+`RcloneRemote` reads manifests with `rclone cat`.
+
+Downloads use:
+
+- `rclone copyto` for `sourceType = file`
+- `rclone copy` for `sourceType = directory`
+
 ## Generate a Manifest from an Rclone Remote
 
 ```powershell
 .\tools\generate-manifest.ps1 `
-  -RcloneRemoteRoot "gdrive:RomCade" `
+  -RcloneRemoteRoot "gdrive:PersonalLibrary" `
   -OutputPath ".\personal-cloud-library.generated.json" `
   -Overwrite
 ```
@@ -88,7 +95,7 @@ You can also keep using the thin compatibility wrapper:
 
 ```powershell
 .\tools\generate-rclone-manifest.ps1 `
-  -RcloneRemoteRoot "gdrive:RomCade" `
+  -RcloneRemoteRoot "gdrive:PersonalLibrary" `
   -OutputPath ".\personal-cloud-library.generated.json" `
   -Overwrite
 ```
@@ -117,4 +124,4 @@ The incorrect example resolves to:
 PersonalLibrary/files/PersonalLibrary/files/Game/Game.exe
 ```
 
-The manifest validation button warns when it sees this likely path-doubling mistake.
+The manifest validation button warns when it sees this likely path-doubling mistake. If `RcloneContentRoot` already points at `PersonalLibrary/files`, item `sourcePath` values should start below that point, not repeat it.

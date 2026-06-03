@@ -51,6 +51,7 @@ $DefaultIgnoredExtensions = @(
 )
 
 $DefaultExcludedFolders = @(
+    # Legacy compatibility ignore for older private library layouts.
     "ROMcade_Data",
     "CloudLibrary",
     "MetadataCache",

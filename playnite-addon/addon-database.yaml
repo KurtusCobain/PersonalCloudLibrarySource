@@ -8,13 +8,13 @@ SourceUrl: https://github.com/KurtusCobain/PersonalCloudLibrarySource
 IconUrl: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/PersonalCloudLibrarySource/icon.png
 
 Description: |
-  Personal Cloud Library Source lets you keep a user-supplied personal library catalog inside Playnite. Entries can appear before they are downloaded, be enriched with Playnite metadata, copied or downloaded to a local cache when needed, launched locally, and later uninstalled from the cache while keeping the catalog entry.
+  Personal Cloud Library Source imports a user-supplied personal library catalog into Playnite. Entries can appear before they are downloaded, be enriched with Playnite metadata, copied or downloaded to a local cache when needed, launched locally, and later uninstalled from the cache while keeping the catalog entry.
 
   Manifest generation update completed 6/2/2026
 
-  Supports LocalFile, LocalFolder, and RcloneRemote providers. Google Drive, OneDrive, Dropbox, and similar cloud services are supported through rclone. Local folders, external drives, mapped drives, synced cloud folders, and NAS paths are supported directly. Local/external/mapped/NAS setups do not require rclone. Rclone is optional and only needed for rclone remote scanning.
+  Supports LocalFile, LocalFolder, and RcloneRemote providers. Local folders, external drives, mapped drives, synced cloud folders, and NAS paths are supported directly. Google Drive, OneDrive, Dropbox, and similar cloud services are supported through rclone when users choose the RcloneRemote provider.
 
-  This is not a gameplay streaming service. It does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, storefront access, or download sources. It catalogs user-supplied entries and copies or downloads user-owned files from configured local folders or rclone remotes.
+  This does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, storefront access, or download sources.
 Tags:
   - library
   - cloud

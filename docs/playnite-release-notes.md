@@ -2,9 +2,11 @@
 
 Manifest generation update completed 6/2/2026
 
-## 0.1.1
+## Unreleased
 
 Personal Cloud Library Source imports a user-supplied JSON manifest into Playnite as a normal library source.
+
+The add-on browser package is still `0.1.1`. The notes below describe the next documentation and manifest-generator update that is not yet packaged in a newer `.pext` release.
 
 Highlights:
 
