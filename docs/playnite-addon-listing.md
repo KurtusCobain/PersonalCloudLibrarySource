@@ -1,10 +1,10 @@
-# Playnite Add-on Listing Draft
+# Playnite Add-on Listing Reference
 
 ![Personal Cloud Library Source workflow](images/pcls-workflow.png)
 
 ## Short Description
 
-Import a user-supplied cloud, NAS, external-drive, or local manifest into Playnite's normal library view.
+Import a user-supplied cloud, NAS, external drive, or local manifest into Playnite's normal library view.
 
 Manifest generation update completed 6/2/2026
 

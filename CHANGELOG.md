@@ -12,17 +12,21 @@
 
 ## 0.1.1
 
-- Added provider-based import modes for LocalFile, LocalFolder, and RcloneRemote.
-- Added manual `Download to local cache` support for missing entries with source paths.
-- Added `sourcePath` and `cachePath` manifest fields while keeping legacy compatibility.
+- Added provider-based import modes:
+  - `LocalFile`
+  - `LocalFolder`
+  - `RcloneRemote`
+- Added manual **Download to local cache** support for missing entries with valid source paths.
+- Added `sourcePath` and `cachePath` manifest fields while keeping legacy manifest compatibility.
 - Added optional import diagnostics.
 - Added configurable library display name.
-- Added public prerelease packaging script and documentation.
+- Added packaging script and release documentation.
+- Updated documentation for public installation through Playnite’s official add-on browser.
 
 ## 0.1.0
 
-- Initial MVP.
-- Local JSON manifest import.
-- Settings UI.
-- Fake sample manifest.
-- Fake local cache launchers for testing.
+- Initial MVP release.
+- Added local JSON manifest import.
+- Added settings UI.
+- Added fake sample manifest for testing.
+- Added fake local cache launchers for testing.

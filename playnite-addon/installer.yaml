@@ -1,20 +1,23 @@
 AddonId: 'PersonalCloudLibrarySource_61993828-67a8-4468-93a2-293442e36328'
 Packages:
-  - Version: 0.1.1
-    RequiredApiVersion: 6.16.0
-    ReleaseDate: 2026-05-09
+  - Version: '0.1.1'
+    RequiredApiVersion: '6.16.0'
+    ReleaseDate: '2026-05-09'
     PackageUrl: https://github.com/KurtusCobain/PersonalCloudLibrarySource/releases/download/v0.1.1/PersonalCloudLibrarySource-0.1.1.pext
     Changelog:
-      - Initial public alpha release.
+      - Public alpha release for Playnite's official add-on browser.
       - Added LocalFile, LocalFolder, and RcloneRemote provider modes.
-      - Added Google Drive, OneDrive, Dropbox, and similar provider support through rclone.
-      - Added local folder, external drive, mapped drive, synced folder, and NAS support.
+      - Added support for Google Drive, OneDrive, Dropbox, and similar providers through rclone.
+      - Added support for local folders, external drives, mapped drives, synced folders, and NAS paths.
       - Added universal manifest generation for filesystem roots and rclone remotes.
       - Added manifest version 3 sourceType directory support.
       - Manifest generation update completed 6/2/2026
-      - Added cloud-only entries that can appear in Playnite before download.
-      - Added Download to local cache support.
+      - Added cloud-only library entries that can appear in Playnite before being downloaded.
+      - Added manual Download to local cache support.
       - Added cached local launch support.
       - Added uninstall/remove cached copy support while keeping the Playnite catalog entry.
+      - Added sourcePath and cachePath manifest fields while keeping legacy manifest compatibility.
       - Added customizable library display name.
-      - Added import diagnostics, setup tools, sample manifests, documentation, and packaging script.
+      - Added optional import diagnostics.
+      - Added setup tools, sample manifests, documentation, and packaging scripts.
+      - Updated documentation for public installation through Playnite's official add-on browser.
