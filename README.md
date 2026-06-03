@@ -16,7 +16,6 @@ Local folders, external drives, mapped drives, and NAS paths do not require rclo
 
 ## How This Works
 
-![Personal Cloud Library Source workflow](docs/images/pcls-workflow.png)
 
 Personal Cloud Library Source lets users keep a record of their personal cloud, NAS, external-drive, or local library inside Playnite. Entries can appear before they are downloaded, so the library can be organized, filtered, and enriched with metadata first, then cached locally later.
 
