@@ -81,7 +81,7 @@ Mapped drive:
 
 ```powershell
 .\tools\generate-manifest.ps1 `
-  -SourceRoot "Z:\ROMCade" `
+  -SourceRoot "Z:\ROMGames" `
   -OutputPath ".\personal-cloud-library.generated.json" `
   -Overwrite
 ```
@@ -99,7 +99,7 @@ Rclone:
 
 ```powershell
 .\tools\generate-manifest.ps1 `
-  -RcloneRemoteRoot "gdrive:RomCade" `
+  -RcloneRemoteRoot "gdrive:RomGames" `
   -OutputPath ".\personal-cloud-library.generated.json" `
   -Overwrite
 ```
