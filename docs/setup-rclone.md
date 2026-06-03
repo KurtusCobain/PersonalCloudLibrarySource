@@ -4,6 +4,8 @@
 
 Personal Cloud Library Source uses rclone as a generic provider for cloud storage. This is how Google Drive, OneDrive, Dropbox, and many other storage providers are supported.
 
+Rclone is optional and only needed for rclone remote scanning or `RcloneRemote` provider mode. Local folders, external drives, mapped drives, and NAS paths do not require rclone.
+
 Configure rclone outside Playnite first. The plugin calls the existing rclone setup; it does not configure cloud accounts itself.
 
 ## Install Rclone
@@ -72,6 +74,24 @@ AllowDownloads = true
 For Google Drive or OneDrive, use the remote name you created in `rclone config`.
 
 The provider settings screen maps directly to these rclone values: executable path, remote name, manifest path, optional content root, and timeout.
+
+## Generate a Manifest from an Rclone Remote
+
+```powershell
+.\tools\generate-manifest.ps1 `
+  -RcloneRemoteRoot "gdrive:RomCade" `
+  -OutputPath ".\personal-cloud-library.generated.json" `
+  -Overwrite
+```
+
+You can also keep using the thin compatibility wrapper:
+
+```powershell
+.\tools\generate-rclone-manifest.ps1 `
+  -RcloneRemoteRoot "gdrive:RomCade" `
+  -OutputPath ".\personal-cloud-library.generated.json" `
+  -Overwrite
+```
 
 ## Avoid Doubled Content Paths
 

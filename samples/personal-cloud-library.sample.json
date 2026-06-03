@@ -1,35 +1,43 @@
 {
-  "version": 2,
+  "version": 3,
+  "generatedBy": "Personal Cloud Library Source manifest generator",
+  "generatedAt": "2026-06-02T00:00:00Z",
+  "sourceMode": "filesystem",
+  "itemCount": 3,
   "items": [
     {
-      "id": "example-adventure",
-      "title": "Example Adventure",
-      "platform": "Example Platform",
-      "sourcePath": "ExampleAdventure/ExampleAdventure.bat",
-      "cachePath": "ExampleAdventure\\ExampleAdventure.bat",
-      "installDirectory": "ExampleAdventure",
-      "launchFile": "ExampleAdventure.bat",
-      "notes": "Fake local sample entry for testing. No game content is included."
+      "id": "nintendo-nes-example-cartridge-demo-nintendo-entertainment-system-example-cartridge-demo-nes",
+      "title": "Example Cartridge Demo",
+      "platform": "Nintendo NES",
+      "sourcePath": "Nintendo Entertainment System/Example Cartridge Demo.nes",
+      "sourceType": "file",
+      "cachePath": "Nintendo Entertainment System\\Example Cartridge Demo.nes",
+      "installDirectory": "Nintendo Entertainment System",
+      "launchFile": "Example Cartridge Demo.nes",
+      "notes": "Fake single-file sample item for manifest import testing."
     },
     {
-      "id": "example-puzzle-pack",
-      "title": "Example Puzzle Pack",
-      "platform": "Example Platform",
-      "sourcePath": "ExamplePuzzlePack/ExamplePuzzlePack.bat",
-      "cachePath": "ExamplePuzzlePack\\ExamplePuzzlePack.bat",
-      "installDirectory": "ExamplePuzzlePack",
-      "launchFile": "ExamplePuzzlePack.bat",
-      "notes": "Fake sample entry for testing manifest import."
+      "id": "sony-playstation-example-disc-set-playstation-example-disc-set",
+      "title": "Example Disc Set",
+      "platform": "Sony PlayStation",
+      "sourcePath": "PlayStation/Example Disc Set",
+      "sourceType": "directory",
+      "cachePath": "PlayStation\\Example Disc Set\\Example Disc Set.cue",
+      "installDirectory": "PlayStation\\Example Disc Set",
+      "launchFile": "Example Disc Set.cue",
+      "notes": "Fake directory-disc sample item. The copied package keeps its .bin sidecar inside the folder."
     },
     {
-      "id": "example-homebrew-demo",
-      "title": "Example Homebrew Demo",
-      "platform": "Homebrew",
-      "sourcePath": "ExampleHomebrewDemo/ExampleHomebrewDemo.bat",
-      "cachePath": "ExampleHomebrewDemo\\ExampleHomebrewDemo.bat",
-      "installDirectory": "ExampleHomebrewDemo",
-      "launchFile": "ExampleHomebrewDemo.bat",
-      "notes": "Placeholder for user-owned or homebrew content."
+      "id": "nintendo-wii-u-example-wii-u-package-wii-u-example-wii-u-package-game",
+      "title": "Example Wii U Package",
+      "platform": "Nintendo Wii U",
+      "sourcePath": "Wii U/Example Wii U Package [Game]",
+      "sourceType": "directory",
+      "cachePath": "Wii U\\Example Wii U Package [Game]",
+      "installDirectory": "Wii U\\Example Wii U Package [Game]",
+      "launchFile": "",
+      "packageRole": "game",
+      "notes": "Fake Wii U-style directory package sample with code/content/meta folders and no direct launch file."
     }
   ]
 }

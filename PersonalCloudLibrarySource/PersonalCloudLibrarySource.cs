@@ -127,8 +127,10 @@ namespace PersonalCloudLibrarySource
                     }
 
                     var launchPath = ResolveLaunchPath(item, pluginSettings);
+                    var installDirectory = ResolveInstallDirectory(item, pluginSettings, launchPath);
                     var launchFileExists = !string.IsNullOrWhiteSpace(launchPath) && File.Exists(launchPath);
-                    if (launchFileExists)
+                    var installDirectoryExists = !string.IsNullOrWhiteSpace(installDirectory) && Directory.Exists(installDirectory);
+                    if (launchFileExists || (IsDirectoryItem(item) && installDirectoryExists))
                     {
                         logger.Info($"Personal Cloud Library Source install action not returned for {item.Id}: launch file already exists.");
                         return installActions;
@@ -513,6 +515,23 @@ namespace PersonalCloudLibrarySource
             }
 
             return string.Empty;
+        }
+
+        public static string GetItemSourceType(PersonalCloudLibraryItem item)
+        {
+            if (item == null || string.IsNullOrWhiteSpace(item.SourceType))
+            {
+                return "file";
+            }
+
+            return item.SourceType.Trim().Equals("directory", StringComparison.OrdinalIgnoreCase)
+                ? "directory"
+                : "file";
+        }
+
+        public static bool IsDirectoryItem(PersonalCloudLibraryItem item)
+        {
+            return string.Equals(GetItemSourceType(item), "directory", StringComparison.OrdinalIgnoreCase);
         }
 
         public static string ResolveInstallDirectory(
@@ -1012,6 +1031,8 @@ namespace PersonalCloudLibrarySource
         public string SourcePath { get; set; }
         public string CachePath { get; set; }
         public string RemotePath { get; set; }
+        public string SourceType { get; set; }
+        public string PackageRole { get; set; }
         public string Notes { get; set; }
     }
 }

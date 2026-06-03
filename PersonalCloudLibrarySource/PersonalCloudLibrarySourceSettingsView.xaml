@@ -53,7 +53,7 @@
                      MinWidth="540"
                      Margin="0,0,0,6"/>
 
-            <TextBlock Text="LocalFile reads one manifest JSON file. LocalFolder supports local folders, external drives, mapped drives, and NAS. RcloneRemote supports Google Drive, OneDrive, Dropbox, and other rclone remotes."
+            <TextBlock Text="LocalFile reads one manifest JSON file. LocalFolder supports local folders, external drives, mapped drives, and NAS without rclone. RcloneRemote supports Google Drive, OneDrive, Dropbox, and other rclone remotes."
                        Opacity="0.7"
                        TextWrapping="Wrap"
                        Margin="0,0,0,4"/>
@@ -267,7 +267,7 @@
                        FontWeight="Bold"
                        Margin="0,0,0,10"/>
 
-            <TextBlock Text="Use these checks to verify rclone, validate the current manifest, open working folders, or create a fake sample manifest."
+            <TextBlock Text="Use these checks to verify rclone, validate the current manifest, open working folders, or create a fake sample manifest. Manifest generation is handled outside Playnite with tools/generate-manifest.ps1."
                        Opacity="0.7"
                        TextWrapping="Wrap"
                        Margin="0,0,0,8"/>

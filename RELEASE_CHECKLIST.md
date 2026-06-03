@@ -1,5 +1,7 @@
 # Release Checklist
 
+Manifest generation update completed 6/2/2026
+
 ## Build
 
 - Build Release Any CPU.
@@ -11,6 +13,9 @@
 - Run LocalFile test.
 - Run LocalFolder test.
 - Run RcloneRemote test.
+- Run manifest generator test for filesystem mode.
+- Run manifest generator test for rclone mode.
+- Confirm directory-package items copy full folders for both local and rclone providers.
 - Test missing-file `Download to local cache`.
 - Confirm cached/downloaded fake launchers launch from Playnite.
 

@@ -2,11 +2,17 @@
 
 ![Personal Cloud Library Source workflow](docs/images/pcls-workflow.png)
 
-Personal Cloud Library Source imports a user-supplied cloud, NAS, external-drive, or local manifest into Playnite's normal library view. Cloud-only entries can appear before download, be enriched with Playnite metadata, downloaded/copied to a local cache when needed, launched locally, and later uninstalled from cache while keeping the catalog entry.
+Personal Cloud Library Source imports a user-supplied cloud, NAS, external-drive, or local manifest into Playnite's normal library view. Cloud-only entries can appear before download, be enriched with Playnite metadata, downloaded or copied to a local cache when needed, launched locally, and later uninstalled from cache while keeping the catalog entry.
+
+Manifest generation update completed 6/2/2026
 
 ## Overview
 
-The plugin catalogs user-supplied entries and copies/downloads user-owned files from configured local folders or rclone remotes.
+The plugin catalogs user-supplied entries and copies or downloads user-owned files from configured local folders or rclone remotes.
+
+Generate manifests from local folders, external drives, mapped drives, NAS paths, or rclone cloud remotes with `tools/generate-manifest.ps1`.
+
+Local folders, external drives, mapped drives, and NAS paths do not require rclone. rclone is optional and only needed for rclone cloud scanning.
 
 ## How This Works
 
@@ -16,7 +22,7 @@ Personal Cloud Library Source lets users keep a record of their personal cloud/l
 
 This supports a download/cache workflow: import entries, enrich them in Playnite, download or copy selected items to a local cache when ready, then launch them locally through Playnite.
 
-This is not a gameplay streaming service. It does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, or download sources. It catalogs user-supplied entries and copies/downloads user-owned files from configured local folders or rclone remotes.
+This is not a gameplay streaming service. It does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, storefront access, or download sources. It catalogs user-supplied entries and copies or downloads user-owned files from configured local folders or rclone remotes.
 
 ## Features
 
@@ -24,6 +30,7 @@ This is not a gameplay streaming service. It does not provide games, ROMs, BIOS 
 - Provider modes for `LocalFile`, `LocalFolder`, and `RcloneRemote`.
 - Local folder, external drive, mounted drive, and NAS support.
 - Google Drive, OneDrive, Dropbox, and other cloud providers through rclone.
+- Universal manifest generation from filesystem roots or rclone remotes.
 - Cloud-only entries imported as uninstalled.
 - Cached entries imported as installed with a Play action.
 - Manual `Download to local cache` action when a provider can resolve `sourcePath`.
@@ -39,7 +46,64 @@ Metadata can be prepared before downloading or installing the actual file, as lo
 
 ## What This Plugin Does Not Provide
 
-This is not a gameplay streaming service. It does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, or download sources. It catalogs user-supplied entries and copies/downloads user-owned files from configured local folders or rclone remotes.
+This is not a gameplay streaming service. It does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, storefront access, or download sources. It catalogs user-supplied entries and copies or downloads user-owned files from configured local folders or rclone remotes.
+
+## Manifest Generator
+
+Use `tools/generate-manifest.ps1` to build a v3 manifest from user-owned files that already exist in a local folder, external drive, mapped drive, NAS path, or rclone remote.
+
+Filesystem:
+
+```powershell
+.\tools\generate-manifest.ps1 `
+  -SourceRoot "D:\Games" `
+  -OutputPath ".\personal-cloud-library.generated.json" `
+  -Overwrite
+```
+
+External drive:
+
+```powershell
+.\tools\generate-manifest.ps1 `
+  -SourceRoot "E:\ROMs" `
+  -OutputPath ".\personal-cloud-library.generated.json" `
+  -Overwrite
+```
+
+Mapped drive:
+
+```powershell
+.\tools\generate-manifest.ps1 `
+  -SourceRoot "Z:\ROMCade" `
+  -OutputPath ".\personal-cloud-library.generated.json" `
+  -Overwrite
+```
+
+NAS:
+
+```powershell
+.\tools\generate-manifest.ps1 `
+  -SourceRoot "\\NAS\Games" `
+  -OutputPath ".\personal-cloud-library.generated.json" `
+  -Overwrite
+```
+
+Rclone:
+
+```powershell
+.\tools\generate-manifest.ps1 `
+  -RcloneRemoteRoot "gdrive:RomCade" `
+  -OutputPath ".\personal-cloud-library.generated.json" `
+  -Overwrite
+```
+
+Dry run:
+
+```powershell
+.\tools\generate-manifest.ps1 `
+  -SourceRoot "D:\Games" `
+  -DryRun
+```
 
 ## Installation for Users
 
@@ -161,17 +225,22 @@ RcloneContentRoot = PersonalLibrary/files
 
 ## Manifest Setup
 
-Recommended v2 manifests use `sourcePath` for the provider source and `cachePath` for the local cached launch file.
+Recommended v3 manifests use `sourcePath` for the provider source, `sourceType` to distinguish files vs packages, and `cachePath` for the local cached launch target.
 
 ```json
 {
-  "version": 2,
+  "version": 3,
+  "generatedBy": "Personal Cloud Library Source manifest generator",
+  "generatedAt": "2026-06-02T00:00:00Z",
+  "sourceMode": "filesystem",
+  "itemCount": 1,
   "items": [
     {
       "id": "example-adventure",
       "title": "Example Adventure",
       "platform": "Example Platform",
       "sourcePath": "ExampleAdventure/ExampleAdventure.bat",
+      "sourceType": "file",
       "cachePath": "ExampleAdventure\\ExampleAdventure.bat",
       "installDirectory": "ExampleAdventure",
       "launchFile": "ExampleAdventure.bat",
@@ -231,7 +300,7 @@ See [docs/troubleshooting.md](docs/troubleshooting.md) for common setup and visi
 
 ## Privacy and Legal Use
 
-Personal Cloud Library Source reads user-supplied paths and manifests. It does not include private cloud IDs, native cloud API credentials, or bundled content.
+Personal Cloud Library Source reads user-supplied paths and manifests. It only indexes user-owned files. It does not include private cloud IDs, native cloud API credentials, bundled content, storefront access, or download sources.
 
 See [docs/legal-use.md](docs/legal-use.md).
 

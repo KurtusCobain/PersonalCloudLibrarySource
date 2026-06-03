@@ -30,12 +30,14 @@ namespace PersonalCloudLibrarySource
 
         public override void Install(InstallActionArgs args)
         {
+            var sourceType = PersonalCloudLibrarySource.GetItemSourceType(item);
             var launchPath = PersonalCloudLibrarySource.ResolveLaunchPath(item, settings);
             var installDirectory = PersonalCloudLibrarySource.ResolveInstallDirectory(item, settings, launchPath);
             var destinationFilePath = PersonalCloudLibrarySource.ResolveDownloadDestinationFilePath(item, settings, launchPath);
+            var destinationFolderPath = PersonalCloudLibrarySource.ResolveDownloadDestinationFolder(item, settings, launchPath);
             var sourcePath = PersonalCloudLibrarySource.GetItemSourcePath(item);
 
-            logger.Info($"Personal Cloud Library Source downloading item {item.Id} to {destinationFilePath}.");
+            logger.Info($"Personal Cloud Library Source downloading item {item.Id} as {sourceType}.");
             var providerType = PersonalCloudLibrarySource.GetProviderType(settings);
             var succeeded = false;
             string message = null;
@@ -44,7 +46,9 @@ namespace PersonalCloudLibrarySource
             if (string.Equals(providerType, PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType, System.StringComparison.OrdinalIgnoreCase))
             {
                 var rcloneSourcePath = PersonalCloudLibrarySource.ResolveRcloneSourcePath(settings, sourcePath);
-                var result = rcloneFileCopier.CopyRemoteFileToLocalPath(settings, rcloneSourcePath, destinationFilePath);
+                var result = sourceType == "directory"
+                    ? rcloneFileCopier.CopyRemoteDirectoryToLocalPath(settings, rcloneSourcePath, destinationFolderPath)
+                    : rcloneFileCopier.CopyRemoteFileToLocalPath(settings, rcloneSourcePath, destinationFilePath);
                 succeeded = result.Succeeded;
                 message = result.Message;
                 exception = result.Exception;
@@ -52,7 +56,9 @@ namespace PersonalCloudLibrarySource
             else
             {
                 var localSourcePath = PersonalCloudLibrarySource.ResolveLocalFolderSourcePath(settings, sourcePath);
-                var result = localFileCopier.CopyFileToLocalPath(localSourcePath, destinationFilePath);
+                var result = sourceType == "directory"
+                    ? localFileCopier.CopyDirectoryToLocalPath(localSourcePath, destinationFolderPath)
+                    : localFileCopier.CopyFileToLocalPath(localSourcePath, destinationFilePath);
                 succeeded = result.Succeeded;
                 message = result.Message;
                 exception = result.Exception;
