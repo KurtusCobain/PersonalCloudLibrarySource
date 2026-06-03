@@ -6,7 +6,7 @@ Use `LocalFolder` when your manifest and source files are available through a no
 
 Good fits include external drives, mapped network drives, NAS shares, and synced cloud folders that already exist on disk.
 
-These setups do not require rclone.
+Local folders, external drives, mapped network drives, NAS shares, and synced local cloud folders do not require rclone.
 
 ## Folder Layout Example
 
@@ -16,6 +16,13 @@ E:\PersonalLibrary
   ExampleAdventure
     ExampleAdventure.bat
 ```
+
+## Generated-Manifest Workflow
+
+1. Run `tools/generate-manifest.ps1` against the local filesystem root you want to catalog.
+2. Place the generated JSON inside the library root, or set `ManifestRelativePath` to point at it.
+3. Configure `LocalLibraryRoot` and `LocalCacheFolder` in the plugin settings.
+4. Run **Update Game Library** in Playnite.
 
 ## Plugin Settings
 
@@ -69,7 +76,7 @@ Filesystem:
 
 ```powershell
 .\tools\generate-manifest.ps1 `
-  -SourceRoot "D:\Games" `
+  -SourceRoot "D:\PersonalLibrary" `
   -OutputPath ".\personal-cloud-library.generated.json" `
   -Overwrite
 ```
@@ -78,7 +85,7 @@ External drive:
 
 ```powershell
 .\tools\generate-manifest.ps1 `
-  -SourceRoot "E:\ROMs" `
+  -SourceRoot "E:\PersonalLibrary" `
   -OutputPath ".\personal-cloud-library.generated.json" `
   -Overwrite
 ```
@@ -87,7 +94,7 @@ Mapped drive:
 
 ```powershell
 .\tools\generate-manifest.ps1 `
-  -SourceRoot "Z:\ROMCade" `
+  -SourceRoot "Z:\PersonalLibrary" `
   -OutputPath ".\personal-cloud-library.generated.json" `
   -Overwrite
 ```
@@ -96,7 +103,7 @@ NAS:
 
 ```powershell
 .\tools\generate-manifest.ps1 `
-  -SourceRoot "\\NAS\Games" `
+  -SourceRoot "\\NAS\PersonalLibrary" `
   -OutputPath ".\personal-cloud-library.generated.json" `
   -Overwrite
 ```
@@ -105,7 +112,7 @@ Dry run:
 
 ```powershell
 .\tools\generate-manifest.ps1 `
-  -SourceRoot "D:\Games" `
+  -SourceRoot "D:\PersonalLibrary" `
   -DryRun
 ```
 

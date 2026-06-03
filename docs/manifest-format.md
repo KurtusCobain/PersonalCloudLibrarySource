@@ -6,6 +6,8 @@ Personal Cloud Library Source reads a JSON manifest with a top-level `version` a
 
 Version 3 manifests should prefer `sourcePath`, `sourceType`, and `cachePath`.
 
+Generate a manifest with `tools/generate-manifest.ps1` when you want to scan a local filesystem root or rclone remote and produce a v3 manifest automatically.
+
 ```json
 {
   "version": 3,
@@ -57,6 +59,32 @@ New manifests should use `sourcePath` instead of `remotePath`.
 - `launchFile`: Launch file name used with `installDirectory`, and useful as a clear launch-file hint with `cachePath`.
 - `remotePath`: Legacy fallback for `sourcePath`.
 - `notes`: Optional text imported as the Playnite description.
+
+## sourceType Examples
+
+Single-file entries use `sourceType = file`:
+
+```json
+{
+  "sourcePath": "Nintendo Entertainment System/Example Cartridge Demo.nes",
+  "sourceType": "file",
+  "cachePath": "Nintendo Entertainment System\\Example Cartridge Demo.nes",
+  "installDirectory": "Nintendo Entertainment System",
+  "launchFile": "Example Cartridge Demo.nes"
+}
+```
+
+Directory packages use `sourceType = directory`:
+
+```json
+{
+  "sourcePath": "PlayStation/Example Disc Set",
+  "sourceType": "directory",
+  "cachePath": "PlayStation\\Example Disc Set\\Example Disc Set.cue",
+  "installDirectory": "PlayStation\\Example Disc Set",
+  "launchFile": "Example Disc Set.cue"
+}
+```
 
 ## Path Resolution
 

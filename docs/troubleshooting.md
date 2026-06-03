@@ -36,6 +36,19 @@ If this fails, update `RcloneRemoteName` or `RcloneManifestPath`.
 
 Save the manifest as valid UTF-8 JSON. The importer trims a leading UTF-8 BOM, but malformed JSON will fail to load.
 
+## Generated Manifest Is Empty
+
+Check that the source root actually contains supported launchable files or supported directory packages.
+
+Common reasons for an empty generated manifest:
+
+- the source root only contains ignored metadata, artwork, save, or media files
+- files are under excluded folders
+- only unsupported extensions were found
+- the selected root is one level too high or one level too low
+
+Run the generator with `-DryRun` first if you want to inspect what it detects without writing files.
+
 ## Cloud Item Appears Uninstalled
 
 This is expected when the cached launch file is missing and `TreatMissingFilesAsUninstalled` is enabled. Use `Download to local cache` if the item has a resolvable `sourcePath`.
@@ -66,6 +79,12 @@ Confirm:
 
 `Remove cached copy` and Playnite uninstall only target the local cached file or folder. They do not delete the manifest, source provider files, or rclone remote content.
 
+## sourceType=directory Item Imports but Is Not Playable
+
+Some directory packages intentionally leave `launchFile` blank, especially Wii U-style `code/content/meta` packages.
+
+This is normal for package-style content that does not have a direct single launch file. If you need a direct launch target, use a manifest item whose copied directory contains a detectable launch file such as `.cue`, `.m3u`, `.chd`, `.iso`, `.exe`, `.bat`, `.cmd`, or `.lnk`.
+
 ## Rclone Path Looks Doubled
 
 If `RcloneContentRoot` is set to `PersonalLibrary/files`, item `sourcePath` values should not also start with `PersonalLibrary/files`.
@@ -85,6 +104,18 @@ sourcePath = PersonalLibrary/files/Game/Game.exe
 ```
 
 The incorrect setup resolves to `PersonalLibrary/files/PersonalLibrary/files/Game/Game.exe`. Use the manifest validation button to catch this warning.
+
+## .bin Sidecar Files Should Not Appear as Separate Entries
+
+Standalone `.bin` files are intentionally skipped by the manifest generator. Disc packages should appear as one directory item that uses the matching `.cue`, `.m3u`, `.chd`, `.pbp`, `.iso`, or launcher file.
+
+If you see a loose `.bin` in a generated manifest, regenerate with the current `tools/generate-manifest.ps1`.
+
+## Metadata or Package Folders Were Skipped
+
+The generator skips non-launchable metadata and support folders such as saves, screenshots, artwork caches, and similar support content. It also treats some legacy folder names as compatibility excludes.
+
+This behavior is intentional so the manifest stays focused on launchable files and package directories.
 
 ## Uninstall Did Not Delete Files
 

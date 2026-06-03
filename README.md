@@ -14,8 +14,9 @@ Generate manifests from local folders, external drives, mapped drives, NAS paths
 
 Local folders, external drives, mapped drives, and NAS paths do not require rclone. rclone is optional and only needed for rclone cloud scanning.
 
-## How This Works
+This does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, storefront access, or download sources.
 
+## How This Works
 
 Personal Cloud Library Source lets users keep a record of their personal cloud, NAS, external-drive, or local library inside Playnite. Entries can appear before they are downloaded, so the library can be organized, filtered, and enriched with metadata first, then cached locally later.
 
@@ -28,13 +29,11 @@ This supports a download/cache workflow:
 5. Launch cached entries locally through Playnite.
 6. Remove cached copies later while keeping the catalog entry in the library.
 
-This is not a gameplay streaming service. It does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, storefront access, or download sources. It catalogs user-supplied entries and copies or downloads user-owned files from configured local folders or rclone remotes.
-
 ## Features
 
 - Normal Playnite `GameLibrary` integration.
 - Provider modes for `LocalFile`, `LocalFolder`, and `RcloneRemote`.
-- Local folder, external drive, mounted drive, and NAS support.
+- Local folder, external drive, mapped drive, and NAS support.
 - Google Drive, OneDrive, Dropbox, and other cloud providers through rclone.
 - Universal manifest generation from filesystem roots or rclone remotes.
 - Cloud-only entries imported as uninstalled.
@@ -52,7 +51,7 @@ Metadata can be prepared before downloading or installing the actual file, as lo
 
 ## What This Plugin Does Not Provide
 
-This is not a gameplay streaming service. It does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, storefront access, or download sources. It catalogs user-supplied entries and copies or downloads user-owned files from configured local folders or rclone remotes.
+This is not a gameplay streaming service. It catalogs user-supplied entries and copies or downloads user-owned files from configured local folders or rclone remotes.
 
 ## Manifest Generator
 
@@ -62,7 +61,7 @@ Filesystem:
 
 ```powershell
 .\tools\generate-manifest.ps1 `
-  -SourceRoot "D:\Games" `
+  -SourceRoot "D:\PersonalLibrary" `
   -OutputPath ".\personal-cloud-library.generated.json" `
   -Overwrite
 ```
@@ -71,7 +70,7 @@ External drive:
 
 ```powershell
 .\tools\generate-manifest.ps1 `
-  -SourceRoot "E:\ROMs" `
+  -SourceRoot "E:\PersonalLibrary" `
   -OutputPath ".\personal-cloud-library.generated.json" `
   -Overwrite
 ```
@@ -80,7 +79,7 @@ Mapped drive:
 
 ```powershell
 .\tools\generate-manifest.ps1 `
-  -SourceRoot "Z:\ROMGames" `
+  -SourceRoot "Z:\PersonalLibrary" `
   -OutputPath ".\personal-cloud-library.generated.json" `
   -Overwrite
 ```
@@ -89,7 +88,7 @@ NAS:
 
 ```powershell
 .\tools\generate-manifest.ps1 `
-  -SourceRoot "\\NAS\Games" `
+  -SourceRoot "\\NAS\PersonalLibrary" `
   -OutputPath ".\personal-cloud-library.generated.json" `
   -Overwrite
 ```
@@ -98,7 +97,7 @@ Rclone:
 
 ```powershell
 .\tools\generate-manifest.ps1 `
-  -RcloneRemoteRoot "gdrive:RomGames" `
+  -RcloneRemoteRoot "gdrive:PersonalLibrary" `
   -OutputPath ".\personal-cloud-library.generated.json" `
   -Overwrite
 ```
@@ -107,7 +106,7 @@ Dry run:
 
 ```powershell
 .\tools\generate-manifest.ps1 `
-  -SourceRoot "D:\Games" `
+  -SourceRoot "D:\PersonalLibrary" `
   -DryRun
 ```
 
@@ -116,7 +115,7 @@ Dry run:
 The recommended way to install **Personal Cloud Library Source** is through Playnite's official add-on browser.
 
 1. Open Playnite.
-2. Go to **Main Menu → Add-ons**.
+2. Go to **Main Menu -> Add-ons**.
 3. Open **Browse**.
 4. Search for **Personal Cloud Library Source**.
 5. Select the add-on and click **Install**.
@@ -133,7 +132,7 @@ Users who prefer manual installation can also download the packaged `.pext` file
 ## Requirements
 
 - Playnite installed.
-- A user-created manifest file.
+- A manifest file, either generated or user-created.
 - A local cache folder where downloaded or copied entries can be stored.
 - rclone, only if using the `RcloneRemote` provider mode.
 
@@ -165,7 +164,7 @@ For normal user installation, use Playnite's official add-on browser instead of 
 
 Reads a manifest from `LocalManifestPath`.
 
-If downloads are enabled, `sourcePath` can be absolute or relative to the manifest folder.
+If downloads are used, `sourcePath` can be absolute or relative to the manifest folder.
 
 ### LocalFolder, External Drive, or NAS
 
@@ -194,7 +193,8 @@ rclone cat remote:manifestPath
 Copies item files with:
 
 ```text
-rclone copyto remote:sourcePath localCachePath
+sourceType = file      -> rclone copyto remote:sourcePath localCachePath
+sourceType = directory -> rclone copy remote:sourcePath localInstallDirectory
 ```
 
 Use this for Google Drive, OneDrive, Dropbox, and other providers supported by rclone.
@@ -333,7 +333,7 @@ See [docs/legal-use.md](docs/legal-use.md).
 Most users should install it from:
 
 ```text
-Playnite → Main Menu → Add-ons → Browse → Personal Cloud Library Source
+Playnite -> Main Menu -> Add-ons -> Browse -> Personal Cloud Library Source
 ```
 
 The `playnite-addon/` folder is kept for release maintenance and add-on database metadata.
@@ -348,5 +348,4 @@ The `playnite-addon/` folder is kept for release maintenance and add-on database
 - Improve setup guidance and first-run user experience.
 - Add stronger manifest validation and friendlier error messages.
 - Add cache verification and optional hash checks.
-- Add automatic manifest generation based on file structures and naming conventions.
 - Auto-fill source paths for game installations where possible.
