@@ -6,11 +6,13 @@
 
 Import a user-supplied cloud, NAS, external drive, or local manifest into Playnite's normal library view.
 
+Manifest generation update completed 6/2/2026
+
 ## Long Description
 
 Personal Cloud Library Source imports a user-supplied cloud, NAS, external-drive, or local manifest into Playnite's normal library view. Cloud-only entries can appear before download, be enriched with Playnite metadata, downloaded/copied to a local cache when needed, launched locally, and later uninstalled from cache while keeping the catalog entry.
 
-This is not a gameplay streaming service. It does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, or download sources. It catalogs user-supplied entries and copies/downloads user-owned files from configured local folders or rclone remotes.
+This is not a gameplay streaming service. It does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, storefront access, or download sources. It catalogs user-supplied entries and copies or downloads user-owned files from configured local folders or rclone remotes.
 
 ## Features
 
@@ -18,6 +20,7 @@ This is not a gameplay streaming service. It does not provide games, ROMs, BIOS 
 - LocalFile, LocalFolder, and RcloneRemote provider modes.
 - Support for local folders, external drives, mapped drives, NAS shares, and synced cloud folders.
 - Generic rclone support for Google Drive, OneDrive, Dropbox, and other rclone remotes.
+- Universal manifest generation from filesystem roots and rclone remotes.
 - Cloud-only entries import as uninstalled.
 - Cached entries launch locally through Playnite.
 - Manual download/cache action for supported missing entries.

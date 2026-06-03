@@ -20,6 +20,8 @@ Personal Cloud Library Source is not a game-streaming service and does not strea
 
 Set `RcloneExecutablePath` to the full path of `rclone.exe`, or add rclone to `PATH`.
 
+This only matters for `RcloneRemote` mode or rclone-based manifest generation. Local filesystem generation and LocalFolder use do not require rclone.
+
 ## Remote manifest path is wrong
 
 Test outside Playnite:
@@ -59,6 +61,10 @@ Confirm:
 - The local cached launch file is missing.
 - The provider can resolve the source path.
 - The game belongs to this plugin.
+
+## Difference between Remove and Uninstall
+
+`Remove cached copy` and Playnite uninstall only target the local cached file or folder. They do not delete the manifest, source provider files, or rclone remote content.
 
 ## Rclone Path Looks Doubled
 

@@ -44,9 +44,53 @@ namespace PersonalCloudLibrarySource
             }
 
             Directory.CreateDirectory(destinationFolder);
-
-            var timeoutSeconds = settings.RcloneTimeoutSeconds < 5 ? 30 : settings.RcloneTimeoutSeconds;
             var remoteItemPath = $"{remoteName}:{remotePath.Trim()}";
+            return RunRcloneCopy(settings, executablePath, remoteItemPath, localFullFilePath, "copyto");
+        }
+
+        public RcloneCopyResult CopyRemoteDirectoryToLocalPath(
+            PersonalCloudLibrarySourceSettings settings,
+            string remotePath,
+            string localDirectoryPath)
+        {
+            if (settings == null)
+            {
+                throw new ArgumentNullException(nameof(settings));
+            }
+
+            if (string.IsNullOrWhiteSpace(remotePath))
+            {
+                return RcloneCopyResult.Fail("Remote path is empty.");
+            }
+
+            if (string.IsNullOrWhiteSpace(localDirectoryPath))
+            {
+                return RcloneCopyResult.Fail("Local destination directory path could not be resolved.");
+            }
+
+            var executablePath = string.IsNullOrWhiteSpace(settings.RcloneExecutablePath)
+                ? "rclone"
+                : settings.RcloneExecutablePath.Trim();
+            var remoteName = (settings.RcloneRemoteName ?? string.Empty).Trim();
+
+            if (string.IsNullOrWhiteSpace(remoteName))
+            {
+                return RcloneCopyResult.Fail("Rclone remote name is required.");
+            }
+
+            Directory.CreateDirectory(localDirectoryPath);
+            var remoteItemPath = $"{remoteName}:{remotePath.Trim()}";
+            return RunRcloneCopy(settings, executablePath, remoteItemPath, localDirectoryPath, "copy");
+        }
+
+        private static RcloneCopyResult RunRcloneCopy(
+            PersonalCloudLibrarySourceSettings settings,
+            string executablePath,
+            string remoteItemPath,
+            string localDestinationPath,
+            string commandName)
+        {
+            var timeoutSeconds = settings.RcloneTimeoutSeconds < 5 ? 30 : settings.RcloneTimeoutSeconds;
 
             using (var process = new Process())
             {
@@ -56,10 +100,10 @@ namespace PersonalCloudLibrarySource
                 process.StartInfo = new ProcessStartInfo
                 {
                     FileName = executablePath,
-                    Arguments = "copyto " +
+                    Arguments = commandName + " " +
                         RcloneManifestReader.QuoteArgument(remoteItemPath) +
                         " " +
-                        RcloneManifestReader.QuoteArgument(localFullFilePath),
+                        RcloneManifestReader.QuoteArgument(localDestinationPath),
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -104,7 +148,7 @@ namespace PersonalCloudLibrarySource
                     {
                     }
 
-                    return RcloneCopyResult.Fail($"rclone copyto timed out after {timeoutSeconds} seconds.");
+                    return RcloneCopyResult.Fail($"rclone {commandName} timed out after {timeoutSeconds} seconds.");
                 }
 
                 process.WaitForExit();
@@ -112,10 +156,10 @@ namespace PersonalCloudLibrarySource
                 if (process.ExitCode != 0)
                 {
                     return RcloneCopyResult.Fail(
-                        $"rclone copyto failed with exit code {process.ExitCode}: {RcloneManifestReader.TrimForLog(error.ToString())}");
+                        $"rclone {commandName} failed with exit code {process.ExitCode}: {RcloneManifestReader.TrimForLog(error.ToString())}");
                 }
 
-                return RcloneCopyResult.Success(RcloneManifestReader.TrimForLog(output.ToString()));
+                return RcloneCopyResult.Success(RcloneManifestReader.TrimForLog(output.ToString()), commandName);
             }
         }
     }
@@ -126,12 +170,12 @@ namespace PersonalCloudLibrarySource
         public string Message { get; private set; }
         public Exception Exception { get; private set; }
 
-        public static RcloneCopyResult Success(string message)
+        public static RcloneCopyResult Success(string message, string commandName = "copyto")
         {
             return new RcloneCopyResult
             {
                 Succeeded = true,
-                Message = string.IsNullOrWhiteSpace(message) ? "rclone copyto completed." : message
+                Message = string.IsNullOrWhiteSpace(message) ? $"rclone {commandName} completed." : message
             };
         }
 

@@ -9,6 +9,9 @@ Packages:
       - Added LocalFile, LocalFolder, and RcloneRemote provider modes.
       - Added support for Google Drive, OneDrive, Dropbox, and similar providers through rclone.
       - Added support for local folders, external drives, mapped drives, synced folders, and NAS paths.
+      - Added universal manifest generation for filesystem roots and rclone remotes.
+      - Added manifest version 3 sourceType directory support.
+      - Manifest generation update completed 6/2/2026
       - Added cloud-only library entries that can appear in Playnite before being downloaded.
       - Added manual Download to local cache support.
       - Added cached local launch support.

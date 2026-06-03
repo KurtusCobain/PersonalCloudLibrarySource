@@ -39,6 +39,59 @@ namespace PersonalCloudLibrarySource
                 return LocalCopyResult.Fail("Local file copy failed.", ex);
             }
         }
+
+        public LocalCopyResult CopyDirectoryToLocalPath(string sourceDirectoryPath, string localDirectoryPath)
+        {
+            if (string.IsNullOrWhiteSpace(sourceDirectoryPath))
+            {
+                return LocalCopyResult.Fail("Source directory path is empty.");
+            }
+
+            if (string.IsNullOrWhiteSpace(localDirectoryPath))
+            {
+                return LocalCopyResult.Fail("Local destination directory path could not be resolved.");
+            }
+
+            if (!Directory.Exists(sourceDirectoryPath))
+            {
+                return LocalCopyResult.Fail($"Source directory does not exist: {sourceDirectoryPath}");
+            }
+
+            try
+            {
+                CopyDirectoryContents(sourceDirectoryPath, localDirectoryPath);
+                return LocalCopyResult.Success("Local directory copy completed.");
+            }
+            catch (Exception ex)
+            {
+                return LocalCopyResult.Fail("Local directory copy failed.", ex);
+            }
+        }
+
+        private static void CopyDirectoryContents(string sourceDirectoryPath, string localDirectoryPath)
+        {
+            Directory.CreateDirectory(localDirectoryPath);
+
+            foreach (var directory in Directory.GetDirectories(sourceDirectoryPath, "*", SearchOption.AllDirectories))
+            {
+                var relativePath = directory.Substring(sourceDirectoryPath.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                Directory.CreateDirectory(Path.Combine(localDirectoryPath, relativePath));
+            }
+
+            foreach (var filePath in Directory.GetFiles(sourceDirectoryPath, "*", SearchOption.AllDirectories))
+            {
+                var relativePath = filePath.Substring(sourceDirectoryPath.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var destinationPath = Path.Combine(localDirectoryPath, relativePath);
+                var destinationFolder = Path.GetDirectoryName(destinationPath);
+
+                if (!string.IsNullOrWhiteSpace(destinationFolder))
+                {
+                    Directory.CreateDirectory(destinationFolder);
+                }
+
+                File.Copy(filePath, destinationPath, true);
+            }
+        }
     }
 
     public class LocalCopyResult

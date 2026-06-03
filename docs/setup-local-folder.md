@@ -6,6 +6,8 @@ Use `LocalFolder` when your manifest and source files are available through a no
 
 Good fits include external drives, mapped network drives, NAS shares, and synced cloud folders that already exist on disk.
 
+These setups do not require rclone.
+
 ## Folder Layout Example
 
 ```text
@@ -60,6 +62,52 @@ LocalLibraryRoot = C:\Users\You\CloudDrive\PersonalLibrary
 ```
 
 `sourcePath` values in the manifest are resolved relative to `LocalLibraryRoot`.
+
+## Generate a Manifest from a Filesystem Root
+
+Filesystem:
+
+```powershell
+.\tools\generate-manifest.ps1 `
+  -SourceRoot "D:\Games" `
+  -OutputPath ".\personal-cloud-library.generated.json" `
+  -Overwrite
+```
+
+External drive:
+
+```powershell
+.\tools\generate-manifest.ps1 `
+  -SourceRoot "E:\ROMs" `
+  -OutputPath ".\personal-cloud-library.generated.json" `
+  -Overwrite
+```
+
+Mapped drive:
+
+```powershell
+.\tools\generate-manifest.ps1 `
+  -SourceRoot "Z:\ROMCade" `
+  -OutputPath ".\personal-cloud-library.generated.json" `
+  -Overwrite
+```
+
+NAS:
+
+```powershell
+.\tools\generate-manifest.ps1 `
+  -SourceRoot "\\NAS\Games" `
+  -OutputPath ".\personal-cloud-library.generated.json" `
+  -Overwrite
+```
+
+Dry run:
+
+```powershell
+.\tools\generate-manifest.ps1 `
+  -SourceRoot "D:\Games" `
+  -DryRun
+```
 
 ![Cache and uninstall settings](images/pcls-settings-cache-uninstall.png)
 
