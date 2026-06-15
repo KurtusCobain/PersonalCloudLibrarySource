@@ -20,7 +20,8 @@ This does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content
 - LocalFile, LocalFolder, and RcloneRemote provider modes.
 - Support for local folders, external drives, mapped drives, NAS shares, and synced cloud folders.
 - Generic rclone support for Google Drive, OneDrive, Dropbox, and other rclone remotes.
-- Universal manifest generation from filesystem roots and rclone remotes.
+- In-Playnite manifest generation for local folders, external drives, mapped drives, and NAS roots.
+- Advanced manual manifest generation tools for scripted local and rclone workflows.
 - Cloud-only entries import as uninstalled.
 - Cached entries launch locally through Playnite.
 - Manual download/cache action for supported missing entries.

@@ -15,6 +15,7 @@ namespace PersonalCloudLibrarySource
         private readonly RcloneManifestReader rcloneManifestReader = new RcloneManifestReader();
         private readonly RcloneFileCopier rcloneFileCopier = new RcloneFileCopier();
         private readonly LocalFileCopier localFileCopier = new LocalFileCopier();
+        private readonly ManifestGenerationService manifestGenerationService = new ManifestGenerationService();
         private readonly IPlayniteAPI playniteApi;
 
         private PersonalCloudLibrarySourceSettingsViewModel settings { get; set; }
@@ -247,6 +248,11 @@ namespace PersonalCloudLibrarySource
 
         public static string GetProviderType(PersonalCloudLibrarySourceSettings pluginSettings)
         {
+            if (pluginSettings == null)
+            {
+                return PersonalCloudLibrarySourceSettings.LocalFileProviderType;
+            }
+
             return string.IsNullOrWhiteSpace(pluginSettings.SourceProviderType)
                 ? PersonalCloudLibrarySourceSettings.LocalFileProviderType
                 : pluginSettings.SourceProviderType;
@@ -904,8 +910,22 @@ namespace PersonalCloudLibrarySource
 
         private static string ResolveLocalFolderManifestPath(PersonalCloudLibrarySourceSettings pluginSettings)
         {
-            if (string.IsNullOrWhiteSpace(pluginSettings.LocalLibraryRoot) ||
-                string.IsNullOrWhiteSpace(pluginSettings.ManifestRelativePath))
+            if (!string.IsNullOrWhiteSpace(pluginSettings.LocalManifestPath))
+            {
+                return pluginSettings.LocalManifestPath;
+            }
+
+            if (string.IsNullOrWhiteSpace(pluginSettings.ManifestRelativePath))
+            {
+                return string.Empty;
+            }
+
+            if (Path.IsPathRooted(pluginSettings.ManifestRelativePath))
+            {
+                return pluginSettings.ManifestRelativePath;
+            }
+
+            if (string.IsNullOrWhiteSpace(pluginSettings.LocalLibraryRoot))
             {
                 return string.Empty;
             }
@@ -960,6 +980,44 @@ namespace PersonalCloudLibrarySource
             return ResolveDiagnosticsDirectory();
         }
 
+        public string GetGeneratedManifestDirectory()
+        {
+            return Path.Combine(GetPluginDataDirectory(), "manifests");
+        }
+
+        public string GetDefaultGeneratedManifestPath()
+        {
+            return Path.Combine(GetGeneratedManifestDirectory(), "personal-cloud-library.generated.json");
+        }
+
+        public string GetDefaultGeneratedReportPath()
+        {
+            return Path.Combine(GetGeneratedManifestDirectory(), "personal-cloud-library.generated.report.txt");
+        }
+
+        public string GetDefaultLocalCacheFolder()
+        {
+            return Path.Combine(GetPluginDataDirectory(), "cache");
+        }
+
+        public string DescribeManifestPath(PersonalCloudLibrarySourceSettings pluginSettings)
+        {
+            return ResolveManifestDescription(pluginSettings);
+        }
+
+        public ManifestGenerationReport GenerateManifestFromFolder(string sourceRoot)
+        {
+            var outputPath = GetDefaultGeneratedManifestPath();
+            var reportPath = GetDefaultGeneratedReportPath();
+
+            return manifestGenerationService.Generate(new ManifestGenerationOptions
+            {
+                SourceRoot = sourceRoot,
+                OutputPath = outputPath,
+                ReportPath = reportPath
+            });
+        }
+
         public string GetPluginDataDirectory()
         {
             try
@@ -1002,13 +1060,20 @@ namespace PersonalCloudLibrarySource
 
         public override UserControl GetSettingsView(bool firstRunSettings)
         {
-            return new PersonalCloudLibrarySourceSettingsView();
+            return new PersonalCloudLibrarySourceSettingsView
+            {
+                DataContext = settings
+            };
         }
     }
 
     public class PersonalCloudLibraryManifest
     {
         public int Version { get; set; }
+        public string GeneratedBy { get; set; }
+        public string GeneratedAt { get; set; }
+        public string SourceMode { get; set; }
+        public int ItemCount { get; set; }
         public List<PersonalCloudLibraryItem> Items { get; set; } = new List<PersonalCloudLibraryItem>();
     }
 

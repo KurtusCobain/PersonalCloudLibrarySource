@@ -44,11 +44,15 @@
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
+    <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="LocalFileCopier.cs" />
+    <Compile Include="ManifestGenerationOptions.cs" />
+    <Compile Include="ManifestGenerationReport.cs" />
+    <Compile Include="ManifestGenerationService.cs" />
     <Compile Include="PersonalCloudLibrarySourceClient.cs" />
     <Compile Include="PersonalCloudLibrarySource.cs" />
     <Compile Include="PersonalCloudLibrarySourceSettings.cs" />

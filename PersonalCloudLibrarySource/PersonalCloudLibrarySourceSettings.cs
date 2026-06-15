@@ -1,11 +1,14 @@
-﻿using Playnite.SDK;
+using Microsoft.Win32;
+using Playnite.SDK;
 using Playnite.SDK.Data;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Windows;
+using Forms = System.Windows.Forms;
 
 namespace PersonalCloudLibrarySource
 {
@@ -36,7 +39,13 @@ namespace PersonalCloudLibrarySource
         private bool allowDownloads = true;
         private bool enableDiagnostics = true;
         private string uninstallBehavior = RemoveCachedInstallFolderUninstallBehavior;
-        private bool allowUninstallOutsideCacheFolder = false;
+        private bool allowUninstallOutsideCacheFolder;
+        private bool autoRefreshOnApplicationStart;
+        private bool autoGenerateManifestOnApplicationStart;
+        private string lastManifestGeneratedAt = string.Empty;
+        private string lastGeneratedManifestPath = string.Empty;
+        private string lastGeneratedReportPath = string.Empty;
+        private int lastManifestItemCount;
 
         public bool Enabled
         {
@@ -151,28 +160,102 @@ namespace PersonalCloudLibrarySource
             get => allowUninstallOutsideCacheFolder;
             set => SetValue(ref allowUninstallOutsideCacheFolder, value);
         }
+
+        public bool AutoRefreshOnApplicationStart
+        {
+            get => autoRefreshOnApplicationStart;
+            set => SetValue(ref autoRefreshOnApplicationStart, value);
+        }
+
+        public bool AutoGenerateManifestOnApplicationStart
+        {
+            get => autoGenerateManifestOnApplicationStart;
+            set => SetValue(ref autoGenerateManifestOnApplicationStart, value);
+        }
+
+        public string LastManifestGeneratedAt
+        {
+            get => lastManifestGeneratedAt;
+            set => SetValue(ref lastManifestGeneratedAt, value);
+        }
+
+        public string LastGeneratedManifestPath
+        {
+            get => lastGeneratedManifestPath;
+            set => SetValue(ref lastGeneratedManifestPath, value);
+        }
+
+        public string LastGeneratedReportPath
+        {
+            get => lastGeneratedReportPath;
+            set => SetValue(ref lastGeneratedReportPath, value);
+        }
+
+        public int LastManifestItemCount
+        {
+            get => lastManifestItemCount;
+            set => SetValue(ref lastManifestItemCount, value);
+        }
     }
 
     public class PersonalCloudLibrarySourceSettingsViewModel : ObservableObject, ISettings
     {
         private readonly PersonalCloudLibrarySource plugin;
-        private PersonalCloudLibrarySourceSettings editingClone { get; set; }
-
+        private PersonalCloudLibrarySourceSettings editingClone;
         private PersonalCloudLibrarySourceSettings settings;
+        private string setupStatusHeadline;
+        private string setupStatusDetails;
+
+        public string[] ProviderTypeOptions { get; } =
+        {
+            PersonalCloudLibrarySourceSettings.LocalFileProviderType,
+            PersonalCloudLibrarySourceSettings.LocalFolderProviderType,
+            PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType
+        };
+
+        public string[] UninstallBehaviorOptions { get; } =
+        {
+            PersonalCloudLibrarySourceSettings.RemoveCachedFileOnlyUninstallBehavior,
+            PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior,
+            PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior
+        };
+
         public PersonalCloudLibrarySourceSettings Settings
         {
             get => settings;
             set
             {
+                if (settings != null)
+                {
+                    settings.PropertyChanged -= Settings_PropertyChanged;
+                }
+
                 settings = value;
+                if (settings != null)
+                {
+                    settings.PropertyChanged += Settings_PropertyChanged;
+                }
+
                 OnPropertyChanged();
+                RefreshBasicSetupStatus();
             }
+        }
+
+        public string SetupStatusHeadline
+        {
+            get => setupStatusHeadline;
+            set => SetValue(ref setupStatusHeadline, value);
+        }
+
+        public string SetupStatusDetails
+        {
+            get => setupStatusDetails;
+            set => SetValue(ref setupStatusDetails, value);
         }
 
         public PersonalCloudLibrarySourceSettingsViewModel(PersonalCloudLibrarySource plugin)
         {
             this.plugin = plugin;
-
             var savedSettings = plugin.LoadPluginSettings<PersonalCloudLibrarySourceSettings>();
             Settings = savedSettings ?? new PersonalCloudLibrarySourceSettings();
         }
@@ -180,16 +263,18 @@ namespace PersonalCloudLibrarySource
         public void BeginEdit()
         {
             editingClone = Serialization.GetClone(Settings);
+            RefreshBasicSetupStatus();
         }
 
         public void CancelEdit()
         {
-            Settings = editingClone;
+            Settings = editingClone ?? new PersonalCloudLibrarySourceSettings();
         }
 
         public void EndEdit()
         {
             plugin.SavePluginSettings(Settings);
+            RefreshBasicSetupStatus();
         }
 
         public bool VerifySettings(out List<string> errors)
@@ -199,40 +284,38 @@ namespace PersonalCloudLibrarySource
                 ? PersonalCloudLibrarySourceSettings.LocalFileProviderType
                 : Settings.SourceProviderType;
 
-            if (string.Equals(
-                sourceProviderType,
-                PersonalCloudLibrarySourceSettings.LocalFileProviderType,
-                StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(sourceProviderType, PersonalCloudLibrarySourceSettings.LocalFileProviderType, StringComparison.OrdinalIgnoreCase))
             {
-                if (!string.IsNullOrWhiteSpace(Settings.LocalManifestPath) &&
-                    !File.Exists(Settings.LocalManifestPath))
+                if (string.IsNullOrWhiteSpace(Settings.LocalManifestPath))
                 {
-                    errors.Add("The local manifest file does not exist.");
+                    errors.Add("Choose a local manifest JSON file for LocalFile mode.");
+                }
+                else if (!File.Exists(Settings.LocalManifestPath))
+                {
+                    errors.Add("The local manifest JSON file does not exist.");
                 }
             }
-            else if (string.Equals(
-                sourceProviderType,
-                PersonalCloudLibrarySourceSettings.LocalFolderProviderType,
-                StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(sourceProviderType, PersonalCloudLibrarySourceSettings.LocalFolderProviderType, StringComparison.OrdinalIgnoreCase))
             {
                 if (string.IsNullOrWhiteSpace(Settings.LocalLibraryRoot))
                 {
-                    errors.Add("The local library root is required for LocalFolder mode.");
+                    errors.Add("Choose a local library root for LocalFolder mode.");
                 }
                 else if (!Directory.Exists(Settings.LocalLibraryRoot))
                 {
                     errors.Add("The local library root does not exist.");
                 }
 
-                if (string.IsNullOrWhiteSpace(Settings.ManifestRelativePath))
+                if (string.IsNullOrWhiteSpace(Settings.LocalManifestPath) && string.IsNullOrWhiteSpace(Settings.ManifestRelativePath))
                 {
-                    errors.Add("The manifest relative path is required for LocalFolder mode.");
+                    errors.Add("Choose or generate a manifest for LocalFolder mode.");
+                }
+                else if (!string.IsNullOrWhiteSpace(Settings.LocalManifestPath) && !File.Exists(Settings.LocalManifestPath))
+                {
+                    errors.Add("The selected LocalFolder manifest file does not exist.");
                 }
             }
-            else if (string.Equals(
-                sourceProviderType,
-                PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
-                StringComparison.OrdinalIgnoreCase))
+            else if (string.Equals(sourceProviderType, PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType, StringComparison.OrdinalIgnoreCase))
             {
                 if (string.IsNullOrWhiteSpace(Settings.RcloneExecutablePath))
                 {
@@ -259,23 +342,58 @@ namespace PersonalCloudLibrarySource
                 errors.Add("Source provider type must be LocalFile, LocalFolder, or RcloneRemote.");
             }
 
-            if (!string.IsNullOrWhiteSpace(Settings.LocalCacheFolder) &&
-                !Directory.Exists(Settings.LocalCacheFolder))
+            if (!string.IsNullOrWhiteSpace(Settings.LocalCacheFolder))
             {
-                errors.Add("The local cache folder does not exist.");
+                try
+                {
+                    Path.GetFullPath(Settings.LocalCacheFolder);
+                }
+                catch (Exception)
+                {
+                    errors.Add("The local cache folder path is invalid.");
+                }
             }
 
             var uninstallBehavior = string.IsNullOrWhiteSpace(Settings.UninstallBehavior)
                 ? PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior
                 : Settings.UninstallBehavior;
-            if (!string.Equals(uninstallBehavior, PersonalCloudLibrarySourceSettings.RemoveCachedFileOnlyUninstallBehavior, StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(uninstallBehavior, PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior, StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(uninstallBehavior, PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior, StringComparison.OrdinalIgnoreCase))
+            if (Array.IndexOf(UninstallBehaviorOptions, uninstallBehavior) < 0)
             {
-                errors.Add("Uninstall behavior must be RemoveCachedFileOnly, RemoveCachedInstallFolder, or AskEachTime.");
+                errors.Add("Choose a valid uninstall behavior.");
             }
 
             return errors.Count == 0;
+        }
+
+        public void VerifySetup()
+        {
+            List<string> errors;
+            if (!VerifySettings(out errors))
+            {
+                var errorText = string.Join(Environment.NewLine, errors);
+                RefreshSetupStatusFromErrors(errors);
+                MessageBox.Show(errorText, "Personal Cloud Library Source");
+                return;
+            }
+
+            try
+            {
+                var summary = plugin.ValidateManifest(Settings);
+                RefreshSetupStatusFromValidation(summary);
+                MessageBox.Show(
+                    "Setup looks valid." + Environment.NewLine +
+                    Environment.NewLine +
+                    "Items found: " + summary.ItemsFound + Environment.NewLine +
+                    "Download-eligible: " + summary.DownloadEligible + Environment.NewLine +
+                    "Cached or installed: " + summary.CachedInstalled + Environment.NewLine +
+                    "Warnings: " + summary.Warnings,
+                    "Personal Cloud Library Source");
+            }
+            catch (Exception ex)
+            {
+                RefreshSetupStatusFromException(ex);
+                MessageBox.Show("Setup verification failed: " + ex.Message, "Personal Cloud Library Source");
+            }
         }
 
         public void TestRcloneConnection()
@@ -333,13 +451,14 @@ namespace PersonalCloudLibrarySource
                     if (process.ExitCode == 0)
                     {
                         MessageBox.Show(
-                            "rclone responded successfully.\n\nConfigured remotes:\n" + output,
+                            "rclone responded successfully." + Environment.NewLine + Environment.NewLine +
+                            "Configured remotes:" + Environment.NewLine + output,
                             "Personal Cloud Library Source");
                     }
                     else
                     {
                         MessageBox.Show(
-                            "rclone listremotes failed:\n" + RcloneManifestReader.TrimForLog(error.ToString()),
+                            "rclone listremotes failed:" + Environment.NewLine + RcloneManifestReader.TrimForLog(error.ToString()),
                             "Personal Cloud Library Source");
                     }
                 }
@@ -352,23 +471,63 @@ namespace PersonalCloudLibrarySource
 
         public void TestManifestLoad()
         {
-            try
+            VerifySetup();
+        }
+
+        public void BrowseLocalManifestPath()
+        {
+            var dialog = new OpenFileDialog
             {
-                var summary = plugin.ValidateManifest(Settings);
-                MessageBox.Show(
-                    "Manifest loaded successfully.\n" +
-                    $"Items found: {summary.ItemsFound}\n" +
-                    $"Download-eligible: {summary.DownloadEligible}\n" +
-                    $"Cached/installed: {summary.CachedInstalled}\n" +
-                    $"Warnings: {summary.Warnings}" +
-                    (summary.Warnings > 0
-                        ? "\n\nCheck for duplicate ids, missing id/title, or sourcePath values that already include RcloneContentRoot."
-                        : string.Empty),
-                    "Personal Cloud Library Source");
+                Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
+                CheckFileExists = true
+            };
+
+            if (!string.IsNullOrWhiteSpace(Settings.LocalManifestPath))
+            {
+                dialog.FileName = Settings.LocalManifestPath;
             }
-            catch (Exception ex)
+
+            if (dialog.ShowDialog() == true)
             {
-                MessageBox.Show("Manifest load failed: " + ex.Message, "Personal Cloud Library Source");
+                Settings.LocalManifestPath = dialog.FileName;
+            }
+        }
+
+        public void BrowseLocalLibraryRoot()
+        {
+            var selectedPath = BrowseForFolder("Choose your local library root folder.", Settings.LocalLibraryRoot);
+            if (!string.IsNullOrWhiteSpace(selectedPath))
+            {
+                Settings.LocalLibraryRoot = selectedPath;
+            }
+        }
+
+        public void BrowseLocalCacheFolder()
+        {
+            var selectedPath = BrowseForFolder("Choose your local cache folder.", Settings.LocalCacheFolder);
+            if (!string.IsNullOrWhiteSpace(selectedPath))
+            {
+                Settings.LocalCacheFolder = selectedPath;
+            }
+        }
+
+        public void BrowseRcloneExecutablePath()
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = "rclone executable (rclone.exe)|rclone.exe|Executable files (*.exe)|*.exe|All files (*.*)|*.*",
+                CheckFileExists = true
+            };
+
+            if (!string.IsNullOrWhiteSpace(Settings.RcloneExecutablePath) &&
+                !string.Equals(Settings.RcloneExecutablePath, "rclone", StringComparison.OrdinalIgnoreCase))
+            {
+                dialog.FileName = Settings.RcloneExecutablePath;
+            }
+
+            if (dialog.ShowDialog() == true)
+            {
+                Settings.RcloneExecutablePath = dialog.FileName;
             }
         }
 
@@ -389,23 +548,158 @@ namespace PersonalCloudLibrarySource
                 var sampleDirectory = Path.Combine(plugin.GetPluginDataDirectory(), "samples");
                 Directory.CreateDirectory(sampleDirectory);
                 var samplePath = Path.Combine(sampleDirectory, "personal-cloud-library.sample.json");
+                File.WriteAllText(samplePath, GetSampleManifestJson(), Encoding.UTF8);
 
-                if (!File.Exists(samplePath))
-                {
-                    File.WriteAllText(samplePath, GetSampleManifestJson(), Encoding.UTF8);
-                }
+                Settings.LocalManifestPath = samplePath;
+                RefreshBasicSetupStatus();
 
-                if (string.IsNullOrWhiteSpace(Settings.LocalManifestPath))
-                {
-                    Settings.LocalManifestPath = samplePath;
-                    OnPropertyChanged(nameof(Settings));
-                }
-
-                MessageBox.Show("Sample manifest is available at:\n" + samplePath, "Personal Cloud Library Source");
+                MessageBox.Show("Sample manifest created at:" + Environment.NewLine + samplePath, "Personal Cloud Library Source");
             }
             catch (Exception ex)
             {
                 MessageBox.Show("Could not create sample manifest: " + ex.Message, "Personal Cloud Library Source");
+            }
+        }
+
+        public void GenerateManifestFromFolder()
+        {
+            var selectedRoot = Settings.LocalLibraryRoot;
+            if (string.IsNullOrWhiteSpace(selectedRoot) || !Directory.Exists(selectedRoot))
+            {
+                selectedRoot = BrowseForFolder("Choose the local folder or NAS root to scan.", Settings.LocalLibraryRoot);
+            }
+
+            if (string.IsNullOrWhiteSpace(selectedRoot))
+            {
+                return;
+            }
+
+            try
+            {
+                var report = plugin.GenerateManifestFromFolder(selectedRoot);
+                Settings.SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFolderProviderType;
+                Settings.LocalLibraryRoot = selectedRoot;
+                Settings.LocalManifestPath = report.OutputPath;
+                Settings.ManifestRelativePath = string.Empty;
+                if (string.IsNullOrWhiteSpace(Settings.LocalCacheFolder))
+                {
+                    Settings.LocalCacheFolder = plugin.GetDefaultLocalCacheFolder();
+                }
+
+                Settings.LastGeneratedManifestPath = report.OutputPath;
+                Settings.LastGeneratedReportPath = report.ReportPath;
+                Settings.LastManifestGeneratedAt = report.Manifest.GeneratedAt;
+                Settings.LastManifestItemCount = report.ItemCount;
+
+                RefreshSetupStatusFromGeneration(report);
+
+                MessageBox.Show(
+                    "Manifest generation completed." + Environment.NewLine + Environment.NewLine +
+                    "Detected items: " + report.ItemCount + Environment.NewLine +
+                    "Detected directory packages: " + report.DetectedDirectoryItemCount + Environment.NewLine +
+                    "Skipped entries: " + report.SkippedEntries.Count + Environment.NewLine +
+                    "Warnings: " + report.Warnings.Count + Environment.NewLine + Environment.NewLine +
+                    "Manifest path:" + Environment.NewLine + report.OutputPath + Environment.NewLine + Environment.NewLine +
+                    "Run Update Game Library in Playnite when you are ready to import the generated manifest.",
+                    "Personal Cloud Library Source");
+            }
+            catch (Exception ex)
+            {
+                RefreshSetupStatusFromException(ex);
+                MessageBox.Show("Manifest generation failed: " + ex.Message, "Personal Cloud Library Source");
+            }
+        }
+
+        public void OpenGeneratedManifest()
+        {
+            OpenFileInExplorer(Settings.LastGeneratedManifestPath, "Generated manifest path is empty.");
+        }
+
+        public void OpenGeneratedReport()
+        {
+            OpenFileInExplorer(Settings.LastGeneratedReportPath, "Generated report path is empty.");
+        }
+
+        public void ShowUpdateLibraryInstructions()
+        {
+            MessageBox.Show(
+                "After saving or generating your manifest:" + Environment.NewLine + Environment.NewLine +
+                "1. Close Extension settings." + Environment.NewLine +
+                "2. Run Update Game Library in Playnite." + Environment.NewLine +
+                "3. Review imported entries, then use Download to local cache for any cloud-only items you want to cache.",
+                "Personal Cloud Library Source");
+        }
+
+        private void Settings_PropertyChanged(object sender, PropertyChangedEventArgs e)
+        {
+            RefreshBasicSetupStatus();
+        }
+
+        private void RefreshBasicSetupStatus()
+        {
+            var provider = PersonalCloudLibrarySource.GetProviderType(Settings);
+            var manifestDescription = plugin.DescribeManifestPath(Settings);
+            var details = new StringBuilder();
+            details.AppendLine("Provider: " + provider);
+            details.AppendLine("Manifest: " + (string.IsNullOrWhiteSpace(manifestDescription) ? "Not configured yet" : manifestDescription));
+            details.AppendLine("Cache folder: " + (string.IsNullOrWhiteSpace(Settings.LocalCacheFolder) ? "Not configured yet" : Settings.LocalCacheFolder));
+
+            if (!string.IsNullOrWhiteSpace(Settings.LastManifestGeneratedAt))
+            {
+                details.AppendLine("Last generated: " + Settings.LastManifestGeneratedAt);
+                details.AppendLine("Last generated items: " + Settings.LastManifestItemCount);
+            }
+
+            SetupStatusHeadline = Settings.Enabled ? "Setup status" : "Library source disabled";
+            SetupStatusDetails = details.ToString().TrimEnd();
+        }
+
+        private void RefreshSetupStatusFromErrors(List<string> errors)
+        {
+            SetupStatusHeadline = "Setup needs attention";
+            SetupStatusDetails = string.Join(Environment.NewLine, errors);
+        }
+
+        private void RefreshSetupStatusFromValidation(ManifestValidationSummary summary)
+        {
+            SetupStatusHeadline = "Setup looks valid";
+            SetupStatusDetails =
+                "Items found: " + summary.ItemsFound + Environment.NewLine +
+                "Download-eligible: " + summary.DownloadEligible + Environment.NewLine +
+                "Cached or installed: " + summary.CachedInstalled + Environment.NewLine +
+                "Warnings: " + summary.Warnings + Environment.NewLine +
+                "Manifest: " + plugin.DescribeManifestPath(Settings);
+        }
+
+        private void RefreshSetupStatusFromGeneration(ManifestGenerationReport report)
+        {
+            SetupStatusHeadline = "Manifest generated successfully";
+            SetupStatusDetails =
+                "Items detected: " + report.ItemCount + Environment.NewLine +
+                "Skipped entries: " + report.SkippedEntries.Count + Environment.NewLine +
+                "Warnings: " + report.Warnings.Count + Environment.NewLine +
+                "Manifest: " + report.OutputPath;
+        }
+
+        private void RefreshSetupStatusFromException(Exception ex)
+        {
+            SetupStatusHeadline = "Setup check failed";
+            SetupStatusDetails = ex.Message;
+        }
+
+        private static string BrowseForFolder(string description, string selectedPath)
+        {
+            using (var dialog = new Forms.FolderBrowserDialog())
+            {
+                dialog.Description = description;
+                if (!string.IsNullOrWhiteSpace(selectedPath) && Directory.Exists(selectedPath))
+                {
+                    dialog.SelectedPath = selectedPath;
+                }
+
+                return dialog.ShowDialog() == Forms.DialogResult.OK
+                    ? dialog.SelectedPath
+                    : string.Empty;
             }
         }
 
@@ -425,24 +719,56 @@ namespace PersonalCloudLibrarySource
             Process.Start("explorer.exe", folderPath);
         }
 
+        private static void OpenFileInExplorer(string path, string emptyPathMessage)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                MessageBox.Show(emptyPathMessage, "Personal Cloud Library Source");
+                return;
+            }
+
+            if (!File.Exists(path))
+            {
+                MessageBox.Show("File not found:" + Environment.NewLine + path, "Personal Cloud Library Source");
+                return;
+            }
+
+            Process.Start("explorer.exe", "/select,\"" + path + "\"");
+        }
+
         private static string GetSampleManifestJson()
         {
             return @"{
-  ""version"": 2,
+  ""version"": 3,
+  ""generatedBy"": ""Personal Cloud Library Source sample manifest"",
+  ""generatedAt"": ""2026-06-15T00:00:00Z"",
+  ""sourceMode"": ""filesystem"",
+  ""itemCount"": 2,
   ""items"": [
     {
-      ""id"": ""example-adventure"",
-      ""title"": ""Example Adventure"",
-      ""platform"": ""Example Platform"",
-      ""sourcePath"": ""ExampleAdventure/ExampleAdventure.bat"",
-      ""cachePath"": ""ExampleAdventure\\ExampleAdventure.bat"",
-      ""installDirectory"": ""ExampleAdventure"",
-      ""launchFile"": ""ExampleAdventure.bat"",
-      ""notes"": ""Fake local sample entry for testing. No game content is included.""
+      ""id"": ""example-cartridge-demo"",
+      ""title"": ""Example Cartridge Demo"",
+      ""platform"": ""Nintendo NES"",
+      ""sourcePath"": ""Nintendo Entertainment System/Example Cartridge Demo.nes"",
+      ""sourceType"": ""file"",
+      ""cachePath"": ""Nintendo Entertainment System\\Example Cartridge Demo.nes"",
+      ""installDirectory"": ""Nintendo Entertainment System"",
+      ""launchFile"": ""Example Cartridge Demo.nes"",
+      ""notes"": ""Fake sample entry for testing only.""
+    },
+    {
+      ""id"": ""example-disc-package"",
+      ""title"": ""Example Disc Package"",
+      ""platform"": ""Sony PlayStation"",
+      ""sourcePath"": ""PlayStation/Example Disc Package"",
+      ""sourceType"": ""directory"",
+      ""cachePath"": ""PlayStation\\Example Disc Package\\Example Disc Package.cue"",
+      ""installDirectory"": ""PlayStation\\Example Disc Package"",
+      ""launchFile"": ""Example Disc Package.cue"",
+      ""notes"": ""Fake directory package sample entry for testing only.""
     }
   ]
-}
-";
+}";
         }
     }
 }

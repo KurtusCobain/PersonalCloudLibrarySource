@@ -5,17 +5,35 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$msbuild = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
+$msbuildCandidates = @(
+    "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe",
+    "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
+)
+$msbuild = $msbuildCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
 $solution = Join-Path $repoRoot "PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln"
 $configuration = "Release"
 $projectOutput = Join-Path $repoRoot "PersonalCloudLibrarySource\bin\$configuration"
 $distRoot = Join-Path $repoRoot "dist"
 $packageFolder = Join-Path $distRoot "PersonalCloudLibrarySource"
-$packagePath = Join-Path $distRoot "PersonalCloudLibrarySource-0.1.1.pext"
-$debugPackagePath = Join-Path $distRoot "PersonalCloudLibrarySource-0.1.1-debug-symbols.zip"
+$extensionManifestPath = Join-Path $repoRoot "PersonalCloudLibrarySource\extension.yaml"
 
-if (-not (Test-Path -LiteralPath $msbuild)) {
-    throw "MSBuild was not found at $msbuild"
+if (-not (Test-Path -LiteralPath $extensionManifestPath)) {
+    throw "Extension manifest not found: $extensionManifestPath"
+}
+
+$extensionVersion = Select-String -Path $extensionManifestPath -Pattern '^Version:\s*(.+)$' |
+    Select-Object -First 1 |
+    ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }
+
+if ([string]::IsNullOrWhiteSpace($extensionVersion)) {
+    throw "Unable to determine extension version from $extensionManifestPath"
+}
+
+$packagePath = Join-Path $distRoot "PersonalCloudLibrarySource-$extensionVersion.pext"
+$debugPackagePath = Join-Path $distRoot "PersonalCloudLibrarySource-$extensionVersion-debug-symbols.zip"
+
+if ([string]::IsNullOrWhiteSpace($msbuild)) {
+    throw "MSBuild was not found in the expected Visual Studio or Build Tools locations."
 }
 
 & $msbuild $solution /p:Configuration=$configuration /p:Platform="Any CPU"
