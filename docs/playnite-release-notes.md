@@ -2,11 +2,11 @@
 
 Manifest generation update completed 6/2/2026
 
-## Unreleased
+## 0.2.0
 
 Personal Cloud Library Source imports a user-supplied JSON manifest into Playnite as a normal library source.
 
-The add-on browser package is still `0.1.1`. The notes below describe the next documentation and manifest-generator update that is not yet packaged in a newer `.pext` release.
+This release packages the guided setup, universal manifest generation, verification reports, and settings theme polish updates for the Playnite add-on browser.
 
 Highlights:
 
@@ -18,6 +18,8 @@ Highlights:
 - Cached entries launch through Playnite.
 - Manual `Download to local cache` action for supported missing entries.
 - Optional import diagnostics.
+- Verification report output for setup and troubleshooting.
+- Dark-theme readability fixes for the settings status card.
 
 Limitations:
 

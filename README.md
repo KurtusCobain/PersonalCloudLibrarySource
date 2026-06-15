@@ -31,9 +31,9 @@ It does not delete source files or cloud files.
 
 ## Current Release Status
 
-The public Playnite add-on browser package is still `0.1.1`.
+The current release target is `0.2.0`.
 
-The repository now contains the v0.2 guided-setup and manifest-generation pass intended for the next packaged release. See:
+This repository now includes the packaged v0.2 guided-setup, manifest-generation, verification-reporting, and settings-theme polish release. See:
 
 - [CHANGELOG.md](CHANGELOG.md)
 - [docs/playnite-release-notes.md](docs/playnite-release-notes.md)

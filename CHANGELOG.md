@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 Manifest generation update completed 6/2/2026
 
@@ -10,6 +10,8 @@ Manifest generation update completed 6/2/2026
 - Added directory-package detection for disc folders, PC folders, and Wii U `code/content/meta` packages in generated manifests.
 - Added local directory-copy and rclone directory-copy install behavior for manifest items with `sourceType = directory`.
 - Kept backward compatibility for older manifests that omit `sourceType`.
+- Added setup verification reports and safer plugin-side file writes.
+- Improved the settings status card styling for Playnite dark theme readability.
 
 ## 0.1.1
 

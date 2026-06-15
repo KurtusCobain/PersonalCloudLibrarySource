@@ -12,6 +12,8 @@ Description: |
 
   Manifest generation update completed 6/2/2026
 
+  Version 0.2.0 adds guided setup support for local manifest generation inside Playnite, verification report output for setup troubleshooting, and improved dark-theme readability in the settings status card.
+
   Supports LocalFile, LocalFolder, and RcloneRemote providers. Local folders, external drives, mapped drives, synced cloud folders, and NAS paths are supported directly. Google Drive, OneDrive, Dropbox, and similar cloud services are supported through rclone when users choose the RcloneRemote provider.
 
   This does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, storefront access, or download sources.

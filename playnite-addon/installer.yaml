@@ -1,21 +1,16 @@
 AddonId: 'PersonalCloudLibrarySource_61993828-67a8-4468-93a2-293442e36328'
 # Manifest generation update completed 6/2/2026
 Packages:
-  - Version: '0.1.1'
+  - Version: '0.2.0'
     RequiredApiVersion: '6.16.0'
-    ReleaseDate: '2026-05-09'
-    PackageUrl: https://github.com/KurtusCobain/PersonalCloudLibrarySource/releases/download/v0.1.1/PersonalCloudLibrarySource-0.1.1.pext
+    ReleaseDate: '2026-06-15'
+    PackageUrl: https://github.com/KurtusCobain/PersonalCloudLibrarySource/releases/download/v0.2.0/PersonalCloudLibrarySource-0.2.0.pext
     Changelog:
-      - Public alpha release for Playnite's official add-on browser.
-      - Added LocalFile, LocalFolder, and RcloneRemote provider modes.
-      - Added support for Google Drive, OneDrive, Dropbox, and similar providers through rclone.
-      - Added support for local folders, external drives, mapped drives, synced folders, and NAS paths.
-      - Added cloud-only library entries that can appear in Playnite before being downloaded.
-      - Added manual Download to local cache support.
-      - Added cached local launch support.
-      - Added uninstall/remove cached copy support while keeping the Playnite catalog entry.
-      - Added sourcePath and cachePath manifest fields while keeping legacy manifest compatibility.
-      - Added customizable library display name.
-      - Added optional import diagnostics.
-      - Added setup tools, sample manifests, documentation, and packaging scripts.
-      - Updated documentation for public installation through Playnite's official add-on browser.
+      - Added guided setup support for local manifest generation inside Playnite settings.
+      - Added universal manifest generation for local folders, external drives, mapped drives, NAS paths, and rclone remotes.
+      - Added sourceType-aware manifest items for file and directory package workflows.
+      - Added directory-package detection for disc folders, PC folders, and Wii U code/content/meta layouts.
+      - Added verification report output for manifest generation and setup troubleshooting.
+      - Added safer plugin-side file writes for generated manifests and reports.
+      - Improved the settings status card contrast for Playnite dark theme readability.
+      - Kept compatibility with older manifests that omit sourceType.
