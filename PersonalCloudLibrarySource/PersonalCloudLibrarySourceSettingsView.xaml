@@ -18,23 +18,26 @@
                        TextWrapping="Wrap"
                        Margin="0,0,0,16"/>
 
-            <Border BorderBrush="#B8C6D6"
+            <Border BorderBrush="#3B4652"
                     BorderThickness="1"
                     CornerRadius="6"
-                    Background="#F7FAFD"
-                    Padding="12"
+                    Background="#1F252C"
+                    Padding="14"
                     Margin="0,0,0,16">
                 <StackPanel>
                     <TextBlock Text="Setup Status"
                                FontSize="15"
                                FontWeight="Bold"
+                               Foreground="#F3F6FA"
                                Margin="0,0,0,6"/>
                     <TextBlock Text="{Binding SetupStatusHeadline}"
                                FontWeight="SemiBold"
+                               Foreground="#FFFFFF"
                                Margin="0,0,0,4"/>
                     <TextBlock Text="{Binding SetupStatusDetails}"
                                TextWrapping="Wrap"
-                               Opacity="0.85"/>
+                               Foreground="#D7E0EA"
+                               Opacity="0.95"/>
                 </StackPanel>
             </Border>
 
