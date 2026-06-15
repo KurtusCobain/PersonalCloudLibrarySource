@@ -9,18 +9,21 @@ namespace PersonalCloudLibrarySource
     {
         private static readonly ILogger logger = LogManager.GetLogger();
 
+        private readonly IPlayniteAPI playniteApi;
         private readonly PersonalCloudLibraryItem item;
         private readonly PersonalCloudLibrarySourceSettings settings;
         private readonly RcloneFileCopier rcloneFileCopier;
         private readonly LocalFileCopier localFileCopier;
 
         public RcloneInstallController(
+            IPlayniteAPI playniteApi,
             Game game,
             PersonalCloudLibraryItem item,
             PersonalCloudLibrarySourceSettings settings,
             RcloneFileCopier rcloneFileCopier,
             LocalFileCopier localFileCopier) : base(game)
         {
+            this.playniteApi = playniteApi;
             this.item = item;
             this.settings = settings;
             this.rcloneFileCopier = rcloneFileCopier;
@@ -75,6 +78,13 @@ namespace PersonalCloudLibrarySource
                     logger.Error($"Personal Cloud Library Source failed to download item {item.Id}: {message}");
                 }
 
+                ShowSummary(
+                    "Download to local cache failed." + System.Environment.NewLine + System.Environment.NewLine +
+                    "Item: " + item.Title + System.Environment.NewLine +
+                    "Source type: " + sourceType + System.Environment.NewLine +
+                    "Result: " + (string.IsNullOrWhiteSpace(message) ? "Unknown failure." : message) + System.Environment.NewLine +
+                    System.Environment.NewLine +
+                    "Next: review the manifest source path and cache settings, then try again.");
                 return;
             }
 
@@ -84,6 +94,13 @@ namespace PersonalCloudLibrarySource
             if (!expectedLaunchFileExists)
             {
                 logger.Warn($"Personal Cloud Library Source downloaded item {item.Id}, but the expected launch file was not found.");
+                ShowSummary(
+                    "Download to local cache finished with warnings." + System.Environment.NewLine + System.Environment.NewLine +
+                    "Item: " + item.Title + System.Environment.NewLine +
+                    "Source type: " + sourceType + System.Environment.NewLine +
+                    "Result: files were copied, but the expected launch file was not found." + System.Environment.NewLine +
+                    System.Environment.NewLine +
+                    "Next: review launchFile, cachePath, and installDirectory in the manifest.");
                 return;
             }
 
@@ -96,6 +113,18 @@ namespace PersonalCloudLibrarySource
             }));
 
             logger.Info($"Personal Cloud Library Source downloaded item {item.Id} to local cache.");
+            ShowSummary(
+                "Download to local cache completed." + System.Environment.NewLine + System.Environment.NewLine +
+                "Item: " + item.Title + System.Environment.NewLine +
+                "Source type: " + sourceType + System.Environment.NewLine +
+                "Installed state: cached locally and launch-ready." + System.Environment.NewLine +
+                System.Environment.NewLine +
+                "Next: launch the item from Playnite or run Update Game Library if you want Playnite to refresh its view.");
+        }
+
+        private void ShowSummary(string message)
+        {
+            playniteApi?.Dialogs?.ShowMessage(message, "Personal Cloud Library Source");
         }
     }
 }

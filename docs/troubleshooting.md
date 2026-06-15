@@ -4,6 +4,8 @@
 
 Use diagnostics and the settings screen first when troubleshooting provider paths, cache state, or uninstall behavior.
 
+The fastest first step is now **Verify setup / generate report**, then open the latest verification report from the settings screen.
+
 ![Provider settings](images/pcls-settings-provider.png)
 
 Provider settings control where the manifest is read from.
@@ -36,6 +38,8 @@ If this fails, update `RcloneRemoteName` or `RcloneManifestPath`.
 
 Save the manifest as valid UTF-8 JSON. The importer trims a leading UTF-8 BOM, but malformed JSON will fail to load.
 
+The verification report records whether manifest loading succeeded and captures the failure message without dumping the full manifest.
+
 ## Generated Manifest Is Empty
 
 Check that the source root actually contains supported launchable files or supported directory packages.
@@ -48,6 +52,11 @@ Common reasons for an empty generated manifest:
 - the selected root is one level too high or one level too low
 
 Run the generator with `-DryRun` first if you want to inspect what it detects without writing files.
+
+The generated manifest report and verification report are both useful here:
+
+- the generated manifest report explains what was skipped during the scan
+- the verification report summarizes whether the resulting manifest is usable in the current provider mode
 
 ## Cloud Item Appears Uninstalled
 
@@ -105,6 +114,8 @@ sourcePath = PersonalLibrary/files/Game/Game.exe
 
 The incorrect setup resolves to `PersonalLibrary/files/PersonalLibrary/files/Game/Game.exe`. Use the manifest validation button to catch this warning.
 
+The verification report includes a dedicated count for these warnings.
+
 ## .bin Sidecar Files Should Not Appear as Separate Entries
 
 Standalone `.bin` files are intentionally skipped by the manifest generator. Disc packages should appear as one directory item that uses the matching `.cue`, `.m3u`, `.chd`, `.pbp`, `.iso`, or launcher file.
@@ -154,3 +165,23 @@ Fallback path:
 ```text
 %LOCALAPPDATA%\PersonalCloudLibrarySource\diagnostics\last-import-diagnostics.txt
 ```
+
+## Verification Report Location
+
+Verification reports are written to:
+
+```text
+<Playnite plugin user data>\reports\latest-verification-report.txt
+```
+
+The report is intentionally capped and summarized for privacy. It does not print the entire manifest inventory by default.
+
+## Backups for Plugin-Generated Outputs
+
+When the plugin replaces its own generated manifest or verification report files, it can create lightweight backups under:
+
+```text
+<Playnite plugin user data>\backups\
+```
+
+These backups apply to plugin-generated outputs only. They do not touch source/cloud files or personal game content.

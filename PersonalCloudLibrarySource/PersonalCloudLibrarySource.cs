@@ -16,6 +16,8 @@ namespace PersonalCloudLibrarySource
         private readonly RcloneFileCopier rcloneFileCopier = new RcloneFileCopier();
         private readonly LocalFileCopier localFileCopier = new LocalFileCopier();
         private readonly ManifestGenerationService manifestGenerationService = new ManifestGenerationService();
+        private readonly LibraryVerificationService libraryVerificationService = new LibraryVerificationService();
+        private readonly SafeFileWriteService safeFileWriteService = new SafeFileWriteService();
         private readonly IPlayniteAPI playniteApi;
 
         private PersonalCloudLibrarySourceSettingsViewModel settings { get; set; }
@@ -144,6 +146,7 @@ namespace PersonalCloudLibrarySource
                     }
 
                     installActions.Add(new RcloneInstallController(
+                        playniteApi,
                         args.Game,
                         item,
                         pluginSettings,
@@ -889,7 +892,7 @@ namespace PersonalCloudLibrarySource
                 .Trim('/');
         }
 
-        private static bool CanResolveSourcePath(PersonalCloudLibrarySourceSettings pluginSettings, string sourcePath)
+        public static bool CanResolveSourcePath(PersonalCloudLibrarySourceSettings pluginSettings, string sourcePath)
         {
             var providerType = GetProviderType(pluginSettings);
 
@@ -965,9 +968,8 @@ namespace PersonalCloudLibrarySource
             try
             {
                 var diagnosticsDirectory = ResolveDiagnosticsDirectory();
-                Directory.CreateDirectory(diagnosticsDirectory);
                 var diagnosticsPath = Path.Combine(diagnosticsDirectory, "last-import-diagnostics.txt");
-                File.WriteAllLines(diagnosticsPath, diagnostics);
+                safeFileWriteService.WriteAllLines(diagnosticsPath, diagnostics);
             }
             catch (Exception ex)
             {
@@ -983,6 +985,21 @@ namespace PersonalCloudLibrarySource
         public string GetGeneratedManifestDirectory()
         {
             return Path.Combine(GetPluginDataDirectory(), "manifests");
+        }
+
+        public string GetReportsDirectory()
+        {
+            return Path.Combine(GetPluginDataDirectory(), "reports");
+        }
+
+        public string GetBackupsDirectory()
+        {
+            return Path.Combine(GetPluginDataDirectory(), "backups");
+        }
+
+        public string GetLatestVerificationReportPath()
+        {
+            return Path.Combine(GetReportsDirectory(), "latest-verification-report.txt");
         }
 
         public string GetDefaultGeneratedManifestPath()
@@ -1014,8 +1031,46 @@ namespace PersonalCloudLibrarySource
             {
                 SourceRoot = sourceRoot,
                 OutputPath = outputPath,
-                ReportPath = reportPath
+                ReportPath = reportPath,
+                BackupDirectory = GetBackupsDirectory()
             });
+        }
+
+        public LibraryVerificationReport GenerateVerificationReport(
+            PersonalCloudLibrarySourceSettings pluginSettings,
+            IEnumerable<string> configurationErrors = null)
+        {
+            var reportPath = GetLatestVerificationReportPath();
+            PersonalCloudLibraryManifest manifest = null;
+            Exception manifestLoadException = null;
+
+            try
+            {
+                var json = LoadManifestJson(pluginSettings);
+                manifest = ParseManifest(json);
+            }
+            catch (Exception ex)
+            {
+                manifestLoadException = ex;
+            }
+
+            var report = libraryVerificationService.BuildReport(
+                pluginSettings,
+                DescribeManifestPath(pluginSettings),
+                reportPath,
+                manifest,
+                manifestLoadException,
+                configurationErrors,
+                playniteApi?.Database?.Games,
+                Id);
+
+            safeFileWriteService.WriteAllLines(
+                reportPath,
+                libraryVerificationService.BuildReportLines(report),
+                GetBackupsDirectory(),
+                createBackup: true);
+
+            return report;
         }
 
         public string GetPluginDataDirectory()

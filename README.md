@@ -19,6 +19,7 @@ Manifest generation update completed 6/2/2026
 - Supports manual `Download to local cache` actions for eligible items.
 - Supports safe `Remove cached copy` uninstall actions for cache-owned paths.
 - Generates a v3 manifest from a local folder, external drive, mapped drive, or NAS path from inside Playnite settings.
+- Generates a public-safe verification report for manifest, cache, and path-resolution troubleshooting.
 
 ## What It Does Not Do
 
@@ -63,6 +64,8 @@ The v0.2 setup flow adds local manifest generation directly inside Playnite sett
 
 The generated manifest is written to the plugin user data path, not the extension install folder.
 
+Verification reports and diagnostics are also written under the plugin user data path.
+
 Use this for:
 
 - local folders
@@ -75,6 +78,7 @@ See:
 
 - [docs/setup-wizard.md](docs/setup-wizard.md)
 - [docs/automatic-manifest-generation.md](docs/automatic-manifest-generation.md)
+- [docs/reports-and-diagnostics.md](docs/reports-and-diagnostics.md)
 - [docs/setup-local-folder.md](docs/setup-local-folder.md)
 
 ## Advanced or Manual Manifest Generation
@@ -117,6 +121,7 @@ See:
 
 See:
 
+- [docs/reports-and-diagnostics.md](docs/reports-and-diagnostics.md)
 - [docs/troubleshooting.md](docs/troubleshooting.md)
 
 ## Documentation Index
@@ -126,6 +131,7 @@ See:
 - [docs/setup-local-folder.md](docs/setup-local-folder.md)
 - [docs/setup-rclone.md](docs/setup-rclone.md)
 - [docs/manifest-format.md](docs/manifest-format.md)
+- [docs/reports-and-diagnostics.md](docs/reports-and-diagnostics.md)
 - [docs/legal-use.md](docs/legal-use.md)
 - [docs/troubleshooting.md](docs/troubleshooting.md)
 

@@ -201,6 +201,7 @@ namespace PersonalCloudLibrarySource
     public class PersonalCloudLibrarySourceSettingsViewModel : ObservableObject, ISettings
     {
         private readonly PersonalCloudLibrarySource plugin;
+        private readonly SafeFileWriteService safeFileWriteService = new SafeFileWriteService();
         private PersonalCloudLibrarySourceSettings editingClone;
         private PersonalCloudLibrarySourceSettings settings;
         private string setupStatusHeadline;
@@ -367,26 +368,34 @@ namespace PersonalCloudLibrarySource
 
         public void VerifySetup()
         {
-            List<string> errors;
-            if (!VerifySettings(out errors))
-            {
-                var errorText = string.Join(Environment.NewLine, errors);
-                RefreshSetupStatusFromErrors(errors);
-                MessageBox.Show(errorText, "Personal Cloud Library Source");
-                return;
-            }
-
             try
             {
-                var summary = plugin.ValidateManifest(Settings);
-                RefreshSetupStatusFromValidation(summary);
+                List<string> errors;
+                VerifySettings(out errors);
+                var report = plugin.GenerateVerificationReport(Settings, errors);
+                RefreshSetupStatusFromVerificationReport(report);
+
+                var verificationPassed = report.ConfigurationErrorsCount == 0 && report.ManifestLoadSucceeded;
+                var headline = verificationPassed
+                    ? "Setup verification completed."
+                    : "Setup verification found issues.";
+                var nextAction = verificationPassed
+                    ? "Next: save settings if needed, then run Update Game Library in Playnite."
+                    : "Next: review the verification report, fix the flagged issues, and run verification again.";
+
                 MessageBox.Show(
-                    "Setup looks valid." + Environment.NewLine +
+                    headline + Environment.NewLine +
                     Environment.NewLine +
-                    "Items found: " + summary.ItemsFound + Environment.NewLine +
-                    "Download-eligible: " + summary.DownloadEligible + Environment.NewLine +
-                    "Cached or installed: " + summary.CachedInstalled + Environment.NewLine +
-                    "Warnings: " + summary.Warnings,
+                    "Manifest load: " + (report.ManifestLoadSucceeded ? "Succeeded" : "Failed") + Environment.NewLine +
+                    "Items found: " + report.TotalManifestItems + Environment.NewLine +
+                    "Download/cache-eligible: " + report.DownloadEligibleCount + Environment.NewLine +
+                    "Cached or installed: " + report.CachedInstalledCount + Environment.NewLine +
+                    "Warnings sampled: " + report.WarningSamples.Count + Environment.NewLine +
+                    "Configuration errors: " + report.ConfigurationErrorsCount + Environment.NewLine +
+                    Environment.NewLine +
+                    "Verification report:" + Environment.NewLine +
+                    report.ReportPath + Environment.NewLine + Environment.NewLine +
+                    nextAction,
                     "Personal Cloud Library Source");
             }
             catch (Exception ex)
@@ -541,6 +550,21 @@ namespace PersonalCloudLibrarySource
             OpenFolder(plugin.GetDiagnosticsDirectory(), createIfMissing: true);
         }
 
+        public void OpenReportsFolder()
+        {
+            OpenFolder(plugin.GetReportsDirectory(), createIfMissing: true);
+        }
+
+        public void OpenPluginDataFolder()
+        {
+            OpenFolder(plugin.GetPluginDataDirectory(), createIfMissing: true);
+        }
+
+        public void OpenLatestVerificationReport()
+        {
+            OpenFileInExplorer(plugin.GetLatestVerificationReportPath(), "Verification report path is empty.");
+        }
+
         public void CreateSampleManifest()
         {
             try
@@ -548,7 +572,7 @@ namespace PersonalCloudLibrarySource
                 var sampleDirectory = Path.Combine(plugin.GetPluginDataDirectory(), "samples");
                 Directory.CreateDirectory(sampleDirectory);
                 var samplePath = Path.Combine(sampleDirectory, "personal-cloud-library.sample.json");
-                File.WriteAllText(samplePath, GetSampleManifestJson(), Encoding.UTF8);
+                safeFileWriteService.WriteAllText(samplePath, GetSampleManifestJson());
 
                 Settings.LocalManifestPath = samplePath;
                 RefreshBasicSetupStatus();
@@ -595,11 +619,13 @@ namespace PersonalCloudLibrarySource
 
                 MessageBox.Show(
                     "Manifest generation completed." + Environment.NewLine + Environment.NewLine +
+                    "Success: yes" + Environment.NewLine +
                     "Detected items: " + report.ItemCount + Environment.NewLine +
                     "Detected directory packages: " + report.DetectedDirectoryItemCount + Environment.NewLine +
                     "Skipped entries: " + report.SkippedEntries.Count + Environment.NewLine +
                     "Warnings: " + report.Warnings.Count + Environment.NewLine + Environment.NewLine +
                     "Manifest path:" + Environment.NewLine + report.OutputPath + Environment.NewLine + Environment.NewLine +
+                    "Manifest report path:" + Environment.NewLine + report.ReportPath + Environment.NewLine + Environment.NewLine +
                     "Run Update Game Library in Playnite when you are ready to import the generated manifest.",
                     "Personal Cloud Library Source");
             }
@@ -612,12 +638,18 @@ namespace PersonalCloudLibrarySource
 
         public void OpenGeneratedManifest()
         {
-            OpenFileInExplorer(Settings.LastGeneratedManifestPath, "Generated manifest path is empty.");
+            var path = string.IsNullOrWhiteSpace(Settings.LastGeneratedManifestPath)
+                ? plugin.GetDefaultGeneratedManifestPath()
+                : Settings.LastGeneratedManifestPath;
+            OpenFileInExplorer(path, "Generated manifest path is empty.");
         }
 
         public void OpenGeneratedReport()
         {
-            OpenFileInExplorer(Settings.LastGeneratedReportPath, "Generated report path is empty.");
+            var path = string.IsNullOrWhiteSpace(Settings.LastGeneratedReportPath)
+                ? plugin.GetDefaultGeneratedReportPath()
+                : Settings.LastGeneratedReportPath;
+            OpenFileInExplorer(path, "Generated report path is empty.");
         }
 
         public void ShowUpdateLibraryInstructions()
@@ -669,6 +701,28 @@ namespace PersonalCloudLibrarySource
                 "Cached or installed: " + summary.CachedInstalled + Environment.NewLine +
                 "Warnings: " + summary.Warnings + Environment.NewLine +
                 "Manifest: " + plugin.DescribeManifestPath(Settings);
+        }
+
+        private void RefreshSetupStatusFromVerificationReport(LibraryVerificationReport report)
+        {
+            var hasIssues =
+                report == null ||
+                report.ConfigurationErrorsCount > 0 ||
+                !report.ManifestLoadSucceeded ||
+                report.InvalidOrMissingSourcePathCount > 0 ||
+                report.InvalidOrMissingCachePathCount > 0 ||
+                report.RclonePathDoublingWarningCount > 0 ||
+                report.LocalFolderPathWarningCount > 0;
+
+            SetupStatusHeadline = hasIssues ? "Setup needs attention" : "Setup looks valid";
+            SetupStatusDetails =
+                "Manifest load: " + (report != null && report.ManifestLoadSucceeded ? "Succeeded" : "Failed") + Environment.NewLine +
+                "Items found: " + (report?.TotalManifestItems ?? 0) + Environment.NewLine +
+                "Download/cache-eligible: " + (report?.DownloadEligibleCount ?? 0) + Environment.NewLine +
+                "Cached or installed: " + (report?.CachedInstalledCount ?? 0) + Environment.NewLine +
+                "Configuration errors: " + (report?.ConfigurationErrorsCount ?? 0) + Environment.NewLine +
+                "Warnings sampled: " + (report?.WarningSamples.Count ?? 0) + Environment.NewLine +
+                "Verification report: " + (report?.ReportPath ?? plugin.GetLatestVerificationReportPath());
         }
 
         private void RefreshSetupStatusFromGeneration(ManifestGenerationReport report)

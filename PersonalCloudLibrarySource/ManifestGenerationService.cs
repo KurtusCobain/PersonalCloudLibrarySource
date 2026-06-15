@@ -8,6 +8,8 @@ namespace PersonalCloudLibrarySource
 {
     public class ManifestGenerationService
     {
+        private readonly SafeFileWriteService safeFileWriteService = new SafeFileWriteService();
+
         private static readonly string[] DefaultSingleFileExtensions =
         {
             ".nes", ".sfc", ".smc", ".n64", ".z64", ".v64",
@@ -315,7 +317,11 @@ namespace PersonalCloudLibrarySource
                 Directory.CreateDirectory(outputDirectory);
             }
 
-            File.WriteAllText(options.OutputPath, Serialization.ToJson(report.Manifest));
+            safeFileWriteService.WriteAllText(
+                options.OutputPath,
+                Serialization.ToJson(report.Manifest),
+                options.BackupDirectory,
+                createBackup: true);
 
             if (!options.NoReport && !string.IsNullOrWhiteSpace(options.ReportPath))
             {
@@ -325,7 +331,11 @@ namespace PersonalCloudLibrarySource
                     Directory.CreateDirectory(reportDirectory);
                 }
 
-                File.WriteAllLines(options.ReportPath, BuildReportLines(report));
+                safeFileWriteService.WriteAllLines(
+                    options.ReportPath,
+                    BuildReportLines(report),
+                    options.BackupDirectory,
+                    createBackup: true);
             }
 
             return report;

@@ -254,8 +254,12 @@
                        Margin="0,0,0,10"/>
 
             <WrapPanel Margin="0,0,0,16">
-                <Button Content="Verify setup"
+                <Button Content="Verify setup / generate report"
                         Click="VerifySetup_Click"
+                        Margin="0,0,8,8"
+                        Padding="10,4"/>
+                <Button Content="Open latest verification report"
+                        Click="OpenLatestVerificationReport_Click"
                         Margin="0,0,8,8"
                         Padding="10,4"/>
                 <Button Content="Test rclone connection"
@@ -276,6 +280,14 @@
                         Padding="10,4"/>
                 <Button Content="Open diagnostics folder"
                         Click="OpenDiagnosticsFolder_Click"
+                        Margin="0,0,8,8"
+                        Padding="10,4"/>
+                <Button Content="Open reports folder"
+                        Click="OpenReportsFolder_Click"
+                        Margin="0,0,8,8"
+                        Padding="10,4"/>
+                <Button Content="Open plugin data folder"
+                        Click="OpenPluginDataFolder_Click"
                         Margin="0,0,8,8"
                         Padding="10,4"/>
                 <Button Content="How to update library"

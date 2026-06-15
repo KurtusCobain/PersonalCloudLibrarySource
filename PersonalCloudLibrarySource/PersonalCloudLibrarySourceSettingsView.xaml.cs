@@ -72,6 +72,21 @@ namespace PersonalCloudLibrarySource
             ViewModel?.OpenDiagnosticsFolder();
         }
 
+        private void OpenReportsFolder_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel?.OpenReportsFolder();
+        }
+
+        private void OpenPluginDataFolder_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel?.OpenPluginDataFolder();
+        }
+
+        private void OpenLatestVerificationReport_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel?.OpenLatestVerificationReport();
+        }
+
         private void CreateSampleManifest_Click(object sender, RoutedEventArgs e)
         {
             ViewModel?.CreateSampleManifest();
