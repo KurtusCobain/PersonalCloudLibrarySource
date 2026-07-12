@@ -9,7 +9,7 @@ using System.Windows.Controls;
 
 namespace PersonalCloudLibrarySource
 {
-    public class PersonalCloudLibrarySource : LibraryPlugin
+    public partial class PersonalCloudLibrarySource : LibraryPlugin
     {
         private static readonly ILogger logger = LogManager.GetLogger();
         private readonly RcloneManifestReader rcloneManifestReader = new RcloneManifestReader();
@@ -20,7 +20,7 @@ namespace PersonalCloudLibrarySource
         private readonly SafeFileWriteService safeFileWriteService = new SafeFileWriteService();
         private readonly IPlayniteAPI playniteApi;
 
-        private PersonalCloudLibrarySourceSettingsViewModel settings { get; set; }
+        private PersonalCloudLibrarySourceSettingsV3ViewModel settings { get; set; }
 
         public override Guid Id { get; } = Guid.Parse("61993828-67a8-4468-93a2-293442e36328");
 
@@ -31,7 +31,9 @@ namespace PersonalCloudLibrarySource
         public PersonalCloudLibrarySource(IPlayniteAPI api) : base(api)
         {
             playniteApi = api;
-            settings = new PersonalCloudLibrarySourceSettingsViewModel(this);
+            settings = new PersonalCloudLibrarySourceSettingsV3ViewModel(this);
+            InitializeDashboardNavigation();
+            Client = new PersonalCloudLibrarySourceClient(navigationService.OpenDashboard);
 
             Properties = new LibraryPluginProperties
             {
