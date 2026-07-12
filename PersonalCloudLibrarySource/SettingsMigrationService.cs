@@ -1,3 +1,4 @@
+using Playnite.SDK.Data;
 using System;
 
 namespace PersonalCloudLibrarySource
@@ -23,6 +24,17 @@ namespace PersonalCloudLibrarySource
 
     public static class SettingsMigrationService
     {
+        public static SettingsMigrationResult Migrate(PersonalCloudLibrarySourceSettings settings)
+        {
+            var versionedSettings = settings as PersonalCloudLibrarySourceSettingsV3;
+            if (versionedSettings == null)
+            {
+                versionedSettings = PromoteLegacySettings(settings);
+            }
+
+            return Migrate(versionedSettings);
+        }
+
         public static SettingsMigrationResult Migrate(PersonalCloudLibrarySourceSettingsV3 settings)
         {
             settings = settings ?? new PersonalCloudLibrarySourceSettingsV3();
@@ -41,6 +53,51 @@ namespace PersonalCloudLibrarySource
             }
 
             return new SettingsMigrationResult(settings, previousVersion, wasMigrated);
+        }
+
+        public static PersonalCloudLibrarySourceSettings CloneForEditing(PersonalCloudLibrarySourceSettings settings)
+        {
+            if (settings is PersonalCloudLibrarySourceSettingsV3 versionedSettings)
+            {
+                return Serialization.GetClone(versionedSettings);
+            }
+
+            return Serialization.GetClone(settings ?? new PersonalCloudLibrarySourceSettings());
+        }
+
+        private static PersonalCloudLibrarySourceSettingsV3 PromoteLegacySettings(PersonalCloudLibrarySourceSettings legacySettings)
+        {
+            if (legacySettings == null)
+            {
+                return new PersonalCloudLibrarySourceSettingsV3();
+            }
+
+            return new PersonalCloudLibrarySourceSettingsV3
+            {
+                Enabled = legacySettings.Enabled,
+                LibraryDisplayName = legacySettings.LibraryDisplayName,
+                SourceProviderType = legacySettings.SourceProviderType,
+                LocalManifestPath = legacySettings.LocalManifestPath,
+                LocalLibraryRoot = legacySettings.LocalLibraryRoot,
+                ManifestRelativePath = legacySettings.ManifestRelativePath,
+                LocalCacheFolder = legacySettings.LocalCacheFolder,
+                TreatMissingFilesAsUninstalled = legacySettings.TreatMissingFilesAsUninstalled,
+                RcloneExecutablePath = legacySettings.RcloneExecutablePath,
+                RcloneRemoteName = legacySettings.RcloneRemoteName,
+                RcloneManifestPath = legacySettings.RcloneManifestPath,
+                RcloneContentRoot = legacySettings.RcloneContentRoot,
+                RcloneTimeoutSeconds = legacySettings.RcloneTimeoutSeconds,
+                AllowDownloads = legacySettings.AllowDownloads,
+                EnableDiagnostics = legacySettings.EnableDiagnostics,
+                UninstallBehavior = legacySettings.UninstallBehavior,
+                AllowUninstallOutsideCacheFolder = legacySettings.AllowUninstallOutsideCacheFolder,
+                AutoRefreshOnApplicationStart = legacySettings.AutoRefreshOnApplicationStart,
+                AutoGenerateManifestOnApplicationStart = legacySettings.AutoGenerateManifestOnApplicationStart,
+                LastManifestGeneratedAt = legacySettings.LastManifestGeneratedAt,
+                LastGeneratedManifestPath = legacySettings.LastGeneratedManifestPath,
+                LastGeneratedReportPath = legacySettings.LastGeneratedReportPath,
+                LastManifestItemCount = legacySettings.LastManifestItemCount
+            };
         }
     }
 }
