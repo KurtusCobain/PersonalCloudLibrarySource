@@ -55,6 +55,7 @@
       <DependentUpon>CloudLibraryDashboardView.xaml</DependentUpon>
     </Compile>
     <Compile Include="Dashboard\CloudLibraryDashboardViewModel.cs" />
+    <Compile Include="Dashboard\CloudTransferQueueItemViewModel.cs" />
     <Compile Include="Dashboard\CloudLibraryDashboardWindowService.cs" />
     <Compile Include="Dashboard\CloudLibrarySidebarItem.cs" />
     <Compile Include="Dashboard\DashboardStateStore.cs" />

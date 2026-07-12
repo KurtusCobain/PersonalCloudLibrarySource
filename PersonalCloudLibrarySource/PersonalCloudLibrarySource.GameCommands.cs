@@ -1,8 +1,9 @@
-using Playnite.SDK.Plugins;
+﻿using Playnite.SDK.Plugins;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace PersonalCloudLibrarySource
@@ -27,6 +28,13 @@ namespace PersonalCloudLibrarySource
                 var pluginSettings = settings.Settings;
                 var manifest = ParseManifest(LoadManifestJson(pluginSettings));
                 var targets = gameCommandService.ResolveTargets(games, manifest.Items, pluginSettings, Id).ToList();
+                var manager = GetTransferManager();
+                foreach (var target in targets)
+                {
+                    target.PolicyContext.HasActiveTransfer = manager.GetActiveJobForGame(target.Game.Id) != null;
+                    target.PolicyContext.HasRetryableTransfer = manager.GetLatestRetryableJobForGame(target.Game.Id) != null;
+                }
+
                 var availability = gameCommandPolicyService.Evaluate(targets.Select(target => target.PolicyContext));
                 if (!availability.ShowPluginMenu)
                 {
@@ -73,6 +81,24 @@ namespace PersonalCloudLibrarySource
                     "LOCPLSGameInstall",
                     "Install to This Computer",
                     () => playniteApi.InstallGame(target.Game.Id)));
+            }
+
+            if (availability.CanCancelTransfer)
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section,
+                    "LOCPLSGameCancelTransfer",
+                    "Cancel Active Transfer",
+                    () => CancelActiveTransfer(target)));
+            }
+
+            if (availability.CanRetryTransfer)
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section,
+                    "LOCPLSGameRetryTransfer",
+                    "Retry Last Transfer",
+                    () => RetryLastTransfer(target)));
             }
 
             if (availability.CanOpenCachedFolder)
@@ -185,6 +211,45 @@ namespace PersonalCloudLibrarySource
                 "LOCPLSOpenDashboard",
                 "Open Dashboard",
                 navigationService.OpenDashboard));
+        }
+
+        private void CancelActiveTransfer(GameCommandTarget target)
+        {
+            var active = target?.Game == null
+                ? null
+                : GetTransferManager().GetActiveJobForGame(target.Game.Id);
+            if (active == null)
+            {
+                return;
+            }
+
+            GetTransferManager().Cancel(active.Id);
+        }
+
+        private void RetryLastTransfer(GameCommandTarget target)
+        {
+            if (target?.Game == null)
+            {
+                return;
+            }
+
+            var manager = GetTransferManager();
+            if (manager.GetActiveJobForGame(target.Game.Id) != null)
+            {
+                return;
+            }
+
+            var previous = manager.GetLatestRetryableJobForGame(target.Game.Id);
+            if (previous == null || string.Equals(
+                previous.ProviderType,
+                PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            var retry = manager.Retry(previous.Id);
+            Task.Run(() => GetTransferExecutor().ExecuteLocal(retry.Id, retry.IsDirectory));
         }
 
         private GameMenuItem CreateGameMenuItem(

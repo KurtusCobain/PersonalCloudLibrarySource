@@ -1,4 +1,4 @@
-using Playnite.SDK;
+﻿using Playnite.SDK;
 using Playnite.SDK.Models;
 using Playnite.SDK.Plugins;
 using System.IO;
@@ -76,7 +76,8 @@ namespace PersonalCloudLibrarySource
                         string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
                         localSourcePath,
                         destinationPath,
-                        providerType);
+                        providerType,
+                        sourceType == "directory");
                     var result = transferExecutor.ExecuteLocal(job.Id, sourceType == "directory");
                     succeeded = result.Succeeded;
                     cancelled = result.Cancelled;

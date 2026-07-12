@@ -52,7 +52,11 @@ namespace PersonalCloudLibrarySource
             RefreshDashboardState();
             return new CloudLibraryDashboardView
             {
-                DataContext = new CloudLibraryDashboardViewModel(dashboardStateStore, navigationService)
+                DataContext = new CloudLibraryDashboardViewModel(
+                    dashboardStateStore,
+                    navigationService,
+                    GetTransferManager(),
+                    GetTransferExecutor())
             };
         }
 
