@@ -4,7 +4,11 @@ on:
   push:
     branches:
       - main
+      - feature/user-friendly-dashboard
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -15,11 +19,187 @@ jobs:
 
       - uses: microsoft/setup-msbuild@v2
 
+      - name: Clean dependency state
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force .\PersonalCloudLibrarySource\packages\NUnit.3.14.0 -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force .\PersonalCloudLibrarySource\packages\NUnitLite.3.14.0 -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force .\PersonalCloudLibrarySource\packages\PlayniteSDK.6.16.0 -ErrorAction SilentlyContinue
+
       - name: Restore NuGet packages
-        run: nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln
+        run: nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln -Force
 
       - name: Build Debug
         run: msbuild .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln /t:Build /p:Configuration=Debug /p:Platform="Any CPU"
 
       - name: Run tests
         run: .\PersonalCloudLibrarySource.Tests\bin\Debug\PersonalCloudLibrarySource.Tests.exe --noheader
+
+  package-test:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/user-friendly-dashboard'
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Clean dependency state
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force .\PersonalCloudLibrarySource\packages\NUnit.3.14.0 -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force .\PersonalCloudLibrarySource\packages\NUnitLite.3.14.0 -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force .\PersonalCloudLibrarySource\packages\PlayniteSDK.6.16.0 -ErrorAction SilentlyContinue
+
+      - name: Restore NuGet packages
+        id: restore
+        continue-on-error: true
+        shell: pwsh
+        run: nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln -Force
+
+      - name: Build and package Release
+        id: package
+        if: steps.restore.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: .\tools\package-extension.ps1 -DebugSymbols
+
+      - name: Inspect test package
+        id: inspect
+        if: steps.package.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $sourcePackage = ".\dist\PersonalCloudLibrarySource-0.3.0.pext"
+          $testPackage = ".\dist\PersonalCloudLibrarySource-0.3.0-test.pext"
+          if (-not (Test-Path -LiteralPath $sourcePackage)) {
+            throw "Expected package was not created: $sourcePackage"
+          }
+
+          Copy-Item -LiteralPath $sourcePackage -Destination $testPackage -Force
+          $zipCopy = Join-Path $env:RUNNER_TEMP "PersonalCloudLibrarySource-0.3.0-test.zip"
+          $extractRoot = Join-Path $env:RUNNER_TEMP "PersonalCloudLibrarySource-0.3.0-test"
+          Copy-Item -LiteralPath $testPackage -Destination $zipCopy -Force
+          Remove-Item -LiteralPath $extractRoot -Recurse -Force -ErrorAction SilentlyContinue
+          Expand-Archive -LiteralPath $zipCopy -DestinationPath $extractRoot -Force
+
+          $requiredFiles = @(
+            "PersonalCloudLibrarySource.dll",
+            "extension.yaml",
+            "icon.png",
+            "Localization\en_US.xaml"
+          )
+          foreach ($relativePath in $requiredFiles) {
+            $fullPath = Join-Path $extractRoot $relativePath
+            if (-not (Test-Path -LiteralPath $fullPath)) {
+              throw "Package is missing required file: $relativePath"
+            }
+          }
+
+          $manifestText = Get-Content -LiteralPath (Join-Path $extractRoot "extension.yaml") -Raw
+          if ($manifestText -notmatch '(?m)^Id:\s*PersonalCloudLibrarySource_61993828-67a8-4468-93a2-293442e36328\s*$') {
+            throw "Package AddonId is missing or incorrect."
+          }
+          if ($manifestText -notmatch '(?m)^Version:\s*0\.3\.0\s*$') {
+            throw "Package extension version is not 0.3.0."
+          }
+
+          $dllPath = Join-Path $extractRoot "PersonalCloudLibrarySource.dll"
+          $assemblyVersion = [System.Reflection.AssemblyName]::GetAssemblyName($dllPath).Version.ToString()
+          if ($assemblyVersion -ne "0.3.0.0") {
+            throw "Assembly version is $assemblyVersion instead of 0.3.0.0."
+          }
+
+          $packageHash = (Get-FileHash -LiteralPath $testPackage -Algorithm SHA256).Hash
+          $packageSize = (Get-Item -LiteralPath $testPackage).Length
+          $contents = Get-ChildItem -LiteralPath $extractRoot -File -Recurse |
+            ForEach-Object { $_.FullName.Substring($extractRoot.Length + 1) } |
+            Sort-Object
+
+          $report = @(
+            "Personal Cloud Library Source 0.3.0 test package",
+            "Commit: $env:GITHUB_SHA",
+            "Package: PersonalCloudLibrarySource-0.3.0-test.pext",
+            "Bytes: $packageSize",
+            "SHA256: $packageHash",
+            "Extension version: 0.3.0",
+            "Assembly version: $assemblyVersion",
+            "AddonId: PersonalCloudLibrarySource_61993828-67a8-4468-93a2-293442e36328",
+            "",
+            "Contents:"
+          ) + $contents
+          $report | Set-Content -LiteralPath ".\dist\package-manifest.txt" -Encoding UTF8
+          Get-Content -LiteralPath ".\dist\package-manifest.txt"
+
+      - name: Upload private beta package
+        id: upload
+        if: steps.inspect.outcome == 'success'
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: PersonalCloudLibrarySource-0.3.0-test-package
+          path: |
+            dist/PersonalCloudLibrarySource-0.3.0-test.pext
+            dist/PersonalCloudLibrarySource-0.3.0-debug-symbols.zip
+            dist/package-manifest.txt
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+
+      - name: Record package verification result
+        if: always()
+        shell: pwsh
+        run: |
+          $restore = "${{ steps.restore.outcome }}"
+          $package = "${{ steps.package.outcome }}"
+          $inspect = "${{ steps.inspect.outcome }}"
+          $upload = "${{ steps.upload.outcome }}"
+          $passed = $restore -eq "success" -and $package -eq "success" -and $inspect -eq "success" -and $upload -eq "success"
+          $result = if ($passed) { "PASS" } else { "FAIL" }
+          $statusPath = ".\docs\superpowers\verification\test-package-status.md"
+          New-Item -ItemType Directory -Path (Split-Path -Parent $statusPath) -Force | Out-Null
+          $verifiedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+          $status = @(
+            "# Personal Cloud Library Source 0.3.0 Test Package",
+            "",
+            "- Result: **$result**",
+            "- Verified at: $verifiedAt",
+            "- Branch: feature/user-friendly-dashboard",
+            "- Commit: $env:GITHUB_SHA",
+            "- Workflow run ID: $env:GITHUB_RUN_ID",
+            "- Artifact: PersonalCloudLibrarySource-0.3.0-test-package",
+            "- Artifact retention: 14 days",
+            "- Debug build and NUnitLite tests: passed in required build job",
+            "- NuGet restore: $restore",
+            "- Release package build: $package",
+            "- Package inspection: $inspect",
+            "- Artifact upload: $upload"
+          )
+          if (Test-Path -LiteralPath ".\dist\package-manifest.txt") {
+            $status += @("", "## Package manifest", "", "```text")
+            $status += Get-Content -LiteralPath ".\dist\package-manifest.txt"
+            $status += "```"
+          }
+          $status | Set-Content -LiteralPath $statusPath -Encoding UTF8
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add $statusPath
+          git commit -m "Record 0.3.0 test package verification [skip ci]"
+          git push origin HEAD:feature/user-friendly-dashboard
+
+      - name: Fail when package verification failed
+        if: always()
+        shell: pwsh
+        run: |
+          if ("${{ steps.restore.outcome }}" -ne "success" -or
+              "${{ steps.package.outcome }}" -ne "success" -or
+              "${{ steps.inspect.outcome }}" -ne "success" -or
+              "${{ steps.upload.outcome }}" -ne "success") {
+            exit 1
+          }
