@@ -49,7 +49,9 @@
     <Compile Include="Services\PluginNavigationServiceTests.cs" />
     <Compile Include="SettingsMigrationServiceTests.cs" />
     <Compile Include="Setup\SetupWizardViewModelTests.cs" />
+    <Compile Include="Transfers\CloudTransferExecutorTests.cs" />
     <Compile Include="Transfers\CloudTransferManagerTests.cs" />
+    <Compile Include="Transfers\LocalTransferAdapterTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
