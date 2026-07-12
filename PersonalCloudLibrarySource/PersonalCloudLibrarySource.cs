@@ -153,7 +153,9 @@ namespace PersonalCloudLibrarySource
                         item,
                         pluginSettings,
                         rcloneFileCopier,
-                        localFileCopier));
+                        localFileCopier,
+                        GetTransferManager(),
+                        GetTransferExecutor()));
                     logger.Info($"Personal Cloud Library Source install action returned for {item.Id}.");
                     return installActions;
                 }
