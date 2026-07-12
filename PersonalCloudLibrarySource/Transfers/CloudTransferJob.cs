@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace PersonalCloudLibrarySource
 {
@@ -19,6 +20,7 @@ namespace PersonalCloudLibrarySource
 
     public sealed class CloudTransferJob : ObservableObject
     {
+        private readonly CancellationTokenSource cancellationSource = new CancellationTokenSource();
         private CloudTransferState state;
         private long bytesTransferred;
         private long? totalBytes;
@@ -53,6 +55,7 @@ namespace PersonalCloudLibrarySource
         public string ProviderType { get; }
         public Guid? PreviousAttemptId { get; }
         public DateTime CreatedAt { get; }
+        public CancellationToken CancellationToken => cancellationSource.Token;
 
         public CloudTransferState State
         {
@@ -113,6 +116,11 @@ namespace PersonalCloudLibrarySource
                 StartedAt = DateTime.UtcNow;
             }
 
+            if (value == CloudTransferState.Cancelled)
+            {
+                RequestCancellation();
+            }
+
             if (IsTerminal)
             {
                 CompletedAt = DateTime.UtcNow;
@@ -130,6 +138,14 @@ namespace PersonalCloudLibrarySource
 
             BytesTransferred = safeTransferred;
             TotalBytes = safeTotal;
+        }
+
+        internal void RequestCancellation()
+        {
+            if (!cancellationSource.IsCancellationRequested)
+            {
+                cancellationSource.Cancel();
+            }
         }
     }
 
