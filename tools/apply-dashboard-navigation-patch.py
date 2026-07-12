@@ -23,10 +23,10 @@ replacements = [
 ]
 
 for old, new in replacements:
-    if new in text:
+    if old in text:
+        text = text.replace(old, new, 1)
         continue
-    if old not in text:
+    if new not in text:
         raise SystemExit(f"Expected source text was not found: {old}")
-    text = text.replace(old, new, 1)
 
 path.write_text(text, encoding="utf-8-sig")
