@@ -1,4 +1,3 @@
-using Playnite.SDK.Data;
 using System;
 
 namespace PersonalCloudLibrarySource
@@ -59,45 +58,72 @@ namespace PersonalCloudLibrarySource
         {
             if (settings is PersonalCloudLibrarySourceSettingsV3 versionedSettings)
             {
-                return Serialization.GetClone(versionedSettings);
+                var clone = PromoteLegacySettings(versionedSettings);
+                clone.SettingsVersion = versionedSettings.SettingsVersion;
+                clone.ShowTopPanelButton = versionedSettings.ShowTopPanelButton;
+                clone.ShowSidebarDashboard = versionedSettings.ShowSidebarDashboard;
+                clone.ShowSetupReminders = versionedSettings.ShowSetupReminders;
+                clone.OpenDashboardAtStartup = versionedSettings.OpenDashboardAtStartup;
+                clone.TransferConcurrency = versionedSettings.TransferConcurrency;
+                clone.VerifyAfterTransfer = versionedSettings.VerifyAfterTransfer;
+                clone.RemoveIncompleteTransferFiles = versionedSettings.RemoveIncompleteTransferFiles;
+                clone.NotifyLibraryUpdates = versionedSettings.NotifyLibraryUpdates;
+                clone.NotifyTransferCompleted = versionedSettings.NotifyTransferCompleted;
+                clone.NotifyTransferFailed = versionedSettings.NotifyTransferFailed;
+                clone.NotifySourceUnavailable = versionedSettings.NotifySourceUnavailable;
+                clone.NotifyVerificationWarnings = versionedSettings.NotifyVerificationWarnings;
+                return clone;
             }
 
-            return Serialization.GetClone(settings ?? new PersonalCloudLibrarySourceSettings());
+            return CopyLegacySettings(settings);
         }
 
         private static PersonalCloudLibrarySourceSettingsV3 PromoteLegacySettings(PersonalCloudLibrarySourceSettings legacySettings)
         {
-            if (legacySettings == null)
+            var promoted = new PersonalCloudLibrarySourceSettingsV3();
+            CopyBaseProperties(legacySettings, promoted);
+            return promoted;
+        }
+
+        private static PersonalCloudLibrarySourceSettings CopyLegacySettings(PersonalCloudLibrarySourceSettings settings)
+        {
+            var clone = new PersonalCloudLibrarySourceSettings();
+            CopyBaseProperties(settings, clone);
+            return clone;
+        }
+
+        private static void CopyBaseProperties(
+            PersonalCloudLibrarySourceSettings source,
+            PersonalCloudLibrarySourceSettings destination)
+        {
+            if (source == null || destination == null)
             {
-                return new PersonalCloudLibrarySourceSettingsV3();
+                return;
             }
 
-            return new PersonalCloudLibrarySourceSettingsV3
-            {
-                Enabled = legacySettings.Enabled,
-                LibraryDisplayName = legacySettings.LibraryDisplayName,
-                SourceProviderType = legacySettings.SourceProviderType,
-                LocalManifestPath = legacySettings.LocalManifestPath,
-                LocalLibraryRoot = legacySettings.LocalLibraryRoot,
-                ManifestRelativePath = legacySettings.ManifestRelativePath,
-                LocalCacheFolder = legacySettings.LocalCacheFolder,
-                TreatMissingFilesAsUninstalled = legacySettings.TreatMissingFilesAsUninstalled,
-                RcloneExecutablePath = legacySettings.RcloneExecutablePath,
-                RcloneRemoteName = legacySettings.RcloneRemoteName,
-                RcloneManifestPath = legacySettings.RcloneManifestPath,
-                RcloneContentRoot = legacySettings.RcloneContentRoot,
-                RcloneTimeoutSeconds = legacySettings.RcloneTimeoutSeconds,
-                AllowDownloads = legacySettings.AllowDownloads,
-                EnableDiagnostics = legacySettings.EnableDiagnostics,
-                UninstallBehavior = legacySettings.UninstallBehavior,
-                AllowUninstallOutsideCacheFolder = legacySettings.AllowUninstallOutsideCacheFolder,
-                AutoRefreshOnApplicationStart = legacySettings.AutoRefreshOnApplicationStart,
-                AutoGenerateManifestOnApplicationStart = legacySettings.AutoGenerateManifestOnApplicationStart,
-                LastManifestGeneratedAt = legacySettings.LastManifestGeneratedAt,
-                LastGeneratedManifestPath = legacySettings.LastGeneratedManifestPath,
-                LastGeneratedReportPath = legacySettings.LastGeneratedReportPath,
-                LastManifestItemCount = legacySettings.LastManifestItemCount
-            };
+            destination.Enabled = source.Enabled;
+            destination.LibraryDisplayName = source.LibraryDisplayName;
+            destination.SourceProviderType = source.SourceProviderType;
+            destination.LocalManifestPath = source.LocalManifestPath;
+            destination.LocalLibraryRoot = source.LocalLibraryRoot;
+            destination.ManifestRelativePath = source.ManifestRelativePath;
+            destination.LocalCacheFolder = source.LocalCacheFolder;
+            destination.TreatMissingFilesAsUninstalled = source.TreatMissingFilesAsUninstalled;
+            destination.RcloneExecutablePath = source.RcloneExecutablePath;
+            destination.RcloneRemoteName = source.RcloneRemoteName;
+            destination.RcloneManifestPath = source.RcloneManifestPath;
+            destination.RcloneContentRoot = source.RcloneContentRoot;
+            destination.RcloneTimeoutSeconds = source.RcloneTimeoutSeconds;
+            destination.AllowDownloads = source.AllowDownloads;
+            destination.EnableDiagnostics = source.EnableDiagnostics;
+            destination.UninstallBehavior = source.UninstallBehavior;
+            destination.AllowUninstallOutsideCacheFolder = source.AllowUninstallOutsideCacheFolder;
+            destination.AutoRefreshOnApplicationStart = source.AutoRefreshOnApplicationStart;
+            destination.AutoGenerateManifestOnApplicationStart = source.AutoGenerateManifestOnApplicationStart;
+            destination.LastManifestGeneratedAt = source.LastManifestGeneratedAt;
+            destination.LastGeneratedManifestPath = source.LastGeneratedManifestPath;
+            destination.LastGeneratedReportPath = source.LastGeneratedReportPath;
+            destination.LastManifestItemCount = source.LastManifestItemCount;
         }
     }
 }
