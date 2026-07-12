@@ -58,6 +58,7 @@
     <Compile Include="PersonalCloudLibrarySourceClient.cs" />
     <Compile Include="PersonalCloudLibrarySource.cs" />
     <Compile Include="PersonalCloudLibrarySourceSettings.cs" />
+    <Compile Include="PersonalCloudLibrarySourceSettingsV3.cs" />
     <Compile Include="PersonalCloudLibrarySourceSettingsView.xaml.cs">
       <DependentUpon>PersonalCloudLibrarySourceSettingsView.xaml</DependentUpon>
     </Compile>
@@ -67,6 +68,7 @@
     <Compile Include="RcloneInstallController.cs" />
     <Compile Include="RcloneManifestReader.cs" />
     <Compile Include="SafeFileWriteService.cs" />
+    <Compile Include="SettingsMigrationService.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="extension.yaml">
