@@ -25,6 +25,7 @@ namespace PersonalCloudLibrarySource
             GenerateManifestCommand = new DelegateCommand(navigationService.GenerateManifest);
             ShowUpdateLibraryInstructionsCommand = new DelegateCommand(navigationService.ShowUpdateLibraryInstructions);
             OpenSourceLocationCommand = new DelegateCommand(navigationService.OpenSourceLocation);
+            RunSetupWizardCommand = new DelegateCommand(navigationService.RunSetupWizard);
         }
 
         public CloudLibraryDashboardState State => stateStore.Current;
@@ -47,6 +48,7 @@ namespace PersonalCloudLibrarySource
         public ICommand GenerateManifestCommand { get; }
         public ICommand ShowUpdateLibraryInstructionsCommand { get; }
         public ICommand OpenSourceLocationCommand { get; }
+        public ICommand RunSetupWizardCommand { get; }
 
         private static string EmptyFallback(string value)
         {
