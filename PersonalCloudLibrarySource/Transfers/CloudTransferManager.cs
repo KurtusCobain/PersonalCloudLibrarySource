@@ -77,12 +77,19 @@ namespace PersonalCloudLibrarySource
             string displayName,
             string source,
             string destination,
-            string providerType)
+            string providerType,
+            bool isDirectory = false)
         {
             CloudTransferJob job;
             lock (syncRoot)
             {
-                job = new CloudTransferJob(gameId, displayName, source, destination, providerType);
+                job = new CloudTransferJob(
+                    gameId,
+                    displayName,
+                    source,
+                    destination,
+                    providerType,
+                    isDirectory);
                 jobs.Add(job);
                 StartQueuedJobsLocked();
             }
@@ -96,6 +103,30 @@ namespace PersonalCloudLibrarySource
             lock (syncRoot)
             {
                 return FindJobLocked(jobId);
+            }
+        }
+
+        public CloudTransferJob GetActiveJobForGame(Guid gameId)
+        {
+            lock (syncRoot)
+            {
+                return jobs
+                    .Where(job => job.GameId == gameId && !job.IsTerminal)
+                    .OrderByDescending(job => job.CreatedAt)
+                    .FirstOrDefault();
+            }
+        }
+
+        public CloudTransferJob GetLatestRetryableJobForGame(Guid gameId)
+        {
+            lock (syncRoot)
+            {
+                return jobs
+                    .Where(job =>
+                        job.GameId == gameId &&
+                        (job.State == CloudTransferState.Failed || job.State == CloudTransferState.Cancelled))
+                    .OrderByDescending(job => job.CompletedAt ?? job.CreatedAt)
+                    .FirstOrDefault();
             }
         }
 
@@ -194,6 +225,7 @@ namespace PersonalCloudLibrarySource
                     failedJob.Source,
                     failedJob.Destination,
                     failedJob.ProviderType,
+                    failedJob.IsDirectory,
                     failedJob.Id);
                 jobs.Add(retry);
                 StartQueuedJobsLocked();
