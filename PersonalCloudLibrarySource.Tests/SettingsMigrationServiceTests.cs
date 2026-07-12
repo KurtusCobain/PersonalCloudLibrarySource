@@ -8,7 +8,7 @@ namespace PersonalCloudLibrarySource.Tests
         [Test]
         public void Migrate_LegacySettings_PreservesExistingConfigurationAndAddsSafeDefaults()
         {
-            var settings = new PersonalCloudLibrarySourceSettings
+            var settings = new PersonalCloudLibrarySourceSettingsV3
             {
                 SettingsVersion = 0,
                 SourceProviderType = PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
@@ -26,7 +26,7 @@ namespace PersonalCloudLibrarySource.Tests
 
             Assert.That(result.WasMigrated, Is.True);
             Assert.That(result.PreviousVersion, Is.EqualTo(0));
-            Assert.That(settings.SettingsVersion, Is.EqualTo(PersonalCloudLibrarySourceSettings.CurrentSettingsVersion));
+            Assert.That(settings.SettingsVersion, Is.EqualTo(PersonalCloudLibrarySourceSettingsV3.CurrentSettingsVersion));
             Assert.That(settings.SourceProviderType, Is.EqualTo(PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType));
             Assert.That(settings.RcloneExecutablePath, Is.EqualTo(@"C:\Tools\rclone.exe"));
             Assert.That(settings.RcloneRemoteName, Is.EqualTo("games"));
@@ -48,9 +48,9 @@ namespace PersonalCloudLibrarySource.Tests
         [Test]
         public void Migrate_CurrentSettings_DoesNotOverwriteUserPreferences()
         {
-            var settings = new PersonalCloudLibrarySourceSettings
+            var settings = new PersonalCloudLibrarySourceSettingsV3
             {
-                SettingsVersion = PersonalCloudLibrarySourceSettings.CurrentSettingsVersion,
+                SettingsVersion = PersonalCloudLibrarySourceSettingsV3.CurrentSettingsVersion,
                 ShowTopPanelButton = false,
                 ShowSidebarDashboard = false,
                 ShowSetupReminders = false,
@@ -63,7 +63,7 @@ namespace PersonalCloudLibrarySource.Tests
             var result = SettingsMigrationService.Migrate(settings);
 
             Assert.That(result.WasMigrated, Is.False);
-            Assert.That(result.PreviousVersion, Is.EqualTo(PersonalCloudLibrarySourceSettings.CurrentSettingsVersion));
+            Assert.That(result.PreviousVersion, Is.EqualTo(PersonalCloudLibrarySourceSettingsV3.CurrentSettingsVersion));
             Assert.That(settings.ShowTopPanelButton, Is.False);
             Assert.That(settings.ShowSidebarDashboard, Is.False);
             Assert.That(settings.ShowSetupReminders, Is.False);
@@ -77,9 +77,9 @@ namespace PersonalCloudLibrarySource.Tests
         [TestCase(5)]
         public void Migrate_InvalidTransferConcurrency_ResetsToOne(int invalidValue)
         {
-            var settings = new PersonalCloudLibrarySourceSettings
+            var settings = new PersonalCloudLibrarySourceSettingsV3
             {
-                SettingsVersion = PersonalCloudLibrarySourceSettings.CurrentSettingsVersion,
+                SettingsVersion = PersonalCloudLibrarySourceSettingsV3.CurrentSettingsVersion,
                 TransferConcurrency = invalidValue
             };
 
