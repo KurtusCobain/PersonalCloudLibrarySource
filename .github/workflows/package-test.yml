@@ -7,6 +7,7 @@ on:
       - feature/user-friendly-dashboard
     paths:
       - .github/workflows/package-test.yml
+      - automation/package-test.txt
 
 permissions:
   contents: write
