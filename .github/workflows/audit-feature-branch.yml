@@ -18,10 +18,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: feature/user-friendly-dashboard
+          fetch-depth: 0
 
-      - name: Apply consolidated repair
+      - name: Apply consolidated repairs
         shell: pwsh
-        run: python tools/audit-feature-branch.py
+        run: |
+          python tools/audit-feature-branch.py
+          python tools/fix-transfer-order.py
 
       - uses: microsoft/setup-msbuild@v2
 
@@ -77,7 +80,8 @@ jobs:
             "- Restored dashboard constructor consistency.",
             "- Added queued rclone execution to CloudTransferExecutor.",
             "- Registered orphaned activity and rclone tests in the projects.",
-            "- Removed temporary patch workflows, marker files, scripts, and stale verification logs after a passing run.",
+            "- Added deterministic ordering for active and retryable transfer jobs.",
+            "- Removed restored package contents, temporary workflows, patch scripts, markers, logs, and stale verification reports after a passing run.",
             ""
           )
           foreach ($name in @("restore", "build", "tests")) {
@@ -85,12 +89,18 @@ jobs:
             if (Test-Path $path) {
               $lines += "## $name log tail"
               $lines += ""
-              $lines += Get-Content $path | Select-Object -Last 120
+              $lines += Get-Content $path | Select-Object -Last 80
               $lines += ""
             }
           }
           New-Item -ItemType Directory -Path docs\superpowers\verification -Force | Out-Null
           $lines | Set-Content docs\superpowers\verification\branch-audit-status.md -Encoding UTF8
+
+          git rm -r -f --ignore-unmatch PersonalCloudLibrarySource/packages/NUnit.3.14.0
+          git rm -r -f --ignore-unmatch PersonalCloudLibrarySource/packages/NUnitLite.3.14.0
+          git rm -r -f --ignore-unmatch PersonalCloudLibrarySource/packages/PlayniteSDK.6.16.0
+          git checkout origin/main -- PersonalCloudLibrarySource/packages/PlayniteSDK.6.16.0/lib/net462/Playnite.SDK.dll
+          git rm -f --ignore-unmatch TestResult.xml build.log restore.log tests.log
 
           if ($passed) {
             git rm -f --ignore-unmatch `
@@ -107,6 +117,7 @@ jobs:
               automation/verify-rclone-transfer-adapter.txt `
               automation/verify-settings-tabs.txt `
               tools/audit-feature-branch.py `
+              tools/fix-transfer-order.py `
               tools/apply-actionable-transfer-ui.py `
               tools/apply-rclone-queue-integration.py `
               tools/register-rclone-transfer-adapter.py `
@@ -124,8 +135,10 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          $message = if ($passed) { "Repair and consolidate user-friendly dashboard branch [skip ci]" } else { "Apply branch audit repairs and record failing verification [skip ci]" }
+          git add .gitignore
+          git add PersonalCloudLibrarySource/Transfers/CloudTransferManager.cs
+          git add docs/superpowers/verification/branch-audit-status.md
+          $message = if ($passed) { "Repair and consolidate user-friendly dashboard branch [skip ci]" } else { "Apply deterministic transfer ordering and record failing verification [skip ci]" }
           git commit -m $message
           git push origin HEAD:feature/user-friendly-dashboard
 
