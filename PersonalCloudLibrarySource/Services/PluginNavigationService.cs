@@ -23,7 +23,7 @@ namespace PersonalCloudLibrarySource
             Action generateManifest,
             Action showUpdateLibraryInstructions,
             Action openSourceLocation,
-            Action runSetupWizard)
+            Action runSetupWizard = null)
         {
             this.openDashboard = openDashboard ?? throw new ArgumentNullException(nameof(openDashboard));
             this.openSettings = openSettings ?? throw new ArgumentNullException(nameof(openSettings));
@@ -33,7 +33,7 @@ namespace PersonalCloudLibrarySource
             this.generateManifest = generateManifest ?? throw new ArgumentNullException(nameof(generateManifest));
             this.showUpdateLibraryInstructions = showUpdateLibraryInstructions ?? throw new ArgumentNullException(nameof(showUpdateLibraryInstructions));
             this.openSourceLocation = openSourceLocation ?? throw new ArgumentNullException(nameof(openSourceLocation));
-            this.runSetupWizard = runSetupWizard ?? throw new ArgumentNullException(nameof(runSetupWizard));
+            this.runSetupWizard = runSetupWizard ?? (() => { });
         }
 
         public void OpenDashboard() => openDashboard();
