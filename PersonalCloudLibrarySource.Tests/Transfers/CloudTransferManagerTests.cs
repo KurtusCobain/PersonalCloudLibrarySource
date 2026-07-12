@@ -85,18 +85,50 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
-        public void Retry_CreatesNewQueuedAttemptLinkedToFailedJob()
+        public void Retry_CreatesNewQueuedAttemptLinkedToFailedJobAndPreservesDirectoryKind()
         {
             var manager = new CloudTransferManager(1);
-            var job = manager.Enqueue(Guid.NewGuid(), "Game", "source", "dest", "RcloneRemote");
+            var job = manager.Enqueue(Guid.NewGuid(), "Game", "source", "dest", "LocalFolder", true);
             manager.Transition(job.Id, CloudTransferState.Failed, "Network unavailable");
 
             var retry = manager.Retry(job.Id);
 
             Assert.That(retry.PreviousAttemptId, Is.EqualTo(job.Id));
             Assert.That(retry.GameId, Is.EqualTo(job.GameId));
+            Assert.That(retry.IsDirectory, Is.True);
             Assert.That(retry.State, Is.EqualTo(CloudTransferState.Preparing));
             Assert.That(manager.Jobs.Count(value => value.GameId == job.GameId), Is.EqualTo(2));
+        }
+
+        [Test]
+        public void GetActiveJobForGame_ReturnsNewestNonTerminalAttempt()
+        {
+            var manager = new CloudTransferManager(2);
+            var gameId = Guid.NewGuid();
+            var first = manager.Enqueue(gameId, "First", "source-1", "dest-1", "LocalFolder");
+            var second = manager.Enqueue(gameId, "Second", "source-2", "dest-2", "LocalFolder");
+            manager.Transition(first.Id, CloudTransferState.Cancelled);
+
+            var active = manager.GetActiveJobForGame(gameId);
+
+            Assert.That(active, Is.Not.Null);
+            Assert.That(active.Id, Is.EqualTo(second.Id));
+        }
+
+        [Test]
+        public void GetLatestRetryableJobForGame_ReturnsNewestFailedOrCancelledAttempt()
+        {
+            var manager = new CloudTransferManager(1);
+            var gameId = Guid.NewGuid();
+            var failed = manager.Enqueue(gameId, "Failed", "source-1", "dest-1", "LocalFolder");
+            manager.Transition(failed.Id, CloudTransferState.Failed, "failed");
+            var cancelled = manager.Enqueue(gameId, "Cancelled", "source-2", "dest-2", "LocalFolder");
+            manager.Cancel(cancelled.Id);
+
+            var retryable = manager.GetLatestRetryableJobForGame(gameId);
+
+            Assert.That(retryable, Is.Not.Null);
+            Assert.That(retryable.Id, Is.EqualTo(cancelled.Id));
         }
 
         [TestCase(0)]
