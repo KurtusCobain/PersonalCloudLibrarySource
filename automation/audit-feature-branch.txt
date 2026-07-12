@@ -1,1 +1,1 @@
-Apply the consolidated branch repair, deterministic transfer ordering fix, complete Windows Debug build, and full NUnitLite suite; then remove temporary automation and restored package artifacts only after a passing result.
+Force a clean NuGet dependency restore, apply the consolidated branch repair and deterministic transfer ordering fix, run the complete Windows Debug build and full NUnitLite suite, then remove temporary automation and restored package artifacts only after a passing result.
