@@ -13,6 +13,8 @@ namespace PersonalCloudLibrarySource
         public bool CanRemoveCachedCopy { get; set; }
         public bool HasSourcePath { get; set; }
         public bool CanOpenSourceLocation { get; set; }
+        public bool HasActiveTransfer { get; set; }
+        public bool HasRetryableTransfer { get; set; }
     }
 
     public sealed class GameCommandAvailability
@@ -27,6 +29,8 @@ namespace PersonalCloudLibrarySource
         public bool CanCopySourcePaths { get; set; }
         public bool CanCopyCachePath { get; set; }
         public bool CanRemoveSelectedCachedCopies { get; set; }
+        public bool CanCancelTransfer { get; set; }
+        public bool CanRetryTransfer { get; set; }
     }
 
     public sealed class GameCommandPolicyService
@@ -47,13 +51,18 @@ namespace PersonalCloudLibrarySource
                 ShowPluginMenu = true,
                 IsSingleSelection = single,
                 CanViewDetails = single && selected.HasManifestItem,
-                CanInstallSelected = contexts.Any(context => context.CanInstall),
+                CanInstallSelected = contexts.Any(context => context.CanInstall && !context.HasActiveTransfer),
                 CanOpenCachedFolder = single && selected.HasCachedPath,
                 CanOpenSourceLocation = single && selected.CanOpenSourceLocation,
                 CanVerifySelected = contexts.All(context => context.HasManifestItem),
                 CanCopySourcePaths = contexts.All(context => context.HasSourcePath),
                 CanCopyCachePath = single && selected.HasCachedPath,
-                CanRemoveSelectedCachedCopies = contexts.All(context => context.HasCachedPath && context.CanRemoveCachedCopy)
+                CanRemoveSelectedCachedCopies = contexts.All(context =>
+                    context.HasCachedPath &&
+                    context.CanRemoveCachedCopy &&
+                    !context.HasActiveTransfer),
+                CanCancelTransfer = single && selected.HasActiveTransfer,
+                CanRetryTransfer = single && !selected.HasActiveTransfer && selected.HasRetryableTransfer
             };
         }
     }
