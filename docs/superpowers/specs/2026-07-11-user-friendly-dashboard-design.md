@@ -641,10 +641,18 @@ Progress remains in the dashboard rather than notifications.
 
 ## 12. Settings migration
 
-Introduce a schema version for the redesigned settings. The implementation plan will choose the next integer based on the actual existing schema, but the migration behavior is fixed:
+Set the redesigned settings schema marker to:
+
+```text
+SettingsVersion = 3
+```
+
+The current settings model has no schema marker, so missing or zero is treated as the legacy pre-0.3.0 format.
+
+Migration behavior:
 
 1. Load current settings.
-2. Detect old schema or absent schema marker.
+2. Detect a missing, zero, or older schema marker.
 3. Copy every existing source, cache, startup, diagnostic, and uninstall value.
 4. Apply defaults only to new fields.
 5. Validate migrated settings.
@@ -653,8 +661,6 @@ Introduce a schema version for the redesigned settings. The implementation plan 
 8. Log a concise migration result.
 
 Existing valid configurations are considered setup-complete and do not reopen the first-run wizard.
-
-The exact numeric schema marker is intentionally derived from repository state during implementation rather than hard-coded in this design, preventing a collision with any schema changes added before development starts.
 
 ## 13. Localization
 
