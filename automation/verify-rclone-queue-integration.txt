@@ -1,0 +1,1 @@
+Apply and verify shared queue, cancellation, progress, partial safety, and Retry for live rclone installs.
