@@ -1,0 +1,235 @@
+<UserControl x:Class="PersonalCloudLibrarySource.SetupWizardView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="640"
+             d:DesignWidth="760">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,14">
+            <TextBlock Text="{DynamicResource LOCPLSSetupWizardTitle}"
+                       FontSize="24"
+                       FontWeight="Bold" />
+            <TextBlock x:Name="StepIndicatorText"
+                       Margin="0,6,0,0"
+                       FontWeight="SemiBold" />
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled">
+            <Grid>
+                <StackPanel x:Name="ChooseSourcePanel">
+                    <TextBlock Text="{DynamicResource LOCPLSSetupChooseSourceTitle}"
+                               FontSize="18"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="{DynamicResource LOCPLSSetupChooseSourceDescription}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,14" />
+                    <RadioButton x:Name="ExistingManifestRadio"
+                                 Content="{DynamicResource LOCPLSSetupExistingManifest}"
+                                 GroupName="SourceKind"
+                                 Click="ExistingManifestRadio_Click"
+                                 Margin="0,0,0,10" />
+                    <RadioButton x:Name="LocalFolderRadio"
+                                 Content="{DynamicResource LOCPLSSetupLocalFolder}"
+                                 GroupName="SourceKind"
+                                 Click="LocalFolderRadio_Click"
+                                 Margin="0,0,0,10" />
+                    <RadioButton x:Name="NetworkFolderRadio"
+                                 Content="{DynamicResource LOCPLSSetupNetworkFolder}"
+                                 GroupName="SourceKind"
+                                 Click="NetworkFolderRadio_Click"
+                                 Margin="0,0,0,10" />
+                    <RadioButton x:Name="RcloneRemoteRadio"
+                                 Content="{DynamicResource LOCPLSSetupRcloneRemote}"
+                                 GroupName="SourceKind"
+                                 Click="RcloneRemoteRadio_Click" />
+                </StackPanel>
+
+                <StackPanel x:Name="ConfigureSourcePanel" Visibility="Collapsed">
+                    <TextBlock Text="{DynamicResource LOCPLSSetupConfigureTitle}"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,14" />
+
+                    <StackPanel x:Name="ExistingManifestPanel" Visibility="Collapsed">
+                        <TextBlock Text="{DynamicResource LOCPLSSetupManifestPath}" FontWeight="SemiBold" />
+                        <DockPanel Margin="0,5,0,0">
+                            <Button Content="{DynamicResource LOCPLSSetupBrowse}"
+                                    DockPanel.Dock="Right"
+                                    Width="90"
+                                    Margin="8,0,0,0"
+                                    Click="BrowseManifest_Click" />
+                            <TextBox Text="{Binding Draft.LocalManifestPath, UpdateSourceTrigger=PropertyChanged}" />
+                        </DockPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="FolderSourcePanel" Visibility="Collapsed">
+                        <TextBlock Text="{DynamicResource LOCPLSSetupLibraryRoot}" FontWeight="SemiBold" />
+                        <DockPanel Margin="0,5,0,12">
+                            <Button Content="{DynamicResource LOCPLSSetupBrowse}"
+                                    DockPanel.Dock="Right"
+                                    Width="90"
+                                    Margin="8,0,0,0"
+                                    Click="BrowseLibraryRoot_Click" />
+                            <TextBox Text="{Binding Draft.LocalLibraryRoot, UpdateSourceTrigger=PropertyChanged}" />
+                        </DockPanel>
+                        <TextBlock Text="{DynamicResource LOCPLSSetupManifestPath}" FontWeight="SemiBold" />
+                        <DockPanel Margin="0,5,0,0">
+                            <Button Content="{DynamicResource LOCPLSSetupBrowse}"
+                                    DockPanel.Dock="Right"
+                                    Width="90"
+                                    Margin="8,0,0,0"
+                                    Click="BrowseManifest_Click" />
+                            <TextBox Text="{Binding Draft.LocalManifestPath, UpdateSourceTrigger=PropertyChanged}" />
+                        </DockPanel>
+                    </StackPanel>
+
+                    <StackPanel x:Name="RcloneSourcePanel" Visibility="Collapsed">
+                        <TextBlock Text="{DynamicResource LOCPLSSetupRcloneExecutable}" FontWeight="SemiBold" />
+                        <DockPanel Margin="0,5,0,12">
+                            <Button Content="{DynamicResource LOCPLSSetupBrowse}"
+                                    DockPanel.Dock="Right"
+                                    Width="90"
+                                    Margin="8,0,0,0"
+                                    Click="BrowseRclone_Click" />
+                            <TextBox Text="{Binding Draft.RcloneExecutablePath, UpdateSourceTrigger=PropertyChanged}" />
+                        </DockPanel>
+                        <TextBlock Text="{DynamicResource LOCPLSSetupRcloneRemoteName}" FontWeight="SemiBold" />
+                        <TextBox Text="{Binding Draft.RcloneRemoteName, UpdateSourceTrigger=PropertyChanged}" Margin="0,5,0,12" />
+                        <TextBlock Text="{DynamicResource LOCPLSSetupRcloneManifestPath}" FontWeight="SemiBold" />
+                        <TextBox Text="{Binding Draft.RcloneManifestPath, UpdateSourceTrigger=PropertyChanged}" Margin="0,5,0,12" />
+                        <TextBlock Text="{DynamicResource LOCPLSSetupRcloneContentRoot}" FontWeight="SemiBold" />
+                        <TextBox Text="{Binding Draft.RcloneContentRoot, UpdateSourceTrigger=PropertyChanged}" Margin="0,5,0,12" />
+                        <TextBlock Text="{DynamicResource LOCPLSSetupRcloneTimeout}" FontWeight="SemiBold" />
+                        <TextBox Text="{Binding Draft.RcloneTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" Width="120" HorizontalAlignment="Left" Margin="0,5,0,0" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel x:Name="ScanPreviewPanel" Visibility="Collapsed">
+                    <TextBlock Text="{DynamicResource LOCPLSSetupScanTitle}"
+                               FontSize="18"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="{DynamicResource LOCPLSSetupScanDescription}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,14" />
+                    <Border BorderBrush="{DynamicResource TextBrush}" BorderThickness="1" Padding="12">
+                        <StackPanel>
+                            <TextBlock Text="{DynamicResource LOCPLSSourceType}" FontWeight="SemiBold" />
+                            <TextBlock x:Name="ScanSourceTypeText" TextWrapping="Wrap" Margin="0,3,0,10" />
+                            <TextBlock Text="{DynamicResource LOCPLSSourceLocation}" FontWeight="SemiBold" />
+                            <TextBlock x:Name="ScanSourcePathText" TextWrapping="Wrap" Margin="0,3,0,0" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="CacheBehaviorPanel" Visibility="Collapsed">
+                    <TextBlock Text="{DynamicResource LOCPLSSetupCacheTitle}"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,14" />
+                    <CheckBox Content="{DynamicResource LOCPLSSetupAllowDownloads}"
+                              IsChecked="{Binding Draft.AllowDownloads}"
+                              Margin="0,0,0,5" />
+                    <TextBlock Text="{DynamicResource LOCPLSSetupCatalogOnly}"
+                               TextWrapping="Wrap"
+                               Margin="24,0,0,14" />
+                    <TextBlock Text="{DynamicResource LOCPLSCacheLocation}" FontWeight="SemiBold" />
+                    <DockPanel Margin="0,5,0,14">
+                        <Button Content="{DynamicResource LOCPLSSetupBrowse}"
+                                DockPanel.Dock="Right"
+                                Width="90"
+                                Margin="8,0,0,0"
+                                Click="BrowseCache_Click" />
+                        <TextBox Text="{Binding Draft.CachePath, UpdateSourceTrigger=PropertyChanged}" />
+                    </DockPanel>
+                    <CheckBox Content="{DynamicResource LOCPLSSetupMissingFiles}"
+                              IsChecked="{Binding Draft.TreatMissingFilesAsUninstalled}" />
+                </StackPanel>
+
+                <StackPanel x:Name="ReviewPanel" Visibility="Collapsed">
+                    <TextBlock Text="{DynamicResource LOCPLSSetupReviewTitle}"
+                               FontSize="18"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="{DynamicResource LOCPLSSetupReviewDescription}"
+                               TextWrapping="Wrap"
+                               Margin="0,6,0,14" />
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource LOCPLSSourceType}" FontWeight="SemiBold" />
+                        <TextBlock x:Name="ReviewSourceTypeText" Grid.Row="0" Grid.Column="2" TextWrapping="Wrap" />
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource LOCPLSSourceLocation}" FontWeight="SemiBold" Margin="0,10,0,0" />
+                        <TextBlock x:Name="ReviewSourcePathText" Grid.Row="1" Grid.Column="2" TextWrapping="Wrap" Margin="0,10,0,0" />
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource LOCPLSCacheLocation}" FontWeight="SemiBold" Margin="0,10,0,0" />
+                        <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding Draft.CachePath}" TextWrapping="Wrap" Margin="0,10,0,0" />
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Install behavior" FontWeight="SemiBold" Margin="0,10,0,0" />
+                        <TextBlock x:Name="ReviewInstallBehaviorText" Grid.Row="3" Grid.Column="2" TextWrapping="Wrap" Margin="0,10,0,0" />
+                    </Grid>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+
+        <Border x:Name="ValidationBorder"
+                Grid.Row="2"
+                Visibility="Collapsed"
+                Margin="0,14,0,0"
+                Padding="10"
+                BorderThickness="1">
+            <StackPanel>
+                <TextBlock Text="{DynamicResource LOCPLSSetupErrors}" FontWeight="SemiBold" />
+                <ItemsControl ItemsSource="{Binding ValidationErrors}" Margin="0,5,0,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding StringFormat=• {0}}" TextWrapping="Wrap" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+
+        <DockPanel Grid.Row="3" Margin="0,16,0,0" LastChildFill="False">
+            <Button x:Name="CancelButton"
+                    Content="{DynamicResource LOCPLSSetupCancel}"
+                    DockPanel.Dock="Right"
+                    Width="90"
+                    Margin="8,0,0,0"
+                    Click="Cancel_Click" />
+            <Button x:Name="FinishButton"
+                    Content="{DynamicResource LOCPLSSetupFinish}"
+                    DockPanel.Dock="Right"
+                    Width="90"
+                    Margin="8,0,0,0"
+                    Click="Finish_Click" />
+            <Button x:Name="NextButton"
+                    Content="{DynamicResource LOCPLSSetupNext}"
+                    DockPanel.Dock="Right"
+                    Width="90"
+                    Margin="8,0,0,0"
+                    Click="Next_Click" />
+            <Button x:Name="BackButton"
+                    Content="{DynamicResource LOCPLSSetupBack}"
+                    DockPanel.Dock="Right"
+                    Width="90"
+                    Click="Back_Click" />
+        </DockPanel>
+    </Grid>
+</UserControl>
