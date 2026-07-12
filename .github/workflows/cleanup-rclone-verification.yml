@@ -1,0 +1,64 @@
+name: cleanup-rclone-verification
+
+on:
+  push:
+    branches:
+      - feature/user-friendly-dashboard
+    paths:
+      - automation/cleanup-rclone-verification.txt
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/user-friendly-dashboard
+
+      - name: Restore standard CI and remove temporary verification files
+        shell: bash
+        run: |
+          cat > .github/workflows/build.yml <<'YAML'
+          name: build
+
+          on:
+            push:
+              branches:
+                - main
+                - feature/**
+            pull_request:
+
+          jobs:
+            build:
+              runs-on: windows-latest
+
+              steps:
+                - uses: actions/checkout@v4
+
+                - uses: microsoft/setup-msbuild@v2
+
+                - name: Restore NuGet packages
+                  run: nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln
+
+                - name: Build Debug
+                  run: msbuild .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln /t:Build /p:Configuration=Debug /p:Platform="Any CPU"
+
+                - name: Run tests
+                  run: .\PersonalCloudLibrarySource.Tests\bin\Debug\PersonalCloudLibrarySource.Tests.exe --noheader
+          YAML
+
+          git rm -f --ignore-unmatch \
+            .github/workflows/verify-rclone-queue-integration.yml \
+            tools/apply-rclone-queue-integration.py \
+            automation/verify-rclone-queue-integration.txt \
+            .github/workflows/cleanup-rclone-verification.yml \
+            automation/cleanup-rclone-verification.txt
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/build.yml
+          git commit -m "Clean temporary rclone verification files [skip ci]"
+          git push origin HEAD:feature/user-friendly-dashboard
