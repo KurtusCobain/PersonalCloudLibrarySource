@@ -1,0 +1,98 @@
+name: verify-transfer-foundation
+
+on:
+  push:
+    branches:
+      - feature/user-friendly-dashboard
+    paths:
+      - automation/verify-transfer-foundation.txt
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/user-friendly-dashboard
+
+      - name: Apply transfer dashboard integration
+        shell: pwsh
+        run: python tools/apply-transfer-dashboard-integration.py
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet packages
+        id: restore
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln *>&1 | Tee-Object -FilePath restore.log
+          exit $LASTEXITCODE
+
+      - name: Build Debug
+        id: build
+        if: steps.restore.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          msbuild .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln /t:Build /p:Configuration=Debug /p:Platform="Any CPU" *>&1 | Tee-Object -FilePath build.log
+          exit $LASTEXITCODE
+
+      - name: Run NUnitLite tests
+        id: tests
+        if: steps.restore.outcome == 'success' && steps.build.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          .\PersonalCloudLibrarySource.Tests\bin\Debug\PersonalCloudLibrarySource.Tests.exe --noheader *>&1 | Tee-Object -FilePath tests.log
+          exit $LASTEXITCODE
+
+      - name: Commit integration and verification report
+        if: always()
+        shell: pwsh
+        run: |
+          $restore = "${{ steps.restore.outcome }}"
+          $build = "${{ steps.build.outcome }}"
+          $tests = "${{ steps.tests.outcome }}"
+          $result = if ($restore -eq "success" -and $build -eq "success" -and $tests -eq "success") { "PASS" } else { "FAIL" }
+          $timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+          $lines = @(
+            "# Transfer Foundation Verification",
+            "",
+            "- Result: **$result**",
+            "- Verified at: $timestamp",
+            "- Branch: feature/user-friendly-dashboard",
+            "- Commit tested: ${{ github.sha }} plus the focused navigation patch in this run",
+            "- NuGet restore: $restore",
+            "- Debug build: $build",
+            "- NUnitLite tests: $tests",
+            ""
+          )
+          foreach ($name in @("restore", "build", "tests")) {
+            $path = "$name.log"
+            if (Test-Path $path) {
+              $lines += "## $name log tail"
+              $lines += ""
+              $lines += Get-Content $path | Select-Object -Last 100
+              $lines += ""
+            }
+          }
+          New-Item -ItemType Directory -Path docs\superpowers\verification -Force | Out-Null
+          $lines | Set-Content docs\superpowers\verification\transfer-foundation-status.md -Encoding UTF8
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add PersonalCloudLibrarySource/PersonalCloudLibrarySource.Navigation.cs docs/superpowers/verification/transfer-foundation-status.md
+          git commit -m "Integrate and verify transfer foundation [skip ci]"
+          git push origin HEAD:feature/user-friendly-dashboard
+
+      - name: Fail when verification failed
+        if: always()
+        shell: pwsh
+        run: |
+          if ("${{ steps.restore.outcome }}" -ne "success" -or "${{ steps.build.outcome }}" -ne "success" -or "${{ steps.tests.outcome }}" -ne "success") {
+            exit 1
+          }
