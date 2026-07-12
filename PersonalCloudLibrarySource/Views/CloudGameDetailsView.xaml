@@ -1,0 +1,120 @@
+<UserControl x:Class="PersonalCloudLibrarySource.CloudGameDetailsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             d:DesignHeight="600"
+             d:DesignWidth="720">
+    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                  HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="20">
+            <TextBlock Text="{Binding Title}"
+                       FontSize="24"
+                       FontWeight="Bold"
+                       TextWrapping="Wrap" />
+            <TextBlock Text="{Binding InstallationState}"
+                       FontSize="16"
+                       FontWeight="SemiBold"
+                       Margin="0,6,0,16" />
+
+            <GroupBox Header="{DynamicResource LOCPLSGameDetailsGameHeading}"
+                      Margin="0,0,0,12">
+                <Grid Margin="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="14" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource LOCPLSGameDetailsPlatform}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding Platform}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource LOCPLSGameDetailsManifestId}" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding ManifestId}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource LOCPLSGameDetailsPackageRole}" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="2" Grid.Column="2" Text="{Binding PackageRole}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                </Grid>
+            </GroupBox>
+
+            <GroupBox Header="{DynamicResource LOCPLSGameDetailsSourceHeading}"
+                      Margin="0,0,0,12">
+                <Grid Margin="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="14" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource LOCPLSGameDetailsSourceType}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding SourceType}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource LOCPLSGameDetailsSourcePath}" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding SourcePath}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                </Grid>
+            </GroupBox>
+
+            <GroupBox Header="{DynamicResource LOCPLSGameDetailsCacheHeading}"
+                      Margin="0,0,0,12">
+                <Grid Margin="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="14" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource LOCPLSGameDetailsCachePath}" FontWeight="SemiBold" />
+                    <TextBlock Grid.Row="0" Grid.Column="2" Text="{Binding CachePath}" TextWrapping="Wrap" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource LOCPLSGameDetailsInstallDirectory}" FontWeight="SemiBold" Margin="0,8,0,0" />
+                    <TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding InstallDirectory}" TextWrapping="Wrap" Margin="0,8,0,0" />
+                </Grid>
+            </GroupBox>
+
+            <GroupBox Header="{DynamicResource LOCPLSGameDetailsNotesHeading}"
+                      Margin="0,0,0,12">
+                <TextBlock Text="{Binding Notes}"
+                           TextWrapping="Wrap"
+                           Margin="12" />
+            </GroupBox>
+
+            <WrapPanel>
+                <Button Content="{DynamicResource LOCPLSGameInstall}"
+                        Command="{Binding InstallCommand}"
+                        Margin="0,0,8,8"
+                        Padding="10,5" />
+                <Button Content="{DynamicResource LOCPLSGameRemoveCachedCopy}"
+                        Command="{Binding RemoveCachedCopyCommand}"
+                        Margin="0,0,8,8"
+                        Padding="10,5" />
+                <Button Content="{DynamicResource LOCPLSGameOpenCachedFolder}"
+                        Command="{Binding OpenCachedFolderCommand}"
+                        Margin="0,0,8,8"
+                        Padding="10,5" />
+                <Button Content="{DynamicResource LOCPLSGameOpenSource}"
+                        Command="{Binding OpenSourceLocationCommand}"
+                        Margin="0,0,8,8"
+                        Padding="10,5" />
+                <Button Content="{DynamicResource LOCPLSGameVerifyEntry}"
+                        Command="{Binding VerifyCommand}"
+                        Margin="0,0,8,8"
+                        Padding="10,5" />
+                <Button Content="{DynamicResource LOCPLSGameCopySourcePath}"
+                        Command="{Binding CopySourcePathCommand}"
+                        Margin="0,0,8,8"
+                        Padding="10,5" />
+                <Button Content="{DynamicResource LOCPLSGameCopyCachePath}"
+                        Command="{Binding CopyCachePathCommand}"
+                        Margin="0,0,8,8"
+                        Padding="10,5" />
+            </WrapPanel>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
