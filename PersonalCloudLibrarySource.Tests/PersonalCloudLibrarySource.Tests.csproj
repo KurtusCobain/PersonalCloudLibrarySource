@@ -44,7 +44,9 @@
     <Compile Include="Dashboard\FriendlySourceNameProviderTests.cs" />
     <Compile Include="Dashboard\DashboardActivityServiceTests.cs" />
     <Compile Include="Dashboard\LibraryStatusServiceTests.cs" />
+    <Compile Include="Dashboard\VerificationDashboardStateServiceTests.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="RcloneTimeoutDefaultsTests.cs" />
     <Compile Include="Services\GameCommandPolicyServiceTests.cs" />
     <Compile Include="Services\GameCommandServiceTests.cs" />
     <Compile Include="Services\PluginNavigationServiceTests.cs" />
@@ -58,6 +60,7 @@
     <Compile Include="Transfers\RcloneProgressParserTests.cs" />
     <Compile Include="Transfers\RcloneTransferAdapterTests.cs" />
     <Compile Include="Transfers\TransferActivityTrackerTests.cs" />
+    <Compile Include="Ui\UiContractTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
