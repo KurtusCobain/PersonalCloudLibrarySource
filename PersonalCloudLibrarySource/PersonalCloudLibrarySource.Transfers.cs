@@ -5,6 +5,7 @@ namespace PersonalCloudLibrarySource
     public partial class PersonalCloudLibrarySource
     {
         private CloudTransferManager transferManager;
+        private CloudTransferExecutor transferExecutor;
 
         internal CloudTransferManager GetTransferManager()
         {
@@ -16,6 +17,18 @@ namespace PersonalCloudLibrarySource
             }
 
             return transferManager;
+        }
+
+        internal CloudTransferExecutor GetTransferExecutor()
+        {
+            if (transferExecutor == null)
+            {
+                transferExecutor = new CloudTransferExecutor(
+                    GetTransferManager(),
+                    new LocalTransferAdapter());
+            }
+
+            return transferExecutor;
         }
 
         private int GetActiveTransferCount()
