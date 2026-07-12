@@ -1,1 +1,1 @@
-Apply the consolidated branch repair, run the complete Windows Debug build and NUnitLite suite, then remove temporary automation artifacts only after a passing result.
+Apply the consolidated branch repair, deterministic transfer ordering fix, complete Windows Debug build, and full NUnitLite suite; then remove temporary automation and restored package artifacts only after a passing result.
