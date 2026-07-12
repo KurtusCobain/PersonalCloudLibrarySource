@@ -26,7 +26,7 @@ namespace PersonalCloudLibrarySource
 
         public override string Name => ResolveLibraryDisplayName(settings?.Settings);
 
-        public override LibraryClient Client { get; } = new PersonalCloudLibrarySourceClient();
+        public override LibraryClient Client { get; }
 
         public PersonalCloudLibrarySource(IPlayniteAPI api) : base(api)
         {
