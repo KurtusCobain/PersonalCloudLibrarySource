@@ -83,8 +83,8 @@ namespace PersonalCloudLibrarySource
                     ImportedGameCount = importedCount,
                     CachedGameCount = cachedCount,
                     WarningCount = 0,
-                    ActiveTransferCount = 0,
-                    FailedTransferCount = 0,
+                    ActiveTransferCount = GetActiveTransferCount(),
+                    FailedTransferCount = GetFailedTransferCount(),
                     SourceDescription = ResolveDashboardSourceDescription(pluginSettings),
                     ManifestDescription = DescribeManifestPath(pluginSettings),
                     CachePath = pluginSettings?.LocalCacheFolder ?? string.Empty
@@ -169,6 +169,8 @@ namespace PersonalCloudLibrarySource
             {
                 settings.Settings.PropertyChanged -= DashboardSettings_PropertyChanged;
             }
+
+            DisposeTransferManager();
         }
 
         public override void OnLibraryUpdated(OnLibraryUpdatedEventArgs args)
@@ -179,6 +181,7 @@ namespace PersonalCloudLibrarySource
 
         private void DashboardSettings_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
+            SynchronizeTransferManagerSettings();
             RefreshDashboardState();
             UpdateNavigationItemState();
         }
@@ -195,6 +198,8 @@ namespace PersonalCloudLibrarySource
             {
                 dashboardSidebarItem.Visible = settings.Settings.ShowSidebarDashboard;
             }
+
+            UpdateSidebarTransferProgress();
         }
 
         private string BuildToolbarTitle()
