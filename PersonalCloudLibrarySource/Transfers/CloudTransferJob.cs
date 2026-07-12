@@ -34,6 +34,7 @@ namespace PersonalCloudLibrarySource
             string source,
             string destination,
             string providerType,
+            bool isDirectory,
             Guid? previousAttemptId = null)
         {
             Id = Guid.NewGuid();
@@ -42,6 +43,7 @@ namespace PersonalCloudLibrarySource
             Source = source ?? string.Empty;
             Destination = destination ?? string.Empty;
             ProviderType = providerType ?? string.Empty;
+            IsDirectory = isDirectory;
             PreviousAttemptId = previousAttemptId;
             State = CloudTransferState.Queued;
             CreatedAt = DateTime.UtcNow;
@@ -53,6 +55,7 @@ namespace PersonalCloudLibrarySource
         public string Source { get; }
         public string Destination { get; }
         public string ProviderType { get; }
+        public bool IsDirectory { get; }
         public Guid? PreviousAttemptId { get; }
         public DateTime CreatedAt { get; }
         public CancellationToken CancellationToken => cancellationSource.Token;
