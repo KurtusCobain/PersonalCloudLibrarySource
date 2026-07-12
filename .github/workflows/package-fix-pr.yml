@@ -31,12 +31,34 @@ jobs:
         run: msbuild .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln /t:Build /p:Configuration=Debug /p:Platform="Any CPU"
 
       - name: Run NUnitLite tests
-        run: .\PersonalCloudLibrarySource.Tests\bin\Debug\PersonalCloudLibrarySource.Tests.exe --noheader
+        id: tests
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          & .\PersonalCloudLibrarySource.Tests\bin\Debug\PersonalCloudLibrarySource.Tests.exe --noheader 2>&1 |
+            Tee-Object -FilePath .\nunit-output-0.3.1.txt
+          exit $LASTEXITCODE
+
+      - name: Upload NUnit diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: PersonalCloudLibrarySource-0.3.1-test-diagnostics
+          path: nunit-output-0.3.1.txt
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Stop after test failure
+        if: steps.tests.outcome != 'success'
+        shell: pwsh
+        run: exit 1
 
       - name: Build and package Release
+        if: steps.tests.outcome == 'success'
         run: .\tools\package-extension.ps1 -DebugSymbols
 
       - name: Inspect crash-fix package
+        if: steps.tests.outcome == 'success'
         shell: pwsh
         run: |
           $sourcePackage = ".\dist\PersonalCloudLibrarySource-0.3.1.pext"
@@ -99,6 +121,7 @@ jobs:
           Get-Content -LiteralPath ".\dist\package-manifest-0.3.1.txt"
 
       - name: Upload crash-fix test package
+        if: steps.tests.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: PersonalCloudLibrarySource-0.3.1-test-package
