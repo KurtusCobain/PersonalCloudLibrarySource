@@ -1,1 +1,1 @@
-Build and verify Personal Cloud Library Source 0.3.0 test package from feature/user-friendly-dashboard using the registered build workflow.
+Build and verify Personal Cloud Library Source 0.3.0 test package with the self-contained registered build workflow.
