@@ -1,0 +1,1 @@
+Register and verify the cancellable rclone transfer adapter, command builder, progress parser, and partial cleanup behavior.
