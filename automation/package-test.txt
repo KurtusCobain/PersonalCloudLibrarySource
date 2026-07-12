@@ -1,1 +1,0 @@
-Build and verify Personal Cloud Library Source 0.3.0 test package and publish the artifact result as a commit status.
