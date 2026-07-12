@@ -9,7 +9,7 @@ on:
       - .github/workflows/package-test.yml
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-test-package:
@@ -124,3 +124,37 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
+
+      - name: Record successful package verification
+        shell: pwsh
+        run: |
+          $statusPath = ".\docs\superpowers\verification\test-package-status.md"
+          New-Item -ItemType Directory -Path (Split-Path -Parent $statusPath) -Force | Out-Null
+          $verifiedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+          $packageManifest = Get-Content -LiteralPath ".\dist\package-manifest.txt"
+          $status = @(
+            "# Personal Cloud Library Source 0.3.0 Test Package",
+            "",
+            "- Result: **PASS**",
+            "- Verified at: $verifiedAt",
+            "- Branch: feature/user-friendly-dashboard",
+            "- Commit: $env:GITHUB_SHA",
+            "- Workflow run ID: $env:GITHUB_RUN_ID",
+            "- Artifact: PersonalCloudLibrarySource-0.3.0-test-package",
+            "- Artifact retention: 14 days",
+            "- Debug build: passed",
+            "- NUnitLite tests: passed",
+            "- Release build: passed",
+            "- Package inspection: passed",
+            "",
+            "## Package manifest",
+            "",
+            "```text"
+          ) + $packageManifest + @("```")
+          $status | Set-Content -LiteralPath $statusPath -Encoding UTF8
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add $statusPath
+          git commit -m "Record 0.3.0 test package verification [skip ci]"
+          git push origin HEAD:feature/user-friendly-dashboard
