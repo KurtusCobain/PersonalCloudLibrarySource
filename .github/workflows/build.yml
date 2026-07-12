@@ -37,7 +37,6 @@ jobs:
 
   package-test:
     if: github.event_name == 'push' && github.ref == 'refs/heads/feature/user-friendly-dashboard'
-    needs: build
     runs-on: windows-latest
     permissions:
       contents: write
@@ -62,9 +61,23 @@ jobs:
         shell: pwsh
         run: nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln -Force
 
+      - name: Build Debug
+        id: debug_build
+        if: steps.restore.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: msbuild .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln /t:Build /p:Configuration=Debug /p:Platform="Any CPU"
+
+      - name: Run NUnitLite tests
+        id: tests
+        if: steps.restore.outcome == 'success' && steps.debug_build.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        run: .\PersonalCloudLibrarySource.Tests\bin\Debug\PersonalCloudLibrarySource.Tests.exe --noheader
+
       - name: Build and package Release
         id: package
-        if: steps.restore.outcome == 'success'
+        if: steps.restore.outcome == 'success' && steps.debug_build.outcome == 'success' && steps.tests.outcome == 'success'
         continue-on-error: true
         shell: pwsh
         run: .\tools\package-extension.ps1 -DebugSymbols
@@ -156,10 +169,12 @@ jobs:
         shell: pwsh
         run: |
           $restore = "${{ steps.restore.outcome }}"
+          $debugBuild = "${{ steps.debug_build.outcome }}"
+          $tests = "${{ steps.tests.outcome }}"
           $package = "${{ steps.package.outcome }}"
           $inspect = "${{ steps.inspect.outcome }}"
           $upload = "${{ steps.upload.outcome }}"
-          $passed = $restore -eq "success" -and $package -eq "success" -and $inspect -eq "success" -and $upload -eq "success"
+          $passed = $restore -eq "success" -and $debugBuild -eq "success" -and $tests -eq "success" -and $package -eq "success" -and $inspect -eq "success" -and $upload -eq "success"
           $result = if ($passed) { "PASS" } else { "FAIL" }
           $statusPath = ".\docs\superpowers\verification\test-package-status.md"
           New-Item -ItemType Directory -Path (Split-Path -Parent $statusPath) -Force | Out-Null
@@ -174,8 +189,9 @@ jobs:
             "- Workflow run ID: $env:GITHUB_RUN_ID",
             "- Artifact: PersonalCloudLibrarySource-0.3.0-test-package",
             "- Artifact retention: 14 days",
-            "- Debug build and NUnitLite tests: passed in required build job",
             "- NuGet restore: $restore",
+            "- Debug build: $debugBuild",
+            "- NUnitLite tests: $tests",
             "- Release package build: $package",
             "- Package inspection: $inspect",
             "- Artifact upload: $upload"
@@ -198,6 +214,8 @@ jobs:
         shell: pwsh
         run: |
           if ("${{ steps.restore.outcome }}" -ne "success" -or
+              "${{ steps.debug_build.outcome }}" -ne "success" -or
+              "${{ steps.tests.outcome }}" -ne "success" -or
               "${{ steps.package.outcome }}" -ne "success" -or
               "${{ steps.inspect.outcome }}" -ne "success" -or
               "${{ steps.upload.outcome }}" -ne "success") {
