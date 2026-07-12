@@ -101,6 +101,11 @@
     <Compile Include="Transfers\CloudTransferJob.cs" />
     <Compile Include="Transfers\CloudTransferManager.cs" />
     <Compile Include="Transfers\LocalTransferAdapter.cs" />
+    <Compile Include="Transfers\RcloneCommandBuilder.cs" />
+    <Compile Include="Transfers\RcloneProcessRunner.cs" />
+    <Compile Include="Transfers\RcloneProgressParser.cs" />
+    <Compile Include="Transfers\RcloneTransferAdapter.cs" />
+    <Compile Include="Transfers\RcloneTransferModels.cs" />
     <Compile Include="Views\CloudGameDetailsView.xaml.cs">
       <DependentUpon>CloudGameDetailsView.xaml</DependentUpon>
     </Compile>
