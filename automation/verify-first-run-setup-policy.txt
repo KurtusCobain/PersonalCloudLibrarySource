@@ -1,0 +1,1 @@
+Apply and verify one-time wizard launch, persistent dismissal, and non-blocking setup reminders.
