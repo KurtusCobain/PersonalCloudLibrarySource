@@ -1,0 +1,1 @@
+Apply the consolidated branch repair, run the complete Windows Debug build and NUnitLite suite, then remove temporary automation artifacts only after a passing result.
