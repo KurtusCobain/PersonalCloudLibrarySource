@@ -14,6 +14,8 @@ namespace PersonalCloudLibrarySource
         private readonly PersonalCloudLibrarySourceSettings settings;
         private readonly RcloneFileCopier rcloneFileCopier;
         private readonly LocalFileCopier localFileCopier;
+        private readonly CloudTransferManager transferManager;
+        private readonly CloudTransferExecutor transferExecutor;
 
         public RcloneInstallController(
             IPlayniteAPI playniteApi,
@@ -21,13 +23,17 @@ namespace PersonalCloudLibrarySource
             PersonalCloudLibraryItem item,
             PersonalCloudLibrarySourceSettings settings,
             RcloneFileCopier rcloneFileCopier,
-            LocalFileCopier localFileCopier) : base(game)
+            LocalFileCopier localFileCopier,
+            CloudTransferManager transferManager = null,
+            CloudTransferExecutor transferExecutor = null) : base(game)
         {
             this.playniteApi = playniteApi;
             this.item = item;
             this.settings = settings;
             this.rcloneFileCopier = rcloneFileCopier;
             this.localFileCopier = localFileCopier;
+            this.transferManager = transferManager;
+            this.transferExecutor = transferExecutor;
             Name = "Download to local cache";
         }
 
@@ -43,6 +49,7 @@ namespace PersonalCloudLibrarySource
             logger.Info($"Personal Cloud Library Source downloading item {item.Id} as {sourceType}.");
             var providerType = PersonalCloudLibrarySource.GetProviderType(settings);
             var succeeded = false;
+            var cancelled = false;
             string message = null;
             System.Exception exception = null;
 
@@ -59,16 +66,46 @@ namespace PersonalCloudLibrarySource
             else
             {
                 var localSourcePath = PersonalCloudLibrarySource.ResolveLocalFolderSourcePath(settings, sourcePath);
-                var result = sourceType == "directory"
-                    ? localFileCopier.CopyDirectoryToLocalPath(localSourcePath, destinationFolderPath)
-                    : localFileCopier.CopyFileToLocalPath(localSourcePath, destinationFilePath);
-                succeeded = result.Succeeded;
-                message = result.Message;
-                exception = result.Exception;
+                if (transferManager != null && transferExecutor != null)
+                {
+                    var destinationPath = sourceType == "directory"
+                        ? destinationFolderPath
+                        : destinationFilePath;
+                    var job = transferManager.Enqueue(
+                        Game.Id,
+                        string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
+                        localSourcePath,
+                        destinationPath,
+                        providerType);
+                    var result = transferExecutor.ExecuteLocal(job.Id, sourceType == "directory");
+                    succeeded = result.Succeeded;
+                    cancelled = result.Cancelled;
+                    message = result.Message;
+                    exception = result.Exception;
+                }
+                else
+                {
+                    var result = sourceType == "directory"
+                        ? localFileCopier.CopyDirectoryToLocalPath(localSourcePath, destinationFolderPath)
+                        : localFileCopier.CopyFileToLocalPath(localSourcePath, destinationFilePath);
+                    succeeded = result.Succeeded;
+                    message = result.Message;
+                    exception = result.Exception;
+                }
             }
 
             if (!succeeded)
             {
+                if (cancelled)
+                {
+                    logger.Info($"Personal Cloud Library Source transfer cancelled for item {item.Id}.");
+                    ShowSummary(
+                        "Download to local cache was cancelled." + System.Environment.NewLine + System.Environment.NewLine +
+                        "Item: " + item.Title + System.Environment.NewLine +
+                        "Partial files were removed and the game remains uninstalled.");
+                    return;
+                }
+
                 if (exception != null)
                 {
                     logger.Error(exception, $"Personal Cloud Library Source failed to download item {item.Id}: {message}");
