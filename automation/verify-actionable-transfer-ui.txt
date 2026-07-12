@@ -1,0 +1,1 @@
+Apply and verify dashboard queue rows plus per-game Cancel and Retry transfer actions.
