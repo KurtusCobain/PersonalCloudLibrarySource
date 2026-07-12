@@ -16,6 +16,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
             var manifestCalls = 0;
             var updateHelpCalls = 0;
             var sourceCalls = 0;
+            var setupCalls = 0;
 
             var service = new PluginNavigationService(
                 () => dashboardCalls++,
@@ -25,7 +26,8 @@ namespace PersonalCloudLibrarySource.Tests.Services
                 () => reportCalls++,
                 () => manifestCalls++,
                 () => updateHelpCalls++,
-                () => sourceCalls++);
+                () => sourceCalls++,
+                () => setupCalls++);
 
             service.OpenDashboard();
             service.OpenSettings();
@@ -35,6 +37,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
             service.GenerateManifest();
             service.ShowUpdateLibraryInstructions();
             service.OpenSourceLocation();
+            service.RunSetupWizard();
 
             Assert.That(dashboardCalls, Is.EqualTo(1));
             Assert.That(settingsCalls, Is.EqualTo(1));
@@ -44,6 +47,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(manifestCalls, Is.EqualTo(1));
             Assert.That(updateHelpCalls, Is.EqualTo(1));
             Assert.That(sourceCalls, Is.EqualTo(1));
+            Assert.That(setupCalls, Is.EqualTo(1));
         }
     }
 }
