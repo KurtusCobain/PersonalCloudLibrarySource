@@ -57,8 +57,8 @@ namespace PersonalCloudLibrarySource
             }
 
             var pluginSettings = settings?.Settings;
-            var pluginGames = playniteApi?.Database?.Games?
-                .Where(game => game.PluginId == Id)
+            var pluginGames = playniteApi?.Database?.Games?.
+                Where(game => game.PluginId == Id)
                 .ToList() ?? new List<Playnite.SDK.Models.Game>();
 
             var importedCount = pluginGames.Count;
@@ -91,7 +91,7 @@ namespace PersonalCloudLibrarySource
                 dashboardTopPanelItem = new TopPanelItem
                 {
                     Icon = CreateToolbarIcon(),
-                    Title = GetDashboardResource("LOCPLSDashboardTitle", "Personal Cloud Library"),
+                    Title = BuildToolbarTitle(),
                     Visible = settings?.Settings?.ShowTopPanelButton ?? true,
                     Activated = navigationService.OpenDashboard
                 };
@@ -166,35 +166,47 @@ namespace PersonalCloudLibrarySource
         public override void OnLibraryUpdated(OnLibraryUpdatedEventArgs args)
         {
             RefreshDashboardState();
+            UpdateNavigationItemState();
         }
 
         private void DashboardSettings_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
+            RefreshDashboardState();
+            UpdateNavigationItemState();
+        }
+
+        private void UpdateNavigationItemState()
+        {
             if (dashboardTopPanelItem != null)
             {
                 dashboardTopPanelItem.Visible = settings.Settings.ShowTopPanelButton;
-                dashboardTopPanelItem.Title = GetDashboardResource("LOCPLSDashboardTitle", "Personal Cloud Library") + " — " +
-                                              (dashboardStateStore.Current?.StatusText ?? "Needs setup");
+                dashboardTopPanelItem.Title = BuildToolbarTitle();
             }
 
             if (dashboardSidebarItem != null)
             {
                 dashboardSidebarItem.Visible = settings.Settings.ShowSidebarDashboard;
             }
+        }
 
-            RefreshDashboardState();
+        private string BuildToolbarTitle()
+        {
+            return GetDashboardResource("LOCPLSDashboardTitle", "Personal Cloud Library") + " — " +
+                   (dashboardStateStore?.Current?.StatusText ?? "Needs setup");
         }
 
         private void VerifyLibraryFromDashboard()
         {
             settings.VerifySetup();
             RefreshDashboardState();
+            UpdateNavigationItemState();
         }
 
         private void GenerateManifestFromDashboard()
         {
             settings.GenerateManifestFromFolder();
             RefreshDashboardState();
+            UpdateNavigationItemState();
         }
 
         private void OpenSourceLocationFromDashboard()
@@ -204,18 +216,31 @@ namespace PersonalCloudLibrarySource
 
             if (string.Equals(providerType, PersonalCloudLibrarySourceSettings.LocalFolderProviderType, StringComparison.OrdinalIgnoreCase))
             {
-                OpenExplorerFolder(pluginSettings.LocalLibraryRoot);
+                if (!OpenExplorerFolder(pluginSettings.LocalLibraryRoot))
+                {
+                    ShowSourceUnavailableMessage();
+                }
                 return;
             }
 
             if (string.Equals(providerType, PersonalCloudLibrarySourceSettings.LocalFileProviderType, StringComparison.OrdinalIgnoreCase))
             {
-                OpenExplorerFile(pluginSettings.LocalManifestPath);
+                if (!OpenExplorerFile(pluginSettings.LocalManifestPath))
+                {
+                    ShowSourceUnavailableMessage();
+                }
                 return;
             }
 
             playniteApi.Dialogs.ShowMessage(
                 "This cloud source is accessed through rclone. Open the dashboard or plugin settings to review the configured remote and content root.",
+                GetDashboardResource("LOCPLSDashboardTitle", "Personal Cloud Library"));
+        }
+
+        private void ShowSourceUnavailableMessage()
+        {
+            playniteApi.Dialogs.ShowMessage(
+                "The configured source location is missing or unavailable.",
                 GetDashboardResource("LOCPLSDashboardTitle", "Personal Cloud Library"));
         }
 
@@ -316,24 +341,26 @@ namespace PersonalCloudLibrarySource
             return Path.Combine(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "icon.png");
         }
 
-        private static void OpenExplorerFolder(string path)
+        private static bool OpenExplorerFolder(string path)
         {
             if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
             {
-                return;
+                return false;
             }
 
             Process.Start("explorer.exe", path);
+            return true;
         }
 
-        private static void OpenExplorerFile(string path)
+        private static bool OpenExplorerFile(string path)
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             {
-                return;
+                return false;
             }
 
             Process.Start("explorer.exe", "/select,\"" + path + "\"");
+            return true;
         }
     }
 }
