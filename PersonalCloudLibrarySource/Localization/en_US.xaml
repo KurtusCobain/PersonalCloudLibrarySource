@@ -1,5 +1,31 @@
-<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" 
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" 
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
-                    
+    <sys:String x:Key="LOCPLSDashboardTitle">Personal Cloud Library</sys:String>
+    <sys:String x:Key="LOCPLSSidebarTitle">Cloud Library</sys:String>
+    <sys:String x:Key="LOCPLSMenuSection">Personal Cloud Library</sys:String>
+    <sys:String x:Key="LOCPLSOpenDashboard">Open Dashboard</sys:String>
+    <sys:String x:Key="LOCPLSOpenSettings">Settings</sys:String>
+    <sys:String x:Key="LOCPLSVerifyLibrary">Verify Library</sys:String>
+    <sys:String x:Key="LOCPLSOpenCacheFolder">Open Cache Folder</sys:String>
+    <sys:String x:Key="LOCPLSOpenLatestReport">Open Latest Report</sys:String>
+    <sys:String x:Key="LOCPLSGenerateManifest">Generate or Refresh Manifest</sys:String>
+    <sys:String x:Key="LOCPLSUpdateLibraryHelp">How to Update Library</sys:String>
+    <sys:String x:Key="LOCPLSOpenSourceLocation">Open Source Location</sys:String>
+    <sys:String x:Key="LOCPLSOverallStatus">Overall status</sys:String>
+    <sys:String x:Key="LOCPLSSourceHeading">Source</sys:String>
+    <sys:String x:Key="LOCPLSSourceType">Source type</sys:String>
+    <sys:String x:Key="LOCPLSSourceLocation">Source location</sys:String>
+    <sys:String x:Key="LOCPLSManifestLocation">Manifest</sys:String>
+    <sys:String x:Key="LOCPLSLibraryStatusHeading">Library status</sys:String>
+    <sys:String x:Key="LOCPLSManifestItems">Manifest items</sys:String>
+    <sys:String x:Key="LOCPLSImportedGames">Imported games</sys:String>
+    <sys:String x:Key="LOCPLSCachedGames">Cached locally</sys:String>
+    <sys:String x:Key="LOCPLSWarnings">Warnings</sys:String>
+    <sys:String x:Key="LOCPLSTransfersHeading">Transfers</sys:String>
+    <sys:String x:Key="LOCPLSActiveTransfers">Active transfers</sys:String>
+    <sys:String x:Key="LOCPLSFailedTransfers">Failed transfers</sys:String>
+    <sys:String x:Key="LOCPLSCacheHeading">Cache</sys:String>
+    <sys:String x:Key="LOCPLSCacheLocation">Cache location</sys:String>
+    <sys:String x:Key="LOCPLSQuickActions">Quick actions</sys:String>
 </ResourceDictionary>
