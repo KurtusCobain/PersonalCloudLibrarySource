@@ -12,6 +12,7 @@
     <sys:String x:Key="LOCPLSGenerateManifest">Generate or Refresh Manifest</sys:String>
     <sys:String x:Key="LOCPLSUpdateLibraryHelp">How to Update Library</sys:String>
     <sys:String x:Key="LOCPLSOpenSourceLocation">Open Source Location</sys:String>
+    <sys:String x:Key="LOCPLSRunSetupWizard">Run Setup Wizard</sys:String>
     <sys:String x:Key="LOCPLSOverallStatus">Overall status</sys:String>
     <sys:String x:Key="LOCPLSSourceHeading">Source</sys:String>
     <sys:String x:Key="LOCPLSSourceType">Source type</sys:String>
@@ -28,4 +29,34 @@
     <sys:String x:Key="LOCPLSCacheHeading">Cache</sys:String>
     <sys:String x:Key="LOCPLSCacheLocation">Cache location</sys:String>
     <sys:String x:Key="LOCPLSQuickActions">Quick actions</sys:String>
+
+    <sys:String x:Key="LOCPLSSetupWizardTitle">Personal Cloud Library Setup</sys:String>
+    <sys:String x:Key="LOCPLSSetupChooseSourceTitle">Choose where your library is stored</sys:String>
+    <sys:String x:Key="LOCPLSSetupChooseSourceDescription">Select the option that best matches where your game files or manifest are stored.</sys:String>
+    <sys:String x:Key="LOCPLSSetupExistingManifest">I already have a manifest file</sys:String>
+    <sys:String x:Key="LOCPLSSetupLocalFolder">On this computer or an external drive</sys:String>
+    <sys:String x:Key="LOCPLSSetupNetworkFolder">On a NAS or network location</sys:String>
+    <sys:String x:Key="LOCPLSSetupRcloneRemote">In cloud storage through rclone</sys:String>
+    <sys:String x:Key="LOCPLSSetupConfigureTitle">Configure the selected source</sys:String>
+    <sys:String x:Key="LOCPLSSetupManifestPath">Manifest file</sys:String>
+    <sys:String x:Key="LOCPLSSetupLibraryRoot">Library folder</sys:String>
+    <sys:String x:Key="LOCPLSSetupRcloneExecutable">rclone executable</sys:String>
+    <sys:String x:Key="LOCPLSSetupRcloneRemoteName">Configured remote name</sys:String>
+    <sys:String x:Key="LOCPLSSetupRcloneManifestPath">Remote manifest path</sys:String>
+    <sys:String x:Key="LOCPLSSetupRcloneContentRoot">Remote content root</sys:String>
+    <sys:String x:Key="LOCPLSSetupRcloneTimeout">Connection timeout in seconds</sys:String>
+    <sys:String x:Key="LOCPLSSetupBrowse">Browse</sys:String>
+    <sys:String x:Key="LOCPLSSetupScanTitle">Review the selected source</sys:String>
+    <sys:String x:Key="LOCPLSSetupScanDescription">The selected source is configured. Folder scanning and item preview will run in the next setup phase before import.</sys:String>
+    <sys:String x:Key="LOCPLSSetupCacheTitle">Choose cache and install behavior</sys:String>
+    <sys:String x:Key="LOCPLSSetupAllowDownloads">Download or copy games when Install is selected</sys:String>
+    <sys:String x:Key="LOCPLSSetupCatalogOnly">Leave this off for catalog-only mode.</sys:String>
+    <sys:String x:Key="LOCPLSSetupMissingFiles">Mark games uninstalled when cached files are missing</sys:String>
+    <sys:String x:Key="LOCPLSSetupReviewTitle">Review your setup</sys:String>
+    <sys:String x:Key="LOCPLSSetupReviewDescription">Confirm the source and cache settings before saving them.</sys:String>
+    <sys:String x:Key="LOCPLSSetupBack">Back</sys:String>
+    <sys:String x:Key="LOCPLSSetupNext">Next</sys:String>
+    <sys:String x:Key="LOCPLSSetupFinish">Finish</sys:String>
+    <sys:String x:Key="LOCPLSSetupCancel">Cancel</sys:String>
+    <sys:String x:Key="LOCPLSSetupErrors">Please fix the following before continuing:</sys:String>
 </ResourceDictionary>
