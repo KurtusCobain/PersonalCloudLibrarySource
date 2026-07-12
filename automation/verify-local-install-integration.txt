@@ -1,1 +1,0 @@
-Apply the shared transfer manager/executor to local install controllers and verify the full solution.
