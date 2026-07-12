@@ -1,0 +1,1 @@
+Run the consolidated Windows restore, build, and NUnitLite verification for game context actions and details.
