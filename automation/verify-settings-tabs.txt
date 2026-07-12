@@ -1,1 +1,0 @@
-Verify the responsive tabbed settings redesign and clean all temporary verification files.
