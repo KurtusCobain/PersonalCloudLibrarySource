@@ -1,5 +1,4 @@
 using Playnite.SDK;
-using Playnite.SDK.Data;
 using System.Collections.Generic;
 
 namespace PersonalCloudLibrarySource
@@ -50,7 +49,7 @@ namespace PersonalCloudLibrarySource
 
         public new void BeginEdit()
         {
-            editingClone = Serialization.GetClone(Settings);
+            editingClone = (PersonalCloudLibrarySourceSettingsV3)SettingsMigrationService.CloneForEditing(Settings);
         }
 
         public new void CancelEdit()
