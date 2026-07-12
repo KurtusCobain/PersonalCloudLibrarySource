@@ -55,6 +55,44 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Evaluate_ActiveTransfer_OffersCancelAndSuppressesDuplicateInstall()
+        {
+            var result = service.Evaluate(new[]
+            {
+                new GameCommandContext
+                {
+                    BelongsToPlugin = true,
+                    HasManifestItem = true,
+                    CanInstall = true,
+                    HasSourcePath = true,
+                    HasActiveTransfer = true
+                }
+            });
+
+            Assert.That(result.CanCancelTransfer, Is.True);
+            Assert.That(result.CanInstallSelected, Is.False);
+            Assert.That(result.CanRetryTransfer, Is.False);
+        }
+
+        [Test]
+        public void Evaluate_RetryableTransferWithoutActiveJob_OffersRetry()
+        {
+            var result = service.Evaluate(new[]
+            {
+                new GameCommandContext
+                {
+                    BelongsToPlugin = true,
+                    HasManifestItem = true,
+                    HasSourcePath = true,
+                    HasRetryableTransfer = true
+                }
+            });
+
+            Assert.That(result.CanRetryTransfer, Is.True);
+            Assert.That(result.CanCancelTransfer, Is.False);
+        }
+
+        [Test]
         public void Evaluate_CachedSingleGame_OffersCacheActionsButNotInstall()
         {
             var result = service.Evaluate(new[]
