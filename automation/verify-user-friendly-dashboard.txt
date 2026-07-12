@@ -1,2 +1,0 @@
-Run the consolidated Windows restore, build, and NUnitLite verification for the dashboard and setup wizard slice.
-Reporter fix rerun.
