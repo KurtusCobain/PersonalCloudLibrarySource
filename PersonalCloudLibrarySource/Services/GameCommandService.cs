@@ -57,7 +57,9 @@ namespace PersonalCloudLibrarySource
         {
             settings = settings ?? new PersonalCloudLibrarySourceSettings();
             var belongsToPlugin = game.PluginId == pluginId;
-            var sourcePath = PersonalCloudLibrarySource.GetItemSourcePath(item);
+            var sourcePath = item == null
+                ? string.Empty
+                : PersonalCloudLibrarySource.GetItemSourcePath(item);
             var launchPath = item == null
                 ? string.Empty
                 : PersonalCloudLibrarySource.ResolveLaunchPath(item, settings);
