@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - feature/**
   pull_request:
 
 jobs:
@@ -20,3 +21,6 @@ jobs:
 
       - name: Build Debug
         run: msbuild .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln /t:Build /p:Configuration=Debug /p:Platform="Any CPU"
+
+      - name: Run tests
+        run: .\PersonalCloudLibrarySource.Tests\bin\Debug\PersonalCloudLibrarySource.Tests.exe --noheader
