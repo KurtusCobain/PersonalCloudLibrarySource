@@ -1,0 +1,33 @@
+Runtime Environment
+   OS Version: Microsoft Windows NT 10.0.26100
+  CLR Version: 4.0.30319.42000
+
+Test Files
+    D:/a/PersonalCloudLibrarySource/PersonalCloudLibrarySource/PersonalCloudLibrarySource.Tests/bin/Debug/PersonalCloudLibrarySource.Tests.exe
+
+Test Discovery
+  Start time: 2026-07-12 03:18:37Z
+    End time: 2026-07-12 03:18:37Z
+    Duration: 0.059 seconds
+
+Errors, Failures and Warnings
+
+1) Failed : PersonalCloudLibrarySource.Tests.Transfers.CloudTransferManagerTests.GetLatestRetryableJobForGame_ReturnsNewestFailedOrCancelledAttempt
+  Expected: 7e7f39ec-219f-4ced-b851-fc76b7e15d75
+  But was:  a65eb3a2-6aeb-4bd0-be21-cbb9617e7551
+   at PersonalCloudLibrarySource.Tests.Transfers.CloudTransferManagerTests.GetLatestRetryableJobForGame_ReturnsNewestFailedOrCancelledAttempt() in D:\a\PersonalCloudLibrarySource\PersonalCloudLibrarySource\PersonalCloudLibrarySource.Tests\Transfers\CloudTransferManagerTests.cs:line 131
+
+Run Settings
+    Number of Test Workers: 4
+    Work Directory: D:\a\PersonalCloudLibrarySource\PersonalCloudLibrarySource
+    Internal Trace: Off
+
+Test Run Summary
+  Overall result: Failed
+  Test Count: 70, Passed: 69, Failed: 1, Warnings: 0, Inconclusive: 0, Skipped: 0
+    Failed Tests - Failures: 1, Errors: 0, Invalid: 0
+  Start time: 2026-07-12 03:18:38Z
+    End time: 2026-07-12 03:18:38Z
+    Duration: 0.807 seconds
+
+Results (nunit3) saved as D:\a\PersonalCloudLibrarySource\PersonalCloudLibrarySource\TestResult.xml

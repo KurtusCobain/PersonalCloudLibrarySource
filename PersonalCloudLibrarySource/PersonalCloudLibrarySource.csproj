@@ -50,6 +50,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Dashboard\CacheStatusService.cs" />
+    <Compile Include="Dashboard\DashboardActivityService.cs" />
     <Compile Include="Dashboard\CloudLibraryDashboardState.cs" />
     <Compile Include="Dashboard\CloudLibraryDashboardView.xaml.cs">
       <DependentUpon>CloudLibraryDashboardView.xaml</DependentUpon>
@@ -106,6 +107,7 @@
     <Compile Include="Transfers\RcloneProgressParser.cs" />
     <Compile Include="Transfers\RcloneTransferAdapter.cs" />
     <Compile Include="Transfers\RcloneTransferModels.cs" />
+    <Compile Include="Transfers\TransferActivityTracker.cs" />
     <Compile Include="Views\CloudGameDetailsView.xaml.cs">
       <DependentUpon>CloudGameDetailsView.xaml</DependentUpon>
     </Compile>

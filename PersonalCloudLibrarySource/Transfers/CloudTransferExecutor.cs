@@ -8,13 +8,26 @@ namespace PersonalCloudLibrarySource
     {
         private readonly CloudTransferManager manager;
         private readonly LocalTransferAdapter localAdapter;
+        private readonly RcloneTransferAdapter rcloneAdapter;
 
         public CloudTransferExecutor(
             CloudTransferManager manager,
             LocalTransferAdapter localAdapter)
+            : this(
+                manager,
+                localAdapter,
+                new RcloneTransferAdapter(new RcloneProcessRunner()))
+        {
+        }
+
+        public CloudTransferExecutor(
+            CloudTransferManager manager,
+            LocalTransferAdapter localAdapter,
+            RcloneTransferAdapter rcloneAdapter)
         {
             this.manager = manager ?? throw new ArgumentNullException(nameof(manager));
             this.localAdapter = localAdapter ?? throw new ArgumentNullException(nameof(localAdapter));
+            this.rcloneAdapter = rcloneAdapter ?? throw new ArgumentNullException(nameof(rcloneAdapter));
         }
 
         public CloudTransferExecutionResult ExecuteLocal(Guid jobId, bool isDirectory)
@@ -40,36 +53,7 @@ namespace PersonalCloudLibrarySource
                         job.CancellationToken,
                         (transferred, total) => UpdateProgressIfActive(job, transferred, total));
 
-                if (result.Cancelled)
-                {
-                    TransitionToCancelledIfNeeded(job);
-                    return result;
-                }
-
-                if (!result.Succeeded)
-                {
-                    TransitionToFailedIfNeeded(job, result.Message);
-                    return result;
-                }
-
-                if (job.IsTerminal)
-                {
-                    return job.State == CloudTransferState.Cancelled
-                        ? CloudTransferExecutionResult.CancelledResult()
-                        : CloudTransferExecutionResult.Failure(job.ErrorSummary);
-                }
-
-                manager.Transition(job.Id, CloudTransferState.Verifying);
-                if (!VerifyDestination(job.Destination, isDirectory, result.TotalBytes))
-                {
-                    var message = "Transferred data did not pass destination verification.";
-                    manager.Transition(job.Id, CloudTransferState.Failed, message);
-                    return CloudTransferExecutionResult.Failure(message);
-                }
-
-                manager.Transition(job.Id, CloudTransferState.Finalizing);
-                manager.Transition(job.Id, CloudTransferState.Completed);
-                return result;
+                return CompleteTransfer(job, result, isDirectory);
             }
             catch (OperationCanceledException)
             {
@@ -81,6 +65,79 @@ namespace PersonalCloudLibrarySource
                 TransitionToFailedIfNeeded(job, ex.Message);
                 return CloudTransferExecutionResult.Failure(ex.Message, ex);
             }
+        }
+
+        public CloudTransferExecutionResult ExecuteRclone(
+            Guid jobId,
+            PersonalCloudLibrarySourceSettings settings)
+        {
+            var job = manager.GetJob(jobId);
+            if (!WaitForExecutionTurn(job))
+            {
+                return CloudTransferExecutionResult.CancelledResult();
+            }
+
+            try
+            {
+                manager.Transition(job.Id, CloudTransferState.Connecting);
+                manager.Transition(job.Id, CloudTransferState.Transferring);
+                var result = rcloneAdapter.Copy(
+                    settings,
+                    job.Source,
+                    job.Destination,
+                    job.IsDirectory,
+                    job.CancellationToken,
+                    (transferred, total) => UpdateProgressIfActive(job, transferred, total));
+
+                return CompleteTransfer(job, result, job.IsDirectory);
+            }
+            catch (OperationCanceledException)
+            {
+                TransitionToCancelledIfNeeded(job);
+                return CloudTransferExecutionResult.CancelledResult();
+            }
+            catch (Exception ex)
+            {
+                TransitionToFailedIfNeeded(job, ex.Message);
+                return CloudTransferExecutionResult.Failure(ex.Message, ex);
+            }
+        }
+
+        private CloudTransferExecutionResult CompleteTransfer(
+            CloudTransferJob job,
+            CloudTransferExecutionResult result,
+            bool isDirectory)
+        {
+            if (result.Cancelled)
+            {
+                TransitionToCancelledIfNeeded(job);
+                return result;
+            }
+
+            if (!result.Succeeded)
+            {
+                TransitionToFailedIfNeeded(job, result.Message);
+                return result;
+            }
+
+            if (job.IsTerminal)
+            {
+                return job.State == CloudTransferState.Cancelled
+                    ? CloudTransferExecutionResult.CancelledResult()
+                    : CloudTransferExecutionResult.Failure(job.ErrorSummary);
+            }
+
+            manager.Transition(job.Id, CloudTransferState.Verifying);
+            if (!VerifyDestination(job.Destination, isDirectory, result.TotalBytes))
+            {
+                var message = "Transferred data did not pass destination verification.";
+                manager.Transition(job.Id, CloudTransferState.Failed, message);
+                return CloudTransferExecutionResult.Failure(message);
+            }
+
+            manager.Transition(job.Id, CloudTransferState.Finalizing);
+            manager.Transition(job.Id, CloudTransferState.Completed);
+            return result;
         }
 
         private bool WaitForExecutionTurn(CloudTransferJob job)

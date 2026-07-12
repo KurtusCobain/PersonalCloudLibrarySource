@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using System;
 using System.IO;
+using System.Threading;
 
 namespace PersonalCloudLibrarySource.Tests.Transfers
 {
@@ -77,6 +78,65 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(result.Cancelled, Is.True);
             Assert.That(job.State, Is.EqualTo(CloudTransferState.Cancelled));
             Assert.That(File.Exists(destination), Is.False);
+        }
+
+        [Test]
+        public void ExecuteRcloneFile_Success_TransitionsJobToCompleted()
+        {
+            var destination = Path.Combine(testRoot, "cache", "cloud-game.bin");
+            var runner = new FakeRcloneProcessRunner(request =>
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(request.DestinationPath));
+                File.WriteAllText(request.DestinationPath, "cloud content");
+                return RcloneProcessResult.Success("ok");
+            });
+            var manager = new CloudTransferManager(1);
+            var job = manager.Enqueue(
+                Guid.NewGuid(),
+                "Cloud Game",
+                "library/cloud-game.bin",
+                destination,
+                PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType);
+            var executor = new CloudTransferExecutor(
+                manager,
+                new LocalTransferAdapter(),
+                new RcloneTransferAdapter(runner));
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                RcloneExecutablePath = "rclone",
+                RcloneRemoteName = "games",
+                RcloneTimeoutSeconds = 30
+            };
+
+            var result = executor.ExecuteRclone(job.Id, settings);
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(job.State, Is.EqualTo(CloudTransferState.Completed));
+            Assert.That(File.Exists(destination), Is.True);
+            Assert.That(File.ReadAllText(destination), Is.EqualTo("cloud content"));
+            Assert.That(runner.RunCount, Is.EqualTo(1));
+        }
+
+        private sealed class FakeRcloneProcessRunner : IRcloneProcessRunner
+        {
+            private readonly Func<RcloneTransferRequest, RcloneProcessResult> handler;
+
+            public FakeRcloneProcessRunner(Func<RcloneTransferRequest, RcloneProcessResult> handler)
+            {
+                this.handler = handler;
+            }
+
+            public int RunCount { get; private set; }
+
+            public RcloneProcessResult Run(
+                RcloneTransferRequest request,
+                CancellationToken cancellationToken,
+                Action<long, long?> progress)
+            {
+                RunCount++;
+                progress?.Invoke(512, 1024);
+                return handler(request);
+            }
         }
     }
 }

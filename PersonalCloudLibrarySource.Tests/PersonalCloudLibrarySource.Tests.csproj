@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -42,6 +42,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Dashboard\FriendlySourceNameProviderTests.cs" />
+    <Compile Include="Dashboard\DashboardActivityServiceTests.cs" />
     <Compile Include="Dashboard\LibraryStatusServiceTests.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Services\GameCommandPolicyServiceTests.cs" />
@@ -53,6 +54,10 @@
     <Compile Include="Transfers\CloudTransferManagerTests.cs" />
     <Compile Include="Transfers\CloudTransferQueueItemViewModelTests.cs" />
     <Compile Include="Transfers\LocalTransferAdapterTests.cs" />
+    <Compile Include="Transfers\RcloneCommandBuilderTests.cs" />
+    <Compile Include="Transfers\RcloneProgressParserTests.cs" />
+    <Compile Include="Transfers\RcloneTransferAdapterTests.cs" />
+    <Compile Include="Transfers\TransferActivityTrackerTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
