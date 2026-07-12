@@ -1,4 +1,4 @@
-using Playnite.SDK;
+﻿using Playnite.SDK;
 using Playnite.SDK.Events;
 using Playnite.SDK.Plugins;
 using System;
@@ -18,6 +18,7 @@ namespace PersonalCloudLibrarySource
         private readonly LibraryStatusService dashboardLibraryStatusService = new LibraryStatusService();
         private DashboardStateStore dashboardStateStore;
         private CloudLibraryDashboardWindowService dashboardWindowService;
+        private SetupWizardWindowService setupWizardWindowService;
         private PluginNavigationService navigationService;
         private TopPanelItem dashboardTopPanelItem;
         private CloudLibrarySidebarItem dashboardSidebarItem;
@@ -26,6 +27,11 @@ namespace PersonalCloudLibrarySource
         {
             dashboardStateStore = new DashboardStateStore();
             dashboardWindowService = new CloudLibraryDashboardWindowService(playniteApi, CreateDashboardView);
+            setupWizardWindowService = new SetupWizardWindowService(
+                playniteApi,
+                settings,
+                GetDefaultLocalCacheFolder,
+                SetupWizardCompleted);
             navigationService = new PluginNavigationService(
                 dashboardWindowService.OpenDashboard,
                 () => playniteApi.MainView.OpenPluginSettings(Id),
@@ -34,7 +40,8 @@ namespace PersonalCloudLibrarySource
                 settings.OpenLatestVerificationReport,
                 GenerateManifestFromDashboard,
                 settings.ShowUpdateLibraryInstructions,
-                OpenSourceLocationFromDashboard);
+                OpenSourceLocationFromDashboard,
+                setupWizardWindowService.OpenWizard);
 
             settings.Settings.PropertyChanged += DashboardSettings_PropertyChanged;
             RefreshDashboardState();
@@ -124,6 +131,7 @@ namespace PersonalCloudLibrarySource
             var iconPath = GetNavigationIconPath();
 
             yield return CreateMainMenuItem(menuSection, "LOCPLSOpenDashboard", "Open Dashboard", navigationService.OpenDashboard, iconPath);
+            yield return CreateMainMenuItem(menuSection, "LOCPLSRunSetupWizard", "Run Setup Wizard", navigationService.RunSetupWizard, iconPath);
             yield return CreateMainMenuItem(menuSection, "LOCPLSUpdateLibraryHelp", "How to Update Library", navigationService.ShowUpdateLibraryInstructions, iconPath);
 
             if (string.Equals(
@@ -207,6 +215,45 @@ namespace PersonalCloudLibrarySource
             settings.GenerateManifestFromFolder();
             RefreshDashboardState();
             UpdateNavigationItemState();
+        }
+
+        private void SetupWizardCompleted()
+        {
+            try
+            {
+                var pluginSettings = settings.Settings;
+                if (string.Equals(
+                        GetProviderType(pluginSettings),
+                        PersonalCloudLibrarySourceSettings.LocalFolderProviderType,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    string.IsNullOrWhiteSpace(pluginSettings.LocalManifestPath))
+                {
+                    var report = GenerateManifestFromFolder(pluginSettings.LocalLibraryRoot);
+                    pluginSettings.LocalManifestPath = report.OutputPath;
+                    pluginSettings.ManifestRelativePath = string.Empty;
+                    pluginSettings.LastGeneratedManifestPath = report.OutputPath;
+                    pluginSettings.LastGeneratedReportPath = report.ReportPath;
+                    pluginSettings.LastManifestGeneratedAt = report.Manifest.GeneratedAt;
+                    pluginSettings.LastManifestItemCount = report.ItemCount;
+                    settings.EndEdit();
+                }
+
+                RefreshDashboardState();
+                UpdateNavigationItemState();
+                dashboardWindowService.OpenDashboard();
+                playniteApi.Dialogs.ShowMessage(
+                    "Setup was saved successfully. Run Update Game Library in Playnite to import or refresh the catalog.",
+                    GetDashboardResource("LOCPLSSetupWizardTitle", "Personal Cloud Library Setup"));
+            }
+            catch (Exception ex)
+            {
+                logger.Error(ex, "Personal Cloud Library Source could not complete guided setup.");
+                RefreshDashboardState();
+                UpdateNavigationItemState();
+                playniteApi.Dialogs.ShowErrorMessage(
+                    "Setup was saved, but manifest generation did not finish: " + ex.Message,
+                    GetDashboardResource("LOCPLSSetupWizardTitle", "Personal Cloud Library Setup"));
+            }
         }
 
         private void OpenSourceLocationFromDashboard()
