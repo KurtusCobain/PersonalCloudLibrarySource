@@ -47,13 +47,14 @@
     <sys:String x:Key="LOCPLSSetupRcloneTimeout">Connection timeout in seconds</sys:String>
     <sys:String x:Key="LOCPLSSetupBrowse">Browse</sys:String>
     <sys:String x:Key="LOCPLSSetupScanTitle">Review the selected source</sys:String>
-    <sys:String x:Key="LOCPLSSetupScanDescription">The selected source is configured. Folder scanning and item preview will run in the next setup phase before import.</sys:String>
+    <sys:String x:Key="LOCPLSSetupScanDescription">The selected source is ready. Finishing setup will use the chosen manifest or generate one from the selected folder before you update the Playnite library.</sys:String>
     <sys:String x:Key="LOCPLSSetupCacheTitle">Choose cache and install behavior</sys:String>
     <sys:String x:Key="LOCPLSSetupAllowDownloads">Download or copy games when Install is selected</sys:String>
     <sys:String x:Key="LOCPLSSetupCatalogOnly">Leave this off for catalog-only mode.</sys:String>
     <sys:String x:Key="LOCPLSSetupMissingFiles">Mark games uninstalled when cached files are missing</sys:String>
     <sys:String x:Key="LOCPLSSetupReviewTitle">Review your setup</sys:String>
     <sys:String x:Key="LOCPLSSetupReviewDescription">Confirm the source and cache settings before saving them.</sys:String>
+    <sys:String x:Key="LOCPLSSetupInstallBehavior">Install behavior</sys:String>
     <sys:String x:Key="LOCPLSSetupBack">Back</sys:String>
     <sys:String x:Key="LOCPLSSetupNext">Next</sys:String>
     <sys:String x:Key="LOCPLSSetupFinish">Finish</sys:String>
