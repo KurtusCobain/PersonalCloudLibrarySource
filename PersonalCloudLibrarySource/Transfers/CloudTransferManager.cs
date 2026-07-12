@@ -91,6 +91,14 @@ namespace PersonalCloudLibrarySource
             return job;
         }
 
+        public CloudTransferJob GetJob(Guid jobId)
+        {
+            lock (syncRoot)
+            {
+                return FindJobLocked(jobId);
+            }
+        }
+
         public void SetMaxConcurrentTransfers(int value)
         {
             lock (syncRoot)
@@ -111,6 +119,11 @@ namespace PersonalCloudLibrarySource
                 {
                     throw new InvalidOperationException(
                         "Transfer job cannot move from " + job.State + " to " + nextState + ".");
+                }
+
+                if (nextState == CloudTransferState.Cancelled)
+                {
+                    job.RequestCancellation();
                 }
 
                 job.SetState(nextState, errorSummary);
@@ -154,6 +167,7 @@ namespace PersonalCloudLibrarySource
                     return false;
                 }
 
+                job.RequestCancellation();
                 job.SetState(CloudTransferState.Cancelled, null);
                 StartQueuedJobsLocked();
             }
