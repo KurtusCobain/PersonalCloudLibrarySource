@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -111,8 +111,11 @@ namespace PersonalCloudLibrarySource
             lock (syncRoot)
             {
                 return jobs
-                    .Where(job => job.GameId == gameId && !job.IsTerminal)
-                    .OrderByDescending(job => job.CreatedAt)
+                    .Select((job, index) => new { Job = job, Index = index })
+                    .Where(value => value.Job.GameId == gameId && !value.Job.IsTerminal)
+                    .OrderByDescending(value => value.Job.CreatedAt)
+                    .ThenByDescending(value => value.Index)
+                    .Select(value => value.Job)
                     .FirstOrDefault();
             }
         }
@@ -122,10 +125,14 @@ namespace PersonalCloudLibrarySource
             lock (syncRoot)
             {
                 return jobs
-                    .Where(job =>
-                        job.GameId == gameId &&
-                        (job.State == CloudTransferState.Failed || job.State == CloudTransferState.Cancelled))
-                    .OrderByDescending(job => job.CompletedAt ?? job.CreatedAt)
+                    .Select((job, index) => new { Job = job, Index = index })
+                    .Where(value =>
+                        value.Job.GameId == gameId &&
+                        (value.Job.State == CloudTransferState.Failed || value.Job.State == CloudTransferState.Cancelled))
+                    .OrderByDescending(value => value.Job.CompletedAt ?? value.Job.CreatedAt)
+                    .ThenByDescending(value => value.Job.CreatedAt)
+                    .ThenByDescending(value => value.Index)
+                    .Select(value => value.Job)
                     .FirstOrDefault();
             }
         }
