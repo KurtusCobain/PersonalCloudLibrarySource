@@ -45,6 +45,7 @@
     <Compile Include="Dashboard\LibraryStatusServiceTests.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Services\GameCommandPolicyServiceTests.cs" />
+    <Compile Include="Services\GameCommandServiceTests.cs" />
     <Compile Include="Services\PluginNavigationServiceTests.cs" />
     <Compile Include="SettingsMigrationServiceTests.cs" />
     <Compile Include="Setup\SetupWizardViewModelTests.cs" />
