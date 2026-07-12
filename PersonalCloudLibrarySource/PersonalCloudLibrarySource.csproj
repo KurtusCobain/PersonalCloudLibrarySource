@@ -68,6 +68,7 @@
     <Compile Include="ManifestGenerationService.cs" />
     <Compile Include="PersonalCloudLibrarySource.GameCommands.cs" />
     <Compile Include="PersonalCloudLibrarySource.Navigation.cs" />
+    <Compile Include="PersonalCloudLibrarySource.Transfers.cs" />
     <Compile Include="PersonalCloudLibrarySourceClient.cs" />
     <Compile Include="PersonalCloudLibrarySource.cs" />
     <Compile Include="PersonalCloudLibrarySourceSettings.cs" />
@@ -94,6 +95,8 @@
     </Compile>
     <Compile Include="Setup\SetupWizardViewModel.cs" />
     <Compile Include="Setup\SetupWizardWindowService.cs" />
+    <Compile Include="Transfers\CloudTransferJob.cs" />
+    <Compile Include="Transfers\CloudTransferManager.cs" />
     <Compile Include="Views\CloudGameDetailsView.xaml.cs">
       <DependentUpon>CloudGameDetailsView.xaml</DependentUpon>
     </Compile>
