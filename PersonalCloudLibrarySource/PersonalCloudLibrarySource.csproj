@@ -86,7 +86,11 @@
     <Compile Include="Setup\SetupDraft.cs" />
     <Compile Include="Setup\SetupModels.cs" />
     <Compile Include="Setup\SetupValidationService.cs" />
+    <Compile Include="Setup\SetupWizardView.xaml.cs">
+      <DependentUpon>SetupWizardView.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Setup\SetupWizardViewModel.cs" />
+    <Compile Include="Setup\SetupWizardWindowService.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="extension.yaml">
@@ -110,6 +114,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="Dashboard\CloudLibraryDashboardView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Setup\SetupWizardView.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>
