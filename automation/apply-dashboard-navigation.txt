@@ -1,2 +1,0 @@
-Apply the focused dashboard navigation integration patch to the feature branch.
-Cleanup pass: remove the default no-op library client initializer.
