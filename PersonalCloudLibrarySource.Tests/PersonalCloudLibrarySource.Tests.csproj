@@ -41,7 +41,10 @@
     <Reference Include="System.Core" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Dashboard\FriendlySourceNameProviderTests.cs" />
+    <Compile Include="Dashboard\LibraryStatusServiceTests.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="Services\PluginNavigationServiceTests.cs" />
     <Compile Include="SettingsMigrationServiceTests.cs" />
   </ItemGroup>
   <ItemGroup>
