@@ -240,15 +240,21 @@ namespace PersonalCloudLibrarySource
             }
 
             var previous = manager.GetLatestRetryableJobForGame(target.Game.Id);
-            if (previous == null || string.Equals(
-                previous.ProviderType,
-                PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
-                StringComparison.OrdinalIgnoreCase))
+            if (previous == null)
             {
                 return;
             }
 
             var retry = manager.Retry(previous.Id);
+            if (string.Equals(
+                previous.ProviderType,
+                PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                Task.Run(() => GetTransferExecutor().ExecuteRclone(retry.Id, settings.Settings));
+                return;
+            }
+
             Task.Run(() => GetTransferExecutor().ExecuteLocal(retry.Id, retry.IsDirectory));
         }
 

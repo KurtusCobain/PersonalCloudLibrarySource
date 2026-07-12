@@ -56,12 +56,33 @@ namespace PersonalCloudLibrarySource
             if (string.Equals(providerType, PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType, System.StringComparison.OrdinalIgnoreCase))
             {
                 var rcloneSourcePath = PersonalCloudLibrarySource.ResolveRcloneSourcePath(settings, sourcePath);
-                var result = sourceType == "directory"
-                    ? rcloneFileCopier.CopyRemoteDirectoryToLocalPath(settings, rcloneSourcePath, destinationFolderPath)
-                    : rcloneFileCopier.CopyRemoteFileToLocalPath(settings, rcloneSourcePath, destinationFilePath);
-                succeeded = result.Succeeded;
-                message = result.Message;
-                exception = result.Exception;
+                if (transferManager != null && transferExecutor != null)
+                {
+                    var destinationPath = sourceType == "directory"
+                        ? destinationFolderPath
+                        : destinationFilePath;
+                    var job = transferManager.Enqueue(
+                        Game.Id,
+                        string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
+                        rcloneSourcePath,
+                        destinationPath,
+                        providerType,
+                        sourceType == "directory");
+                    var result = transferExecutor.ExecuteRclone(job.Id, settings);
+                    succeeded = result.Succeeded;
+                    cancelled = result.Cancelled;
+                    message = result.Message;
+                    exception = result.Exception;
+                }
+                else
+                {
+                    var result = sourceType == "directory"
+                        ? rcloneFileCopier.CopyRemoteDirectoryToLocalPath(settings, rcloneSourcePath, destinationFolderPath)
+                        : rcloneFileCopier.CopyRemoteFileToLocalPath(settings, rcloneSourcePath, destinationFilePath);
+                    succeeded = result.Succeeded;
+                    message = result.Message;
+                    exception = result.Exception;
+                }
             }
             else
             {

@@ -56,7 +56,8 @@ namespace PersonalCloudLibrarySource
                     dashboardStateStore,
                     navigationService,
                     GetTransferManager(),
-                    GetTransferExecutor())
+                    GetTransferExecutor(),
+                    settings.Settings)
             };
         }
 
