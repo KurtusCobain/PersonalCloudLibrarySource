@@ -32,23 +32,36 @@ jobs:
           Remove-Item -Recurse -Force .\PersonalCloudLibrarySource\packages\PlayniteSDK.6.16.0 -ErrorAction SilentlyContinue
 
       - name: Restore NuGet packages
+        id: restore
+        continue-on-error: true
         shell: pwsh
         run: nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln -Force
 
       - name: Build Debug
+        id: debug_build
+        if: steps.restore.outcome == 'success'
+        continue-on-error: true
         shell: pwsh
         run: msbuild .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln /t:Build /p:Configuration=Debug /p:Platform="Any CPU"
 
       - name: Run NUnitLite tests
+        id: tests
+        if: steps.restore.outcome == 'success' && steps.debug_build.outcome == 'success'
+        continue-on-error: true
         shell: pwsh
         run: .\PersonalCloudLibrarySource.Tests\bin\Debug\PersonalCloudLibrarySource.Tests.exe --noheader
 
       - name: Build and package Release
+        id: package
+        if: steps.restore.outcome == 'success' && steps.debug_build.outcome == 'success' && steps.tests.outcome == 'success'
+        continue-on-error: true
         shell: pwsh
         run: .\tools\package-extension.ps1 -DebugSymbols
 
       - name: Inspect test package
         id: inspect
+        if: steps.package.outcome == 'success'
+        continue-on-error: true
         shell: pwsh
         run: |
           $sourcePackage = ".\dist\PersonalCloudLibrarySource-0.3.0.pext"
@@ -114,6 +127,9 @@ jobs:
           Get-Content -LiteralPath ".\dist\package-manifest.txt"
 
       - name: Upload private beta package
+        id: upload
+        if: steps.inspect.outcome == 'success'
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: PersonalCloudLibrarySource-0.3.0-test-package
@@ -125,32 +141,43 @@ jobs:
           compression-level: 0
           retention-days: 14
 
-      - name: Record successful package verification
+      - name: Record package verification result
+        if: always()
         shell: pwsh
         run: |
+          $restore = "${{ steps.restore.outcome }}"
+          $debugBuild = "${{ steps.debug_build.outcome }}"
+          $tests = "${{ steps.tests.outcome }}"
+          $package = "${{ steps.package.outcome }}"
+          $inspect = "${{ steps.inspect.outcome }}"
+          $upload = "${{ steps.upload.outcome }}"
+          $passed = $restore -eq "success" -and $debugBuild -eq "success" -and $tests -eq "success" -and $package -eq "success" -and $inspect -eq "success" -and $upload -eq "success"
+          $result = if ($passed) { "PASS" } else { "FAIL" }
           $statusPath = ".\docs\superpowers\verification\test-package-status.md"
           New-Item -ItemType Directory -Path (Split-Path -Parent $statusPath) -Force | Out-Null
           $verifiedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
-          $packageManifest = Get-Content -LiteralPath ".\dist\package-manifest.txt"
           $status = @(
             "# Personal Cloud Library Source 0.3.0 Test Package",
             "",
-            "- Result: **PASS**",
+            "- Result: **$result**",
             "- Verified at: $verifiedAt",
             "- Branch: feature/user-friendly-dashboard",
             "- Commit: $env:GITHUB_SHA",
             "- Workflow run ID: $env:GITHUB_RUN_ID",
             "- Artifact: PersonalCloudLibrarySource-0.3.0-test-package",
             "- Artifact retention: 14 days",
-            "- Debug build: passed",
-            "- NUnitLite tests: passed",
-            "- Release build: passed",
-            "- Package inspection: passed",
-            "",
-            "## Package manifest",
-            "",
-            "```text"
-          ) + $packageManifest + @("```")
+            "- NuGet restore: $restore",
+            "- Debug build: $debugBuild",
+            "- NUnitLite tests: $tests",
+            "- Release package build: $package",
+            "- Package inspection: $inspect",
+            "- Artifact upload: $upload"
+          )
+          if (Test-Path -LiteralPath ".\dist\package-manifest.txt") {
+            $status += @("", "## Package manifest", "", "```text")
+            $status += Get-Content -LiteralPath ".\dist\package-manifest.txt"
+            $status += "```"
+          }
           $status | Set-Content -LiteralPath $statusPath -Encoding UTF8
 
           git config user.name "github-actions[bot]"
@@ -158,3 +185,16 @@ jobs:
           git add $statusPath
           git commit -m "Record 0.3.0 test package verification [skip ci]"
           git push origin HEAD:feature/user-friendly-dashboard
+
+      - name: Fail when package verification failed
+        if: always()
+        shell: pwsh
+        run: |
+          if ("${{ steps.restore.outcome }}" -ne "success" -or
+              "${{ steps.debug_build.outcome }}" -ne "success" -or
+              "${{ steps.tests.outcome }}" -ne "success" -or
+              "${{ steps.package.outcome }}" -ne "success" -or
+              "${{ steps.inspect.outcome }}" -ne "success" -or
+              "${{ steps.upload.outcome }}" -ne "success") {
+            exit 1
+          }
