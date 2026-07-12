@@ -60,4 +60,28 @@
     <sys:String x:Key="LOCPLSSetupFinish">Finish</sys:String>
     <sys:String x:Key="LOCPLSSetupCancel">Cancel</sys:String>
     <sys:String x:Key="LOCPLSSetupErrors">Please fix the following before continuing:</sys:String>
+
+    <sys:String x:Key="LOCPLSGameViewDetails">View Cloud Library Details</sys:String>
+    <sys:String x:Key="LOCPLSGameInstall">Install to This Computer</sys:String>
+    <sys:String x:Key="LOCPLSGameOpenCachedFolder">Open Cached Folder</sys:String>
+    <sys:String x:Key="LOCPLSGameOpenSource">Open Source Location</sys:String>
+    <sys:String x:Key="LOCPLSGameVerifyEntry">Verify This Entry</sys:String>
+    <sys:String x:Key="LOCPLSGameCopySourcePath">Copy Source Path</sys:String>
+    <sys:String x:Key="LOCPLSGameCopyCachePath">Copy Local Cache Path</sys:String>
+    <sys:String x:Key="LOCPLSGameRemoveCachedCopy">Remove Cached Copy</sys:String>
+    <sys:String x:Key="LOCPLSGameInstallSelected">Install Selected Games</sys:String>
+    <sys:String x:Key="LOCPLSGameVerifySelected">Verify Selected Entries</sys:String>
+    <sys:String x:Key="LOCPLSGameCopySourcePaths">Copy Source Paths</sys:String>
+    <sys:String x:Key="LOCPLSGameRemoveSelectedCachedCopies">Remove Selected Cached Copies</sys:String>
+    <sys:String x:Key="LOCPLSGameDetailsGameHeading">Game</sys:String>
+    <sys:String x:Key="LOCPLSGameDetailsPlatform">Platform</sys:String>
+    <sys:String x:Key="LOCPLSGameDetailsManifestId">Manifest ID</sys:String>
+    <sys:String x:Key="LOCPLSGameDetailsPackageRole">Package role</sys:String>
+    <sys:String x:Key="LOCPLSGameDetailsSourceHeading">Source</sys:String>
+    <sys:String x:Key="LOCPLSGameDetailsSourceType">Source type</sys:String>
+    <sys:String x:Key="LOCPLSGameDetailsSourcePath">Source path</sys:String>
+    <sys:String x:Key="LOCPLSGameDetailsCacheHeading">Local cache</sys:String>
+    <sys:String x:Key="LOCPLSGameDetailsCachePath">Cache path</sys:String>
+    <sys:String x:Key="LOCPLSGameDetailsInstallDirectory">Install directory</sys:String>
+    <sys:String x:Key="LOCPLSGameDetailsNotesHeading">Notes</sys:String>
 </ResourceDictionary>
