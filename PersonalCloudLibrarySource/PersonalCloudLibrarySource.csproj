@@ -83,6 +83,10 @@
     <Compile Include="SafeFileWriteService.cs" />
     <Compile Include="Services\PluginNavigationService.cs" />
     <Compile Include="SettingsMigrationService.cs" />
+    <Compile Include="Setup\SetupDraft.cs" />
+    <Compile Include="Setup\SetupModels.cs" />
+    <Compile Include="Setup\SetupValidationService.cs" />
+    <Compile Include="Setup\SetupWizardViewModel.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="extension.yaml">
