@@ -12,6 +12,7 @@ namespace PersonalCloudLibrarySource
         private readonly Action generateManifest;
         private readonly Action showUpdateLibraryInstructions;
         private readonly Action openSourceLocation;
+        private readonly Action runSetupWizard;
 
         public PluginNavigationService(
             Action openDashboard,
@@ -21,7 +22,8 @@ namespace PersonalCloudLibrarySource
             Action openLatestReport,
             Action generateManifest,
             Action showUpdateLibraryInstructions,
-            Action openSourceLocation)
+            Action openSourceLocation,
+            Action runSetupWizard)
         {
             this.openDashboard = openDashboard ?? throw new ArgumentNullException(nameof(openDashboard));
             this.openSettings = openSettings ?? throw new ArgumentNullException(nameof(openSettings));
@@ -31,6 +33,7 @@ namespace PersonalCloudLibrarySource
             this.generateManifest = generateManifest ?? throw new ArgumentNullException(nameof(generateManifest));
             this.showUpdateLibraryInstructions = showUpdateLibraryInstructions ?? throw new ArgumentNullException(nameof(showUpdateLibraryInstructions));
             this.openSourceLocation = openSourceLocation ?? throw new ArgumentNullException(nameof(openSourceLocation));
+            this.runSetupWizard = runSetupWizard ?? throw new ArgumentNullException(nameof(runSetupWizard));
         }
 
         public void OpenDashboard() => openDashboard();
@@ -41,5 +44,6 @@ namespace PersonalCloudLibrarySource
         public void GenerateManifest() => generateManifest();
         public void ShowUpdateLibraryInstructions() => showUpdateLibraryInstructions();
         public void OpenSourceLocation() => openSourceLocation();
+        public void RunSetupWizard() => runSetupWizard();
     }
 }
