@@ -26,6 +26,14 @@ jobs:
           python tools/audit-feature-branch.py
           python tools/fix-transfer-order.py
 
+      - name: Clean dependency restore state
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force .\PersonalCloudLibrarySource\packages\NUnit.3.14.0 -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force .\PersonalCloudLibrarySource\packages\NUnitLite.3.14.0 -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force .\PersonalCloudLibrarySource\packages\PlayniteSDK.6.16.0 -ErrorAction SilentlyContinue
+          Remove-Item -Force restore.log,build.log,tests.log,TestResult.xml -ErrorAction SilentlyContinue
+
       - uses: microsoft/setup-msbuild@v2
 
       - name: Restore NuGet packages
@@ -33,7 +41,7 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: |
-          nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln *>&1 | Tee-Object -FilePath restore.log
+          nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln -Force *>&1 | Tee-Object -FilePath restore.log
           exit $LASTEXITCODE
 
       - name: Build Debug
@@ -81,6 +89,7 @@ jobs:
             "- Added queued rclone execution to CloudTransferExecutor.",
             "- Registered orphaned activity and rclone tests in the projects.",
             "- Added deterministic ordering for active and retryable transfer jobs.",
+            "- Forced a clean NuGet restore after removing incomplete package directories.",
             "- Removed restored package contents, temporary workflows, patch scripts, markers, logs, and stale verification reports after a passing run.",
             ""
           )
@@ -138,7 +147,7 @@ jobs:
           git add .gitignore
           git add PersonalCloudLibrarySource/Transfers/CloudTransferManager.cs
           git add docs/superpowers/verification/branch-audit-status.md
-          $message = if ($passed) { "Repair and consolidate user-friendly dashboard branch [skip ci]" } else { "Apply deterministic transfer ordering and record failing verification [skip ci]" }
+          $message = if ($passed) { "Repair and consolidate user-friendly dashboard branch [skip ci]" } else { "Clean dependency restore and record failing verification [skip ci]" }
           git commit -m $message
           git push origin HEAD:feature/user-friendly-dashboard
 
