@@ -42,7 +42,11 @@ namespace PersonalCloudLibrarySource.Tests.Ui
             Assert.That(File.Exists(Path.Combine(root, "tools", "decode-brand-assets.ps1")), Is.False);
             Assert.That(File.Exists(Path.Combine(root, "tools", "pcls-logo-wide.b64")), Is.False);
             Assert.That(File.Exists(Path.Combine(root, "tools", "apply-0.3.2-assets-note.txt")), Is.False);
-            Assert.That(Directory.GetFiles(Path.Combine(root, "tools", "assets"), "pcls-*.part*"), Is.Empty);
+            var legacyAssetDirectory = Path.Combine(root, "tools", "assets");
+            var legacyAssetParts = Directory.Exists(legacyAssetDirectory)
+                ? Directory.GetFiles(legacyAssetDirectory, "pcls-*.part*")
+                : new string[0];
+            Assert.That(legacyAssetParts, Is.Empty);
         }
 
         [Test]
