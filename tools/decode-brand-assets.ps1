@@ -33,7 +33,7 @@ function Write-Base64File {
 
 New-Item -ItemType Directory -Path $OutputDirectory -Force | Out-Null
 
-$iconBase64 = (Get-Content -LiteralPath (Join-Path $repoRoot 'tools\pcls-icon-flat.b64') -Raw).Trim()
+$iconBase64 = Read-Base64Parts (Join-Path $repoRoot 'tools\assets\pcls-icon.part*')
 $wideBase64 = Read-Base64Parts (Join-Path $repoRoot 'tools\assets\pcls-logo-wide.part*')
 
 Write-Base64File $iconBase64 (Join-Path $OutputDirectory 'icon.png')
