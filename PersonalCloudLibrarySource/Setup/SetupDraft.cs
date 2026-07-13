@@ -13,7 +13,7 @@ namespace PersonalCloudLibrarySource
         private string rcloneRemoteName = string.Empty;
         private string rcloneManifestPath = string.Empty;
         private string rcloneContentRoot = string.Empty;
-        private int rcloneTimeoutSeconds = 30;
+        private int rcloneTimeoutSeconds = 90;
         private string cachePath = string.Empty;
         private bool allowDownloads = true;
         private bool treatMissingFilesAsUninstalled = true;
