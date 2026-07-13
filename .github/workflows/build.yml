@@ -39,7 +39,25 @@ jobs:
 
       - name: Build Release package
         shell: pwsh
-        run: .\tools\package-extension.ps1
+        run: |
+          try {
+            & .\tools\package-extension.ps1 *>&1 | Tee-Object -FilePath package-build.log
+            if ($LASTEXITCODE -ne 0) {
+              throw "Package script returned exit code $LASTEXITCODE"
+            }
+          }
+          catch {
+            ($_ | Format-List * -Force | Out-String) | Tee-Object -FilePath package-build.log -Append
+            exit 1
+          }
+
+      - name: Upload package diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcls-package-diagnostics-${{ github.run_number }}
+          path: package-build.log
+          if-no-files-found: warn
 
       - name: Inspect packaged extension
         shell: pwsh
