@@ -1,0 +1,49 @@
+name: apply-0.3.2-pr
+
+on:
+  pull_request:
+    branches:
+      - feature/user-friendly-dashboard
+    paths:
+      - automation/apply-0.3.2.txt
+
+permissions:
+  contents: write
+
+jobs:
+  apply-test-commit:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/user-friendly-dashboard
+          fetch-depth: 0
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Apply 0.3.2 fixes and assets
+        shell: pwsh
+        run: .\tools\apply-0.3.2-fixes.ps1
+
+      - name: Restore packages
+        shell: pwsh
+        run: nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln -Force
+
+      - name: Build Debug
+        shell: pwsh
+        run: msbuild .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln /t:Build /p:Configuration=Debug /p:Platform="Any CPU"
+
+      - name: Run tests
+        shell: pwsh
+        run: .\PersonalCloudLibrarySource.Tests\bin\Debug\PersonalCloudLibrarySource.Tests.exe --noheader
+
+      - name: Commit verified implementation
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add PersonalCloudLibrarySource docs tools/package-extension.ps1
+          git commit -m "Implement 0.3.2 UI fixes and branding"
+          git push origin HEAD:feature/user-friendly-dashboard
