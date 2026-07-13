@@ -1,5 +1,7 @@
 using Playnite.SDK;
+using System;
 using System.Collections.Generic;
+using System.Windows;
 
 namespace PersonalCloudLibrarySource
 {
@@ -69,6 +71,38 @@ namespace PersonalCloudLibrarySource
         {
             base.Settings = Settings;
             return base.VerifySettings(out errors);
+        }
+
+        public new void VerifySetup()
+        {
+            try
+            {
+                List<string> errors;
+                VerifySettings(out errors);
+                var report = plugin.GenerateVerificationReport(Settings, errors);
+                VerificationDashboardStateService.LatestReport = report;
+
+                var passed = report.ConfigurationErrorsCount == 0 && report.ManifestLoadSucceeded;
+                SetupStatusHeadline = passed
+                    ? "Setup verification completed."
+                    : "Setup verification found issues.";
+                SetupStatusDetails = report.ManifestLoadSucceeded
+                    ? report.TotalManifestItems + " manifest items were checked."
+                    : "Manifest load failed: " + report.ManifestLoadError;
+
+                MessageBox.Show(
+                    VerificationMessageBuilder.Build(report),
+                    "Personal Cloud Library Source");
+            }
+            catch (Exception ex)
+            {
+                VerificationDashboardStateService.LatestReport = null;
+                SetupStatusHeadline = "Setup verification failed.";
+                SetupStatusDetails = ex.Message;
+                MessageBox.Show(
+                    "Setup verification failed: " + ex.Message,
+                    "Personal Cloud Library Source");
+            }
         }
     }
 }
