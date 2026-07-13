@@ -20,6 +20,13 @@ namespace PersonalCloudLibrarySource
         private bool notifySourceUnavailable = true;
         private bool notifyVerificationWarnings = true;
 
+        public PersonalCloudLibrarySourceSettingsV3()
+        {
+            // Thirty seconds is too short for large or sleeping cloud remotes.
+            // Existing custom values are preserved by deserialization and migration.
+            RcloneTimeoutSeconds = 90;
+        }
+
         public int SettingsVersion
         {
             get => settingsVersion;
