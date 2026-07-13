@@ -1,5 +1,7 @@
 using NUnit.Framework;
 using System;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 
@@ -8,6 +10,8 @@ namespace PersonalCloudLibrarySource.Tests.Ui
     [TestFixture]
     public class UiContractTests
     {
+        private const string WideLogoPackUri = "/PersonalCloudLibrarySource;component/Assets/pcls-logo-wide.png";
+
         [Test]
         public void SetupWizard_UsesPlayniteThemeForeground()
         {
@@ -31,21 +35,36 @@ namespace PersonalCloudLibrarySource.Tests.Ui
             StringAssert.Contains("<svg", File.ReadAllText(FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-icon.svg")));
             StringAssert.Contains("<svg", File.ReadAllText(FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-logo-wide.svg")));
             StringAssert.Contains("<svg", File.ReadAllText(FindRepositoryFile("docs", "assets", "pcls-logo-full.svg")));
+            Assert.That(File.Exists(FindRepositoryFile("PersonalCloudLibrarySource", "icon.png")), Is.True);
+            Assert.That(File.Exists(FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-logo-wide.png")), Is.True);
+            Assert.That(File.Exists(FindRepositoryFile("docs", "assets", "pcls-logo-full.png")), Is.True);
         }
 
         [Test]
-        public void EncodedIcon_UsesAlpha()
+        public void BrandArtwork_IsUsedByPrimaryViews()
+        {
+            var dashboard = File.ReadAllText(
+                FindRepositoryFile("PersonalCloudLibrarySource", "Dashboard", "CloudLibraryDashboardView.xaml"));
+            var setupWizard = File.ReadAllText(
+                FindRepositoryFile("PersonalCloudLibrarySource", "Setup", "SetupWizardView.xaml"));
+
+            StringAssert.Contains(WideLogoPackUri, dashboard);
+            StringAssert.Contains(WideLogoPackUri, setupWizard);
+        }
+
+        [Test]
+        public void EncodedIcon_DecodesWithAlpha()
         {
             var bytes = ReadAssetBytes("pcls-icon.part01", "pcls-icon.part*");
+            AssertPngDecodes(bytes, 512, 512);
             Assert.That(ReadPngColorType(bytes), Is.EqualTo(6));
         }
 
         [Test]
-        public void EncodedWideLogo_Decodes()
+        public void EncodedWideLogo_DecodesCompletely()
         {
             var bytes = ReadWideLogoBytes();
-            Assert.That(bytes.Length, Is.GreaterThan(26));
-            AssertPngSignature(bytes);
+            AssertPngDecodes(bytes, 1400, 420);
         }
 
         [Test]
@@ -72,6 +91,32 @@ namespace PersonalCloudLibrarySource.Tests.Ui
                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                     .Select(path => File.ReadAllText(path).Trim()));
             return Convert.FromBase64String(base64);
+        }
+
+        private static void AssertPngDecodes(byte[] bytes, int expectedWidth, int expectedHeight)
+        {
+            Assert.That(bytes, Is.Not.Null);
+            Assert.That(bytes.Length, Is.GreaterThan(26));
+            AssertPngSignature(bytes);
+
+            using (var stream = new MemoryStream(bytes, false))
+            using (var bitmap = new Bitmap(stream))
+            {
+                Assert.That(bitmap.Width, Is.EqualTo(expectedWidth));
+                Assert.That(bitmap.Height, Is.EqualTo(expectedHeight));
+
+                var bounds = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
+                var data = bitmap.LockBits(bounds, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                try
+                {
+                    Assert.That(data.Scan0, Is.Not.EqualTo(IntPtr.Zero));
+                    Assert.That(data.Stride, Is.Not.EqualTo(0));
+                }
+                finally
+                {
+                    bitmap.UnlockBits(data);
+                }
+            }
         }
 
         private static int CountOccurrences(string value, string token)
