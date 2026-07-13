@@ -1,0 +1,1 @@
+Apply and verify the 0.3.2 UI fixes and branding assets on feature/user-friendly-dashboard.
