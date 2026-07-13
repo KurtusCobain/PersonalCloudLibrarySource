@@ -1,11 +1,11 @@
-name: apply-0.3.2-pr
+name: apply-0.3.2-feature-pass
 
 on:
-  pull_request:
+  push:
     branches:
       - feature/user-friendly-dashboard
     paths:
-      - automation/apply-0.3.2.txt
+      - automation/apply-0.3.2-trigger.txt
 
 permissions:
   contents: write
