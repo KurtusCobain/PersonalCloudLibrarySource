@@ -156,7 +156,4 @@
     </Page>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <Target Name="DecodePclsBrandAssets" AfterTargets="Build">
-    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)..\tools\decode-brand-assets.ps1&quot; -OutputDirectory &quot;$(TargetDir)&quot;" />
-  </Target>
 </Project>
