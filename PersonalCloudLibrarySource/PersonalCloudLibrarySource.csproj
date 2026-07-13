@@ -62,6 +62,7 @@
     <Compile Include="Dashboard\DashboardStateStore.cs" />
     <Compile Include="Dashboard\FriendlySourceNameProvider.cs" />
     <Compile Include="Dashboard\LibraryStatusService.cs" />
+    <Compile Include="Dashboard\VerificationDashboardStateService.cs" />
     <Compile Include="LibraryVerificationReport.cs" />
     <Compile Include="LibraryVerificationService.cs" />
     <Compile Include="LocalFileCopier.cs" />
@@ -124,6 +125,8 @@
     <None Include="icon.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="Assets\pcls-icon.svg" />
+    <None Include="Assets\pcls-logo-wide.svg" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Localization\*.xaml">
@@ -153,4 +156,7 @@
     </Page>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Target Name="DecodePclsBrandAssets" AfterTargets="Build">
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(ProjectDir)..\tools\decode-brand-assets.ps1&quot; -OutputDirectory &quot;$(TargetDir)&quot;" />
+  </Target>
 </Project>
