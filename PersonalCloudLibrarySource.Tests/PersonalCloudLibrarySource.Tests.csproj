@@ -47,11 +47,13 @@
     <Compile Include="Dashboard\LibraryStatusServiceTests.cs" />
     <Compile Include="Dashboard\VerificationDashboardStateServiceTests.cs" />
     <Compile Include="Program.cs" />
+    <Compile Include="Repository\ProjectSourceInclusionTests.cs" />
     <Compile Include="RcloneTimeoutDefaultsTests.cs" />
     <Compile Include="Services\GameCommandPolicyServiceTests.cs" />
     <Compile Include="Services\GameCommandServiceTests.cs" />
     <Compile Include="Services\PluginNavigationServiceTests.cs" />
     <Compile Include="SettingsMigrationServiceTests.cs" />
+    <Compile Include="Setup\SetupLaunchPolicyServiceTests.cs" />
     <Compile Include="Setup\SetupWizardViewModelTests.cs" />
     <Compile Include="Transfers\CloudTransferExecutorTests.cs" />
     <Compile Include="Transfers\CloudTransferManagerTests.cs" />
