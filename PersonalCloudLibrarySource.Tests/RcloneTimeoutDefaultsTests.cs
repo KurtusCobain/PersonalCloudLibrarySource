@@ -8,7 +8,7 @@ namespace PersonalCloudLibrarySource.Tests
         [Test]
         public void NewSettings_DefaultToNinetySecondRcloneTimeout()
         {
-            var settings = new PersonalCloudLibrarySourceSettings();
+            var settings = new PersonalCloudLibrarySourceSettingsV3();
 
             Assert.That(settings.RcloneTimeoutSeconds, Is.EqualTo(90));
         }
