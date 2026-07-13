@@ -16,11 +16,15 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="0,0,0,14">
-            <TextBlock Text="{DynamicResource LOCPLSSetupWizardTitle}"
-                       FontSize="24"
-                       FontWeight="Bold" />
+            <Image Source="/PersonalCloudLibrarySource;component/Assets/pcls-logo-wide.png"
+                   Height="72"
+                   MaxWidth="420"
+                   HorizontalAlignment="Left"
+                   Stretch="Uniform"
+                   SnapsToDevicePixels="True"
+                   ToolTip="{DynamicResource LOCPLSSetupWizardTitle}" />
             <TextBlock x:Name="StepIndicatorText"
-                       Margin="0,6,0,0"
+                       Margin="0,8,0,0"
                        FontWeight="SemiBold" />
         </StackPanel>
 
