@@ -20,13 +20,17 @@
             </Grid.RowDefinitions>
 
             <StackPanel Grid.Row="0" Margin="0,0,0,16">
-                <TextBlock Text="{DynamicResource LOCPLSDashboardTitle}"
-                           FontSize="24"
-                           FontWeight="Bold" />
+                <Image Source="/PersonalCloudLibrarySource;component/Assets/pcls-logo-wide.png"
+                       Height="92"
+                       MaxWidth="520"
+                       HorizontalAlignment="Left"
+                       Stretch="Uniform"
+                       SnapsToDevicePixels="True"
+                       ToolTip="{DynamicResource LOCPLSDashboardTitle}" />
                 <TextBlock Text="{Binding StatusText}"
                            FontSize="16"
                            FontWeight="SemiBold"
-                           Margin="0,6,0,0" />
+                           Margin="0,10,0,0" />
             </StackPanel>
 
             <GroupBox Grid.Row="1"
