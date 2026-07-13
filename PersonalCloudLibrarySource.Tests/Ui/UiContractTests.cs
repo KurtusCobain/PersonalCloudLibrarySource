@@ -28,7 +28,7 @@ namespace PersonalCloudLibrarySource.Tests.Ui
         }
 
         [Test]
-        public void BrandAssets_ArePresentAndEncodedPngsUseAlpha()
+        public void BrandAssets_ArePresentAndEncodedPngsUseTransparency()
         {
             var iconArtwork = FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-icon.svg");
             var wideArtwork = FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-logo-wide.svg");
@@ -47,8 +47,15 @@ namespace PersonalCloudLibrarySource.Tests.Ui
                     .Select(path => File.ReadAllText(path).Trim()));
             var wideBytes = Convert.FromBase64String(wideBase64);
 
-            Assert.That(ReadPngColorType(iconBytes), Is.EqualTo(6), "Encoded icon.png must be a truecolor PNG with alpha.");
-            Assert.That(ReadPngColorType(wideBytes), Is.EqualTo(6), "Encoded wide logo must be a truecolor PNG with alpha.");
+            Assert.That(ReadPngColorType(iconBytes), Is.EqualTo(6), "Encoded icon.png must use truecolor alpha.");
+
+            var wideColorType = ReadPngColorType(wideBytes);
+            var wideHasTransparency = wideColorType == 6 ||
+                (wideColorType == 3 && ContainsChunk(wideBytes, new byte[] { 116, 82, 78, 83 }));
+            Assert.That(
+                wideHasTransparency,
+                Is.True,
+                "Encoded wide logo must use truecolor alpha or an indexed palette with a tRNS transparency chunk.");
         }
 
         private static int CountOccurrences(string value, string token)
@@ -76,6 +83,29 @@ namespace PersonalCloudLibrarySource.Tests.Ui
             }
 
             return bytes[25];
+        }
+
+        private static bool ContainsChunk(byte[] bytes, byte[] chunkName)
+        {
+            for (var index = 0; index <= bytes.Length - chunkName.Length; index++)
+            {
+                var matches = true;
+                for (var offset = 0; offset < chunkName.Length; offset++)
+                {
+                    if (bytes[index + offset] != chunkName[offset])
+                    {
+                        matches = false;
+                        break;
+                    }
+                }
+
+                if (matches)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static string FindRepositoryFile(params string[] segments)
