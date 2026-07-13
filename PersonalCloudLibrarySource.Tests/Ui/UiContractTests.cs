@@ -27,16 +27,19 @@ namespace PersonalCloudLibrarySource.Tests.Ui
         }
 
         [Test]
-        public void BrandAssets_ArePresentAndPluginIconUsesAlphaPng()
+        public void BrandAssets_ArePresentAndBuildOutputUsesAlphaPngs()
         {
-            var iconPath = FindRepositoryFile("PersonalCloudLibrarySource", "icon.png");
-            var wideLogoPath = FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-logo-wide.png");
-            var fullLogoPath = FindRepositoryFile("docs", "assets", "pcls-logo-full.png");
+            var iconArtwork = FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-icon.svg");
+            var wideArtwork = FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-logo-wide.svg");
+            var fullArtwork = FindRepositoryFile("docs", "assets", "pcls-logo-full.svg");
+            var iconPath = FindRepositoryFile("PersonalCloudLibrarySource", "bin", "Debug", "icon.png");
+            var wideLogoPath = FindRepositoryFile("PersonalCloudLibrarySource", "bin", "Debug", "Assets", "pcls-logo-wide.png");
 
-            Assert.That(File.Exists(iconPath), Is.True);
-            Assert.That(File.Exists(wideLogoPath), Is.True);
-            Assert.That(File.Exists(fullLogoPath), Is.True);
-            Assert.That(ReadPngColorType(iconPath), Is.EqualTo(6), "icon.png must be a truecolor PNG with alpha.");
+            StringAssert.Contains("<svg", File.ReadAllText(iconArtwork));
+            StringAssert.Contains("<svg", File.ReadAllText(wideArtwork));
+            StringAssert.Contains("<svg", File.ReadAllText(fullArtwork));
+            Assert.That(ReadPngColorType(iconPath), Is.EqualTo(6), "Generated icon.png must be a truecolor PNG with alpha.");
+            Assert.That(ReadPngColorType(wideLogoPath), Is.EqualTo(6), "Generated wide logo must be a truecolor PNG with alpha.");
         }
 
         private static int CountOccurrences(string value, string token)
