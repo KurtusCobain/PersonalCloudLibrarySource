@@ -1,1 +1,3 @@
 Apply and verify the 0.3.2 UI fixes and branding assets on feature/user-friendly-dashboard.
+
+Retriggered after moving the isolated pass into the established build workflow and adding Release package inspection.
