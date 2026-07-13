@@ -8,7 +8,10 @@ namespace PersonalCloudLibrarySource
             PersonalCloudLibrarySourceSettings settings,
             LibraryStatusContext context)
         {
-            context = context ?? new LibraryStatusContext();
+            context = VerificationDashboardStateService.Apply(
+                context ?? new LibraryStatusContext(),
+                VerificationDashboardStateService.LatestReport);
+
             var setupComplete = IsSetupComplete(settings);
             var status = ResolveStatus(setupComplete, context);
 
