@@ -1,0 +1,194 @@
+name: materialize-brand-assets
+
+on:
+  push:
+    branches:
+      - feature/user-friendly-dashboard
+    paths:
+      - .github/workflows/materialize-brand-assets.yml
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/user-friendly-dashboard
+          fetch-depth: 0
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Render and decode approved branding
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $iconSvg = '.\PersonalCloudLibrarySource\Assets\pcls-icon.svg'
+          $iconPng = '.\PersonalCloudLibrarySource\icon.png'
+          $widePng = '.\PersonalCloudLibrarySource\Assets\pcls-logo-wide.png'
+          $fullPng = '.\docs\assets\pcls-logo-full.png'
+
+          $magick = Get-Command magick -ErrorAction SilentlyContinue
+          if ($magick) {
+            & $magick.Source -background none -density 192 $iconSvg -resize 512x512! $iconPng
+            if ($LASTEXITCODE -ne 0) {
+              throw "ImageMagick failed with exit code $LASTEXITCODE"
+            }
+          }
+          else {
+            python -m pip install --disable-pip-version-check cairosvg
+            @'
+          import cairosvg
+          cairosvg.svg2png(
+              url=r"PersonalCloudLibrarySource/Assets/pcls-icon.svg",
+              write_to=r"PersonalCloudLibrarySource/icon.png",
+              output_width=512,
+              output_height=512)
+          '@ | python -
+            if ($LASTEXITCODE -ne 0) {
+              throw "CairoSVG failed with exit code $LASTEXITCODE"
+            }
+          }
+
+          function Decode-Parts {
+            param(
+              [Parameter(Mandatory = $true)][string]$Pattern,
+              [Parameter(Mandatory = $true)][string]$Destination
+            )
+
+            $parts = Get-ChildItem -Path $Pattern | Sort-Object Name
+            if (-not $parts) {
+              throw "No branding parts matched: $Pattern"
+            }
+
+            $base64 = ($parts | ForEach-Object {
+              (Get-Content -LiteralPath $_.FullName -Raw).Trim()
+            }) -join ''
+
+            $parent = Split-Path -Parent $Destination
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+            [IO.File]::WriteAllBytes($Destination, [Convert]::FromBase64String($base64))
+          }
+
+          Decode-Parts '.\tools\assets\pcls-logo-wide.part*' $widePng
+          Decode-Parts '.\tools\assets\pcls-logo-full.part*' $fullPng
+
+          $iconBytes = [IO.File]::ReadAllBytes($iconPng)
+          [IO.File]::WriteAllText(
+            '.\tools\pcls-icon-flat.b64',
+            [Convert]::ToBase64String($iconBytes),
+            [Text.Encoding]::ASCII)
+
+          Add-Type -AssemblyName System.Drawing
+          $icon = [System.Drawing.Image]::FromFile((Resolve-Path $iconPng))
+          $wide = [System.Drawing.Image]::FromFile((Resolve-Path $widePng))
+          try {
+            if ($icon.Width -ne 512 -or $icon.Height -ne 512) {
+              throw "icon.png has unexpected dimensions: $($icon.Width)x$($icon.Height)"
+            }
+            if ($wide.Width -ne 1400 -or $wide.Height -ne 420) {
+              throw "pcls-logo-wide.png has unexpected dimensions: $($wide.Width)x$($wide.Height)"
+            }
+          }
+          finally {
+            $icon.Dispose()
+            $wide.Dispose()
+          }
+
+          $projectPath = '.\PersonalCloudLibrarySource\PersonalCloudLibrarySource.csproj'
+          $project = Get-Content -LiteralPath $projectPath -Raw
+          if ($project -notmatch 'Assets\\pcls-logo-wide\.png') {
+            $old = @'
+              <None Include="icon.png">
+                <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+              </None>
+          '@
+            $new = @'
+              <None Include="Assets\pcls-logo-wide.png">
+                <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+              </None>
+              <None Include="icon.png">
+                <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+              </None>
+          '@
+            if (-not $project.Contains($old)) {
+              throw 'Could not locate the icon asset block in the project file.'
+            }
+            Set-Content -LiteralPath $projectPath -Value ($project.Replace($old, $new)) -Encoding UTF8
+          }
+
+      - name: Restore NuGet packages
+        run: nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln -Force
+
+      - name: Build Debug
+        run: msbuild .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln /t:Build /p:Configuration=Debug /p:Platform="Any CPU"
+
+      - name: Run full test suite
+        shell: pwsh
+        run: |
+          & .\PersonalCloudLibrarySource.Tests\bin\Debug\PersonalCloudLibrarySource.Tests.exe --noheader '--result=TestResult.xml;format=nunit2'
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Build and inspect Release package
+        shell: pwsh
+        run: |
+          .\tools\package-extension.ps1
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+          $package = '.\dist\PersonalCloudLibrarySource-0.3.2.pext'
+          if (-not (Test-Path -LiteralPath $package)) {
+            throw "Package was not created: $package"
+          }
+
+          $inspect = Join-Path $env:RUNNER_TEMP 'pcls-package-inspect'
+          New-Item -ItemType Directory -Path $inspect -Force | Out-Null
+          $zip = "$package.zip"
+          Copy-Item -LiteralPath $package -Destination $zip -Force
+          Expand-Archive -LiteralPath $zip -DestinationPath $inspect -Force
+
+          foreach ($relative in @(
+            'PersonalCloudLibrarySource.dll',
+            'extension.yaml',
+            'icon.png',
+            'Localization\en_US.xaml',
+            'Assets\pcls-logo-wide.png')) {
+            if (-not (Test-Path -LiteralPath (Join-Path $inspect $relative))) {
+              throw "Packaged extension is missing: $relative"
+            }
+          }
+
+      - name: Commit materialized branding assets
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- PersonalCloudLibrarySource/icon.png PersonalCloudLibrarySource/Assets/pcls-logo-wide.png docs/assets/pcls-logo-full.png tools/pcls-icon-flat.b64 PersonalCloudLibrarySource/PersonalCloudLibrarySource.csproj
+          if (git diff --cached --quiet) {
+            throw 'Branding materialization produced no changes.'
+          }
+          git commit -m "Materialize approved PCLS branding assets"
+          git push origin HEAD:feature/user-friendly-dashboard
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcls-brand-test-results-${{ github.run_number }}
+          path: TestResult.xml
+          if-no-files-found: warn
+
+      - name: Upload verified package
+        uses: actions/upload-artifact@v4
+        with:
+          name: PersonalCloudLibrarySource-0.3.2-branding-test
+          path: dist/PersonalCloudLibrarySource-0.3.2.pext
+          if-no-files-found: error
