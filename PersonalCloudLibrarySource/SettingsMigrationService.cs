@@ -46,6 +46,13 @@ namespace PersonalCloudLibrarySource
                 settings.TransferConcurrency = 1;
             }
 
+            // Version 3 used 30 seconds as the default. Upgrade only that exact
+            // legacy value so explicit user choices such as 75 seconds survive.
+            if (wasMigrated && previousVersion <= 3 && settings.RcloneTimeoutSeconds == 30)
+            {
+                settings.RcloneTimeoutSeconds = 90;
+            }
+
             if (wasMigrated)
             {
                 settings.SettingsVersion = PersonalCloudLibrarySourceSettingsV3.CurrentSettingsVersion;
