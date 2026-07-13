@@ -1,0 +1,115 @@
+name: regenerate-brand-assets-once
+
+on:
+  push:
+    branches:
+      - feature/user-friendly-dashboard-cleanup
+    paths:
+      - .github/workflows/regenerate-brand-assets.yml
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out cleanup branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/user-friendly-dashboard-cleanup
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install image renderers
+        run: python -m pip install --disable-pip-version-check cairosvg pillow
+
+      - name: Regenerate validated PNG assets
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          import base64
+          import cairosvg
+          from PIL import Image
+
+          root = Path.cwd()
+          assets = root / "tools" / "assets"
+          source = root / "PersonalCloudLibrarySource"
+          docs = root / "docs" / "assets"
+
+          def joined_parts(pattern: str) -> str:
+              parts = sorted(assets.glob(pattern))
+              if not parts:
+                  raise RuntimeError(f"No asset parts matched {pattern}")
+              return "".join(path.read_text(encoding="ascii").strip() for path in parts)
+
+          def validate_png(path: Path, size: tuple[int, int], require_alpha: bool) -> None:
+              with Image.open(path) as image:
+                  image.load()
+                  if image.size != size:
+                      raise RuntimeError(f"{path} has size {image.size}, expected {size}")
+                  if require_alpha and image.mode not in ("RGBA", "LA", "P"):
+                      raise RuntimeError(f"{path} does not contain an alpha-capable mode: {image.mode}")
+
+          icon_path = source / "icon.png"
+          icon_path.write_bytes(base64.b64decode(joined_parts("pcls-icon.part*"), validate=True))
+
+          wide_path = source / "Assets" / "pcls-logo-wide.png"
+          wide_path.parent.mkdir(parents=True, exist_ok=True)
+          cairosvg.svg2png(
+              url=str(source / "Assets" / "pcls-logo-wide.svg"),
+              write_to=str(wide_path),
+              output_width=1400,
+              output_height=420,
+          )
+
+          full_path = docs / "pcls-logo-full.png"
+          full_path.parent.mkdir(parents=True, exist_ok=True)
+          cairosvg.svg2png(
+              url=str(docs / "pcls-logo-full.svg"),
+              write_to=str(full_path),
+              output_width=1024,
+              output_height=1024,
+          )
+
+          validate_png(icon_path, (512, 512), True)
+          validate_png(wide_path, (1400, 420), True)
+          validate_png(full_path, (1024, 1024), False)
+
+          for old_part in assets.glob("pcls-logo-wide.part*"):
+              old_part.unlink()
+
+          encoded = base64.b64encode(wide_path.read_bytes()).decode("ascii")
+          chunk_size = 5000
+          for index, start in enumerate(range(0, len(encoded), chunk_size), start=1):
+              (assets / f"pcls-logo-wide.part{index:02d}").write_text(
+                  encoded[start:start + chunk_size],
+                  encoding="ascii",
+              )
+
+          print(f"icon.png: {icon_path.stat().st_size} bytes")
+          print(f"pcls-logo-wide.png: {wide_path.stat().st_size} bytes")
+          print(f"pcls-logo-full.png: {full_path.stat().st_size} bytes")
+          print(f"wide PNG parts: {len(list(assets.glob('pcls-logo-wide.part*')))}")
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Commit regenerated assets
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- PersonalCloudLibrarySource/icon.png PersonalCloudLibrarySource/Assets/pcls-logo-wide.png docs/assets/pcls-logo-full.png tools/assets
+          if (git diff --cached --quiet) {
+            throw 'Brand asset regeneration produced no repository changes.'
+          }
+          git commit -m "Regenerate validated PCLS brand assets"
+          git push origin HEAD:feature/user-friendly-dashboard-cleanup
