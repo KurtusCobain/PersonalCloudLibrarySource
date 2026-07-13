@@ -26,16 +26,51 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install image renderers
-        run: python -m pip install --disable-pip-version-check cairosvg pillow
+      - name: Install validation and SVG rendering tools
+        shell: pwsh
+        run: |
+          python -m pip install --disable-pip-version-check pillow
+          npm install --no-save @resvg/resvg-js
 
-      - name: Regenerate validated PNG assets
+      - name: Render wide and full PNG assets
+        shell: pwsh
+        run: |
+          @'
+          const fs = require('fs');
+          const path = require('path');
+          const { Resvg } = require('@resvg/resvg-js');
+
+          function render(svgPath, pngPath, width) {
+            const svg = fs.readFileSync(svgPath, 'utf8');
+            const rendered = new Resvg(svg, {
+              fitTo: { mode: 'width', value: width },
+              background: 'rgba(0,0,0,0)'
+            }).render().asPng();
+            fs.mkdirSync(path.dirname(pngPath), { recursive: true });
+            fs.writeFileSync(pngPath, rendered);
+          }
+
+          render(
+            'PersonalCloudLibrarySource/Assets/pcls-logo-wide.svg',
+            'PersonalCloudLibrarySource/Assets/pcls-logo-wide.png',
+            1400
+          );
+          render(
+            'docs/assets/pcls-logo-full.svg',
+            'docs/assets/pcls-logo-full.png',
+            1024
+          );
+          '@ | node
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Materialize icon, validate pixels, and split wide PNG
         shell: pwsh
         run: |
           @'
           from pathlib import Path
           import base64
-          import cairosvg
           from PIL import Image
 
           root = Path.cwd()
@@ -61,22 +96,7 @@ jobs:
           icon_path.write_bytes(base64.b64decode(joined_parts("pcls-icon.part*"), validate=True))
 
           wide_path = source / "Assets" / "pcls-logo-wide.png"
-          wide_path.parent.mkdir(parents=True, exist_ok=True)
-          cairosvg.svg2png(
-              url=str(source / "Assets" / "pcls-logo-wide.svg"),
-              write_to=str(wide_path),
-              output_width=1400,
-              output_height=420,
-          )
-
           full_path = docs / "pcls-logo-full.png"
-          full_path.parent.mkdir(parents=True, exist_ok=True)
-          cairosvg.svg2png(
-              url=str(docs / "pcls-logo-full.svg"),
-              write_to=str(full_path),
-              output_width=1024,
-              output_height=1024,
-          )
 
           validate_png(icon_path, (512, 512), True)
           validate_png(wide_path, (1400, 420), True)
