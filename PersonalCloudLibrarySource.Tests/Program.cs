@@ -1,5 +1,4 @@
 using NUnitLite;
-using System.Linq;
 
 namespace PersonalCloudLibrarySource.Tests
 {
@@ -7,10 +6,7 @@ namespace PersonalCloudLibrarySource.Tests
     {
         public static int Main(string[] args)
         {
-            var filteredArgs = args
-                .Concat(new[] { "--test=PersonalCloudLibrarySource.Tests.Ui.UiContractTests.BrandAssets_ArePresentAndEncodedPngsUseTransparency" })
-                .ToArray();
-            return new AutoRun().Execute(filteredArgs);
+            return new AutoRun().Execute(args);
         }
     }
 }
