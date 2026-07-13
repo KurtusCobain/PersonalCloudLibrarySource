@@ -21,5 +21,85 @@ jobs:
       - name: Build Debug
         run: msbuild .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln /t:Build /p:Configuration=Debug /p:Platform="Any CPU"
 
-      - name: Run tests
-        run: .\PersonalCloudLibrarySource.Tests\bin\Debug\PersonalCloudLibrarySource.Tests.exe --noheader
+      - name: Run full test suite
+        shell: pwsh
+        run: |
+          & .\PersonalCloudLibrarySource.Tests\bin\Debug\PersonalCloudLibrarySource.Tests.exe --noheader '--result=TestResult.xml;format=nunit2'
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcls-test-results-${{ github.run_number }}
+          path: TestResult.xml
+          if-no-files-found: warn
+
+      - name: Build Release package
+        shell: pwsh
+        run: .\tools\package-extension.ps1
+
+      - name: Inspect packaged extension
+        shell: pwsh
+        run: |
+          $package = '.\dist\PersonalCloudLibrarySource-0.3.2.pext'
+          if (-not (Test-Path -LiteralPath $package)) {
+            throw "Package was not created: $package"
+          }
+
+          $inspect = Join-Path $env:RUNNER_TEMP 'pcls-package-inspect'
+          if (Test-Path -LiteralPath $inspect) {
+            Remove-Item -LiteralPath $inspect -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $inspect -Force | Out-Null
+
+          $zip = "$package.zip"
+          Copy-Item -LiteralPath $package -Destination $zip -Force
+          Expand-Archive -LiteralPath $zip -DestinationPath $inspect -Force
+
+          $required = @(
+            'PersonalCloudLibrarySource.dll',
+            'extension.yaml',
+            'icon.png',
+            'Localization\en_US.xaml',
+            'Assets\pcls-logo-wide.png'
+          )
+
+          foreach ($relative in $required) {
+            $path = Join-Path $inspect $relative
+            if (-not (Test-Path -LiteralPath $path)) {
+              throw "Packaged extension is missing: $relative"
+            }
+          }
+
+          $manifest = Get-Content -LiteralPath (Join-Path $inspect 'extension.yaml') -Raw
+          if ($manifest -notmatch '(?m)^Version:\s*0\.3\.2\s*$') {
+            throw 'Packaged extension manifest is not version 0.3.2.'
+          }
+
+          Add-Type -AssemblyName System.Drawing
+          $icon = [System.Drawing.Image]::FromFile((Join-Path $inspect 'icon.png'))
+          $wide = [System.Drawing.Image]::FromFile((Join-Path $inspect 'Assets\pcls-logo-wide.png'))
+          try {
+            if ($icon.Width -ne 512 -or $icon.Height -ne 512) {
+              throw "icon.png has unexpected dimensions: $($icon.Width)x$($icon.Height)"
+            }
+            if ($wide.Width -ne 1400 -or $wide.Height -ne 420) {
+              throw "pcls-logo-wide.png has unexpected dimensions: $($wide.Width)x$($wide.Height)"
+            }
+          }
+          finally {
+            $icon.Dispose()
+            $wide.Dispose()
+          }
+
+          Write-Host 'Package inspection passed.'
+
+      - name: Upload test package
+        uses: actions/upload-artifact@v4
+        with:
+          name: PersonalCloudLibrarySource-0.3.2-test
+          path: dist/PersonalCloudLibrarySource-0.3.2.pext
+          if-no-files-found: error
