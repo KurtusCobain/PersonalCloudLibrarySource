@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
+using System.Xml;
 
 namespace PersonalCloudLibrarySource.Tests.Repository
 {
@@ -63,15 +63,48 @@ namespace PersonalCloudLibrarySource.Tests.Repository
                 string.Join(Environment.NewLine, missingFiles));
         }
 
+        [Test]
+        public void GetCompileEntries_ParsesNamespacedProjectXmlAttributes()
+        {
+            var temporaryDirectory = Path.Combine(Path.GetTempPath(), "pcls-project-contract-" + Guid.NewGuid());
+            Directory.CreateDirectory(temporaryDirectory);
+            var projectFile = Path.Combine(temporaryDirectory, "Contract.csproj");
+
+            try
+            {
+                File.WriteAllText(projectFile,
+                    "<Project xmlns=\"http://schemas.microsoft.com/developer/msbuild/2003\">" +
+                    "<ItemGroup>" +
+                    "<Compile Condition=\"'$(Configuration)' == 'Debug'\" Include=\"Reordered\\First.cs\" />" +
+                    "<Compile Include='Single\\Second.cs' Condition='true' />" +
+                    "<Compile Condition='true' Include='Escaped&#92;Third.cs' />" +
+                    "</ItemGroup>" +
+                    "</Project>");
+
+                CollectionAssert.AreEquivalent(new[]
+                {
+                    "Reordered/First.cs",
+                    "Single/Second.cs",
+                    "Escaped/Third.cs"
+                }, GetCompileEntries(projectFile));
+            }
+            finally
+            {
+                Directory.Delete(temporaryDirectory, true);
+            }
+        }
+
         private static HashSet<string> GetCompileEntries(string projectFile)
         {
-            var matches = Regex.Matches(
-                File.ReadAllText(projectFile),
-                "<Compile\\s+Include=\"([^\"]+)\"",
-                RegexOptions.IgnoreCase);
+            var document = new XmlDocument();
+            document.Load(projectFile);
+            var compileElements = document.SelectNodes("//*[local-name()='Compile']");
 
             return new HashSet<string>(
-                matches.Cast<Match>().Select(match => NormalizePath(match.Groups[1].Value)),
+                compileElements.Cast<XmlElement>()
+                    .Select(element => element.GetAttribute("Include"))
+                    .Where(path => !string.IsNullOrEmpty(path))
+                    .Select(NormalizeProjectRelativePath),
                 StringComparer.OrdinalIgnoreCase);
         }
 
@@ -80,7 +113,7 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             var startInfo = new ProcessStartInfo
             {
                 FileName = "git",
-                Arguments = "ls-files --cached -- \"*.cs\"",
+                Arguments = "ls-files --cached -z -- \"*.cs\"",
                 WorkingDirectory = repositoryRoot,
                 UseShellExecute = false,
                 RedirectStandardOutput = true,
@@ -94,19 +127,19 @@ namespace PersonalCloudLibrarySource.Tests.Repository
                 var error = process.StandardError.ReadToEnd();
                 process.WaitForExit();
                 Assert.That(process.ExitCode, Is.EqualTo(0), "git ls-files failed: " + error);
-                return output.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                    .Select(NormalizePath)
+                return output.Split(new[] { '\0' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(NormalizeProjectRelativePath)
                     .ToArray();
             }
         }
 
         private static bool IsIntendedSource(string path)
         {
-            var segments = NormalizePath(path).Split('/');
-            if (segments.Any(segment =>
-                segment.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
-                segment.Equals("obj", StringComparison.OrdinalIgnoreCase) ||
-                segment.Equals("packages", StringComparison.OrdinalIgnoreCase)))
+            var segments = NormalizeProjectRelativePath(path).Split('/');
+            var rootDirectory = segments[0];
+            if (rootDirectory.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
+                rootDirectory.Equals("obj", StringComparison.OrdinalIgnoreCase) ||
+                rootDirectory.Equals("packages", StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -118,9 +151,15 @@ namespace PersonalCloudLibrarySource.Tests.Repository
                 !fileName.StartsWith("TemporaryGeneratedFile_", StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string NormalizePath(string path)
+        private static string NormalizeProjectRelativePath(string path)
         {
-            return path.Replace('\\', '/');
+            var normalized = path.Replace('\\', '/');
+            while (normalized.StartsWith("./", StringComparison.Ordinal))
+            {
+                normalized = normalized.Substring(2);
+            }
+
+            return normalized;
         }
 
         private static string FindRepositoryRoot()
