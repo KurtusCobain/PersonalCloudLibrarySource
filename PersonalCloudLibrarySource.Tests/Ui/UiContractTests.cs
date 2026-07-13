@@ -36,8 +36,7 @@ namespace PersonalCloudLibrarySource.Tests.Ui
         [Test]
         public void EncodedIcon_UsesAlpha()
         {
-            var bytes = Convert.FromBase64String(
-                File.ReadAllText(FindRepositoryFile("tools", "pcls-icon-flat.b64")).Trim());
+            var bytes = ReadAssetBytes("pcls-icon.part01", "pcls-icon.part*");
             Assert.That(ReadPngColorType(bytes), Is.EqualTo(6));
         }
 
@@ -61,10 +60,15 @@ namespace PersonalCloudLibrarySource.Tests.Ui
 
         private static byte[] ReadWideLogoBytes()
         {
+            return ReadAssetBytes("pcls-logo-wide.part01", "pcls-logo-wide.part*");
+        }
+
+        private static byte[] ReadAssetBytes(string firstPartName, string pattern)
+        {
             var directory = Path.GetDirectoryName(
-                FindRepositoryFile("tools", "assets", "pcls-logo-wide.part01"));
+                FindRepositoryFile("tools", "assets", firstPartName));
             var base64 = string.Concat(
-                Directory.GetFiles(directory, "pcls-logo-wide.part*")
+                Directory.GetFiles(directory, pattern)
                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                     .Select(path => File.ReadAllText(path).Trim()));
             return Convert.FromBase64String(base64);
