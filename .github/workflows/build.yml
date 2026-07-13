@@ -15,6 +15,23 @@ jobs:
 
       - uses: microsoft/setup-msbuild@v2
 
+      - name: Resolve package identity
+        shell: pwsh
+        run: |
+          $manifestPath = '.\PersonalCloudLibrarySource\extension.yaml'
+          $extensionVersion = Select-String -Path $manifestPath -Pattern '^Version:\s*(.+)$' |
+            Select-Object -First 1 |
+            ForEach-Object { $_.Matches[0].Groups[1].Value.Trim() }
+          if ([string]::IsNullOrWhiteSpace($extensionVersion)) {
+            throw "Unable to determine extension version from $manifestPath"
+          }
+
+          "PCLS_VERSION=$extensionVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Validate release baseline contract
+        shell: pwsh
+        run: .\tools\test-release-baseline.ps1
+
       - name: Restore NuGet packages
         run: nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln
 
@@ -63,10 +80,12 @@ jobs:
       - name: Inspect packaged extension
         shell: pwsh
         run: |
-          $package = '.\dist\PersonalCloudLibrarySource-0.3.2.pext'
+          $package = ".\dist\PersonalCloudLibrarySource-$env:PCLS_VERSION.pext"
           if (-not (Test-Path -LiteralPath $package)) {
             throw "Package was not created: $package"
           }
+
+          & .\tools\test-release-baseline.ps1 -PackagePath $package
 
           $inspect = Join-Path $env:RUNNER_TEMP 'pcls-package-inspect'
           if (Test-Path -LiteralPath $inspect) {
@@ -78,24 +97,9 @@ jobs:
           Copy-Item -LiteralPath $package -Destination $zip -Force
           Expand-Archive -LiteralPath $zip -DestinationPath $inspect -Force
 
-          $required = @(
-            'PersonalCloudLibrarySource.dll',
-            'extension.yaml',
-            'icon.png',
-            'Localization\en_US.xaml',
-            'Assets\pcls-logo-wide.png'
-          )
-
-          foreach ($relative in $required) {
-            $path = Join-Path $inspect $relative
-            if (-not (Test-Path -LiteralPath $path)) {
-              throw "Packaged extension is missing: $relative"
-            }
-          }
-
           $manifest = Get-Content -LiteralPath (Join-Path $inspect 'extension.yaml') -Raw
-          if ($manifest -notmatch '(?m)^Version:\s*0\.3\.2\s*$') {
-            throw 'Packaged extension manifest is not version 0.3.2.'
+          if ($manifest -notmatch "(?m)^Version:\s*$([regex]::Escape($env:PCLS_VERSION))\s*$") {
+            throw "Packaged extension manifest is not version $env:PCLS_VERSION."
           }
 
           Add-Type -AssemblyName System.Drawing
@@ -119,6 +123,6 @@ jobs:
       - name: Upload test package
         uses: actions/upload-artifact@v4
         with:
-          name: PersonalCloudLibrarySource-0.3.2-test
-          path: dist/PersonalCloudLibrarySource-0.3.2.pext
+          name: PersonalCloudLibrarySource-${{ env.PCLS_VERSION }}-test
+          path: dist/PersonalCloudLibrarySource-${{ env.PCLS_VERSION }}.pext
           if-no-files-found: error
