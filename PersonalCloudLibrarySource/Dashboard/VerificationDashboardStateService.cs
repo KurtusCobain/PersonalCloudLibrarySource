@@ -4,12 +4,25 @@ namespace PersonalCloudLibrarySource
 {
     public static class VerificationDashboardStateService
     {
+        public static LibraryVerificationReport LatestReport { get; set; }
+
         public static LibraryStatusContext Apply(
             LibraryStatusContext context,
             LibraryVerificationReport report)
         {
             context = context ?? new LibraryStatusContext();
             if (report == null)
+            {
+                return context;
+            }
+
+            // Do not apply a report from a previously configured source.
+            if (!string.IsNullOrWhiteSpace(report.ManifestSource) &&
+                !string.IsNullOrWhiteSpace(context.ManifestDescription) &&
+                !string.Equals(
+                    report.ManifestSource,
+                    context.ManifestDescription,
+                    StringComparison.OrdinalIgnoreCase))
             {
                 return context;
             }
