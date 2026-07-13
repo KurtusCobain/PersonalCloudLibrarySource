@@ -12,7 +12,6 @@ namespace PersonalCloudLibrarySource.Tests.Ui
         public void SetupWizard_UsesPlayniteThemeForeground()
         {
             var xaml = File.ReadAllText(FindRepositoryFile("PersonalCloudLibrarySource", "Setup", "SetupWizardView.xaml"));
-
             StringAssert.Contains("Foreground=\"{DynamicResource TextBrush}\"", xaml);
         }
 
@@ -20,7 +19,6 @@ namespace PersonalCloudLibrarySource.Tests.Ui
         public void SourceSettings_ShowOnlyFieldsForSelectedProvider()
         {
             var xaml = File.ReadAllText(FindRepositoryFile("PersonalCloudLibrarySource", "PersonalCloudLibrarySourceSettingsView.xaml"));
-
             StringAssert.Contains("Value=\"LocalFile\"", xaml);
             StringAssert.Contains("Value=\"LocalFolder\"", xaml);
             StringAssert.Contains("Value=\"RcloneRemote\"", xaml);
@@ -28,34 +26,48 @@ namespace PersonalCloudLibrarySource.Tests.Ui
         }
 
         [Test]
-        public void BrandAssets_ArePresentAndEncodedPngsUseTransparency()
+        public void BrandArtwork_IsPresent()
         {
-            var iconArtwork = FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-icon.svg");
-            var wideArtwork = FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-logo-wide.svg");
-            var fullArtwork = FindRepositoryFile("docs", "assets", "pcls-logo-full.svg");
-            var iconBase64Path = FindRepositoryFile("tools", "pcls-icon-flat.b64");
-            var widePartsDirectory = Path.GetDirectoryName(FindRepositoryFile("tools", "assets", "pcls-logo-wide.part01"));
+            StringAssert.Contains("<svg", File.ReadAllText(FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-icon.svg")));
+            StringAssert.Contains("<svg", File.ReadAllText(FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-logo-wide.svg")));
+            StringAssert.Contains("<svg", File.ReadAllText(FindRepositoryFile("docs", "assets", "pcls-logo-full.svg")));
+        }
 
-            StringAssert.Contains("<svg", File.ReadAllText(iconArtwork));
-            StringAssert.Contains("<svg", File.ReadAllText(wideArtwork));
-            StringAssert.Contains("<svg", File.ReadAllText(fullArtwork));
+        [Test]
+        public void EncodedIcon_UsesAlpha()
+        {
+            var bytes = Convert.FromBase64String(
+                File.ReadAllText(FindRepositoryFile("tools", "pcls-icon-flat.b64")).Trim());
+            Assert.That(ReadPngColorType(bytes), Is.EqualTo(6));
+        }
 
-            var iconBytes = Convert.FromBase64String(File.ReadAllText(iconBase64Path).Trim());
-            var wideBase64 = string.Concat(
-                Directory.GetFiles(widePartsDirectory, "pcls-logo-wide.part*")
+        [Test]
+        public void EncodedWideLogo_Decodes()
+        {
+            var bytes = ReadWideLogoBytes();
+            Assert.That(bytes.Length, Is.GreaterThan(26));
+            AssertPngSignature(bytes);
+        }
+
+        [Test]
+        public void EncodedWideLogo_UsesTransparency()
+        {
+            var bytes = ReadWideLogoBytes();
+            var colorType = ReadPngColorType(bytes);
+            var transparent = colorType == 6 ||
+                (colorType == 3 && ContainsChunk(bytes, new byte[] { 116, 82, 78, 83 }));
+            Assert.That(transparent, Is.True);
+        }
+
+        private static byte[] ReadWideLogoBytes()
+        {
+            var directory = Path.GetDirectoryName(
+                FindRepositoryFile("tools", "assets", "pcls-logo-wide.part01"));
+            var base64 = string.Concat(
+                Directory.GetFiles(directory, "pcls-logo-wide.part*")
                     .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                     .Select(path => File.ReadAllText(path).Trim()));
-            var wideBytes = Convert.FromBase64String(wideBase64);
-
-            Assert.That(ReadPngColorType(iconBytes), Is.EqualTo(6), "Encoded icon.png must use truecolor alpha.");
-
-            var wideColorType = ReadPngColorType(wideBytes);
-            var wideHasTransparency = wideColorType == 6 ||
-                (wideColorType == 3 && ContainsChunk(wideBytes, new byte[] { 116, 82, 78, 83 }));
-            Assert.That(
-                wideHasTransparency,
-                Is.True,
-                "Encoded wide logo must use truecolor alpha or an indexed palette with a tRNS transparency chunk.");
+            return Convert.FromBase64String(base64);
         }
 
         private static int CountOccurrences(string value, string token)
@@ -67,7 +79,6 @@ namespace PersonalCloudLibrarySource.Tests.Ui
                 count++;
                 index += token.Length;
             }
-
             return count;
         }
 
@@ -75,14 +86,17 @@ namespace PersonalCloudLibrarySource.Tests.Ui
         {
             Assert.That(bytes, Is.Not.Null);
             Assert.That(bytes.Length, Is.GreaterThanOrEqualTo(26));
-
-            var pngSignature = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 };
-            for (var index = 0; index < pngSignature.Length; index++)
-            {
-                Assert.That(bytes[index], Is.EqualTo(pngSignature[index]), "Invalid PNG signature.");
-            }
-
+            AssertPngSignature(bytes);
             return bytes[25];
+        }
+
+        private static void AssertPngSignature(byte[] bytes)
+        {
+            var signature = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 };
+            for (var index = 0; index < signature.Length; index++)
+            {
+                Assert.That(bytes[index], Is.EqualTo(signature[index]));
+            }
         }
 
         private static bool ContainsChunk(byte[] bytes, byte[] chunkName)
@@ -98,13 +112,11 @@ namespace PersonalCloudLibrarySource.Tests.Ui
                         break;
                     }
                 }
-
                 if (matches)
                 {
                     return true;
                 }
             }
-
             return false;
         }
 
@@ -118,15 +130,12 @@ namespace PersonalCloudLibrarySource.Tests.Ui
                 {
                     path = Path.Combine(path, segment);
                 }
-
                 if (File.Exists(path))
                 {
                     return path;
                 }
-
                 directory = directory.Parent;
             }
-
             Assert.Fail("Repository file was not found: " + string.Join("/", segments));
             return string.Empty;
         }
