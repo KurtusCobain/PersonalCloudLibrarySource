@@ -4,7 +4,7 @@ namespace PersonalCloudLibrarySource
 {
     public class PersonalCloudLibrarySourceSettingsV3 : PersonalCloudLibrarySourceSettings
     {
-        public const int CurrentSettingsVersion = 3;
+        public const int CurrentSettingsVersion = 4;
 
         private int settingsVersion;
         private bool showTopPanelButton = true;
