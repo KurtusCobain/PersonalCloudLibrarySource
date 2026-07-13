@@ -26,7 +26,6 @@ $projectOutput = Join-Path $repoRoot "PersonalCloudLibrarySource\bin\$configurat
 $distRoot = Join-Path $repoRoot "dist"
 $packageFolder = Join-Path $distRoot "PersonalCloudLibrarySource"
 $extensionManifestPath = Join-Path $repoRoot "PersonalCloudLibrarySource\extension.yaml"
-$brandDecoder = Join-Path $repoRoot "tools\decode-brand-assets.ps1"
 
 if (-not (Test-Path -LiteralPath $extensionManifestPath)) {
     throw "Extension manifest not found: $extensionManifestPath"
@@ -51,12 +50,6 @@ if ([string]::IsNullOrWhiteSpace($msbuild)) {
 if ($LASTEXITCODE -ne 0) {
     throw "Release build failed with exit code $LASTEXITCODE"
 }
-
-if (-not (Test-Path -LiteralPath $brandDecoder)) {
-    throw "Brand asset decoder not found: $brandDecoder"
-}
-
-& $brandDecoder -OutputDirectory $projectOutput
 
 if (Test-Path -LiteralPath $packageFolder) {
     Remove-Item -LiteralPath $packageFolder -Recurse -Force
@@ -84,9 +77,9 @@ if (Test-Path -LiteralPath $localizationPath) {
     Copy-Item -LiteralPath $localizationPath -Destination $packageFolder -Recurse -Force
 }
 
-$assetsPath = Join-Path $projectOutput "Assets"
+$assetsPath = Join-Path $repoRoot "PersonalCloudLibrarySource\Assets"
 if (-not (Test-Path -LiteralPath $assetsPath)) {
-    throw "Generated branding assets are missing: $assetsPath"
+    throw "Branding assets are missing: $assetsPath"
 }
 
 Copy-Item -LiteralPath $assetsPath -Destination $packageFolder -Recurse -Force

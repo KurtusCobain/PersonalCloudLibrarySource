@@ -92,7 +92,7 @@ Confirm the icon matches Reference A, the full and wide logos match Reference B,
 
 - [ ] **Step 1: Simplify project resources**
 
-Keep `icon.png` as a copied `None` item and `Assets\pcls-logo-wide.png` as a WPF `Resource` with `CopyToOutputDirectory` set to `PreserveNewest`, so the same file is both available through the pack URI and present in the package staging directory. Remove SVG entries. Do not change the pack URI or XAML unless visual inspection proves sizing needs adjustment.
+Keep `icon.png` as a copied `None` item and `Assets\pcls-logo-wide.png` as a WPF `Resource`. Package the checked-in `PersonalCloudLibrarySource\Assets` directory directly because WPF `Resource` items are embedded and are not copied to the build output by this project type. Remove SVG entries. Do not change the pack URI or XAML unless visual inspection proves sizing needs adjustment.
 
 - [ ] **Step 2: Remove package-time materialization**
 

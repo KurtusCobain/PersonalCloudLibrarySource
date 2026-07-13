@@ -3,7 +3,6 @@ using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Linq;
 
 namespace PersonalCloudLibrarySource.Tests.Ui
 {
@@ -30,14 +29,20 @@ namespace PersonalCloudLibrarySource.Tests.Ui
         }
 
         [Test]
-        public void BrandArtwork_IsPresent()
+        public void BrandArtwork_UsesDirectReferencePngs()
         {
-            StringAssert.Contains("<svg", File.ReadAllText(FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-icon.svg")));
-            StringAssert.Contains("<svg", File.ReadAllText(FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-logo-wide.svg")));
-            StringAssert.Contains("<svg", File.ReadAllText(FindRepositoryFile("docs", "assets", "pcls-logo-full.svg")));
             Assert.That(File.Exists(FindRepositoryFile("PersonalCloudLibrarySource", "icon.png")), Is.True);
             Assert.That(File.Exists(FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-logo-wide.png")), Is.True);
             Assert.That(File.Exists(FindRepositoryFile("docs", "assets", "pcls-logo-full.png")), Is.True);
+
+            var root = FindRepositoryRoot();
+            Assert.That(File.Exists(Path.Combine(root, "PersonalCloudLibrarySource", "Assets", "pcls-icon.svg")), Is.False);
+            Assert.That(File.Exists(Path.Combine(root, "PersonalCloudLibrarySource", "Assets", "pcls-logo-wide.svg")), Is.False);
+            Assert.That(File.Exists(Path.Combine(root, "docs", "assets", "pcls-logo-full.svg")), Is.False);
+            Assert.That(File.Exists(Path.Combine(root, "tools", "decode-brand-assets.ps1")), Is.False);
+            Assert.That(File.Exists(Path.Combine(root, "tools", "pcls-logo-wide.b64")), Is.False);
+            Assert.That(File.Exists(Path.Combine(root, "tools", "apply-0.3.2-assets-note.txt")), Is.False);
+            Assert.That(Directory.GetFiles(Path.Combine(root, "tools", "assets"), "pcls-*.part*"), Is.Empty);
         }
 
         [Test]
@@ -53,57 +58,32 @@ namespace PersonalCloudLibrarySource.Tests.Ui
         }
 
         [Test]
-        public void EncodedIcon_DecodesWithAlpha()
+        public void RuntimeBrandArtwork_HasExpectedDimensionsAndTransparency()
         {
-            var bytes = ReadAssetBytes("pcls-icon.part01", "pcls-icon.part*");
-            AssertPngDecodes(bytes, 512, 512);
-            Assert.That(ReadPngColorType(bytes), Is.EqualTo(6));
+            AssertTransparentPng(FindRepositoryFile("PersonalCloudLibrarySource", "icon.png"), 512, 512);
+            AssertTransparentPng(
+                FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-logo-wide.png"),
+                1400,
+                420);
         }
 
         [Test]
-        public void EncodedWideLogo_DecodesCompletely()
+        public void DocumentationBrandArtwork_DecodesWithTransparency()
         {
-            var bytes = ReadWideLogoBytes();
-            AssertPngDecodes(bytes, 1400, 420);
+            AssertTransparentPng(FindRepositoryFile("docs", "assets", "pcls-logo-full.png"), 1254, 1254);
         }
 
-        [Test]
-        public void EncodedWideLogo_UsesTransparency()
+        private static void AssertTransparentPng(string path, int expectedWidth, int expectedHeight)
         {
-            var bytes = ReadWideLogoBytes();
-            var colorType = ReadPngColorType(bytes);
-            var transparent = colorType == 6 ||
-                (colorType == 3 && ContainsChunk(bytes, new byte[] { 116, 82, 78, 83 }));
-            Assert.That(transparent, Is.True);
-        }
-
-        private static byte[] ReadWideLogoBytes()
-        {
-            return ReadAssetBytes("pcls-logo-wide.part01", "pcls-logo-wide.part*");
-        }
-
-        private static byte[] ReadAssetBytes(string firstPartName, string pattern)
-        {
-            var directory = Path.GetDirectoryName(
-                FindRepositoryFile("tools", "assets", firstPartName));
-            var base64 = string.Concat(
-                Directory.GetFiles(directory, pattern)
-                    .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-                    .Select(path => File.ReadAllText(path).Trim()));
-            return Convert.FromBase64String(base64);
-        }
-
-        private static void AssertPngDecodes(byte[] bytes, int expectedWidth, int expectedHeight)
-        {
-            Assert.That(bytes, Is.Not.Null);
-            Assert.That(bytes.Length, Is.GreaterThan(26));
-            AssertPngSignature(bytes);
-
-            using (var stream = new MemoryStream(bytes, false))
-            using (var bitmap = new Bitmap(stream))
+            using (var bitmap = new Bitmap(path))
             {
                 Assert.That(bitmap.Width, Is.EqualTo(expectedWidth));
                 Assert.That(bitmap.Height, Is.EqualTo(expectedHeight));
+                Assert.That(Image.IsAlphaPixelFormat(bitmap.PixelFormat), Is.True);
+                Assert.That(bitmap.GetPixel(0, 0).A, Is.EqualTo(0));
+                Assert.That(bitmap.GetPixel(bitmap.Width - 1, 0).A, Is.EqualTo(0));
+                Assert.That(bitmap.GetPixel(0, bitmap.Height - 1).A, Is.EqualTo(0));
+                Assert.That(bitmap.GetPixel(bitmap.Width - 1, bitmap.Height - 1).A, Is.EqualTo(0));
 
                 var bounds = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
                 var data = bitmap.LockBits(bounds, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
@@ -131,44 +111,6 @@ namespace PersonalCloudLibrarySource.Tests.Ui
             return count;
         }
 
-        private static byte ReadPngColorType(byte[] bytes)
-        {
-            Assert.That(bytes, Is.Not.Null);
-            Assert.That(bytes.Length, Is.GreaterThanOrEqualTo(26));
-            AssertPngSignature(bytes);
-            return bytes[25];
-        }
-
-        private static void AssertPngSignature(byte[] bytes)
-        {
-            var signature = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 };
-            for (var index = 0; index < signature.Length; index++)
-            {
-                Assert.That(bytes[index], Is.EqualTo(signature[index]));
-            }
-        }
-
-        private static bool ContainsChunk(byte[] bytes, byte[] chunkName)
-        {
-            for (var index = 0; index <= bytes.Length - chunkName.Length; index++)
-            {
-                var matches = true;
-                for (var offset = 0; offset < chunkName.Length; offset++)
-                {
-                    if (bytes[index + offset] != chunkName[offset])
-                    {
-                        matches = false;
-                        break;
-                    }
-                }
-                if (matches)
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
-
         private static string FindRepositoryFile(params string[] segments)
         {
             var directory = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
@@ -187,6 +129,12 @@ namespace PersonalCloudLibrarySource.Tests.Ui
             }
             Assert.Fail("Repository file was not found: " + string.Join("/", segments));
             return string.Empty;
+        }
+
+        private static string FindRepositoryRoot()
+        {
+            var solution = FindRepositoryFile("PersonalCloudLibrarySource", "PersonalCloudLibrarySource.sln");
+            return Directory.GetParent(Path.GetDirectoryName(solution)).FullName;
         }
     }
 }

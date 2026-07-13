@@ -4,20 +4,20 @@ The approved Personal Cloud Library Source branding is available in three layout
 
 ## Plugin icon
 
-![PCLS cloud controller icon](../PersonalCloudLibrarySource/Assets/pcls-icon.svg)
+![PCLS cloud controller icon](../PersonalCloudLibrarySource/icon.png)
 
-Used for Playnite's extension listing, main menu, sidebar, and top-panel navigation. The build generates the transparent `icon.png` required by Playnite.
+The transparent 512 x 512 `icon.png` is derived from the supplied icon-only cloud/gamepad reference. It is used for Playnite's extension listing, main menu, sidebar, and top-panel navigation.
 
 ## Wide wordmark
 
-![PCLS wide logo](../PersonalCloudLibrarySource/Assets/pcls-logo-wide.svg)
+![PCLS wide logo](../PersonalCloudLibrarySource/Assets/pcls-logo-wide.png)
 
-Used for documentation, banners, dashboard headers, and repository presentation. The extension package also includes a transparent PNG copy under `Assets/pcls-logo-wide.png`.
+The transparent 1400 x 420 logo uses the supplied full-brand mark, `PCLS` wordmark, and `Personal Cloud Library Source` subtitle. It is used for dashboard and setup-wizard headers and is included in the extension package under `Assets/pcls-logo-wide.png`.
 
-## Full dark logo
+## Full logo
 
-![PCLS full dark logo](assets/pcls-logo-full.svg)
+![PCLS full logo](assets/pcls-logo-full.png)
 
-Used for square promotional graphics and dark-background presentation.
+The full transparent PNG preserves the supplied stacked composition for documentation and repository presentation.
 
-The SVG files are repository-friendly presentation assets. The plugin's PNG files are generated deterministically from the checked-in encoded image sources during each build, avoiding checkerboard backgrounds while preserving true alpha transparency.
+These PNGs are checked in directly. Builds and packages copy the approved artwork without regenerating or decoding it.

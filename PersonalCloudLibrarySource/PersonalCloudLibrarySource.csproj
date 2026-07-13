@@ -125,8 +125,6 @@
     <None Include="icon.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Include="Assets\pcls-icon.svg" />
-    <None Include="Assets\pcls-logo-wide.svg" />
     <Resource Include="Assets\pcls-logo-wide.png" />
   </ItemGroup>
   <ItemGroup>
