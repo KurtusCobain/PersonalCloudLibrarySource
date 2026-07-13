@@ -77,6 +77,13 @@ if (Test-Path -LiteralPath $localizationPath) {
     Copy-Item -LiteralPath $localizationPath -Destination $packageFolder -Recurse -Force
 }
 
+$assetsPath = Join-Path $projectOutput "Assets"
+if (-not (Test-Path -LiteralPath $assetsPath)) {
+    throw "Generated branding assets are missing: $assetsPath"
+}
+
+Copy-Item -LiteralPath $assetsPath -Destination $packageFolder -Recurse -Force
+
 if (Test-Path -LiteralPath $packagePath) {
     Remove-Item -LiteralPath $packagePath -Force
 }
@@ -87,7 +94,7 @@ if (Test-Path -LiteralPath $packageZipPath) {
 }
 
 Compress-Archive -Path (Join-Path $packageFolder "*") -DestinationPath $packageZipPath -Force
-Move-Item -LiteralPath $packageZipPath -Destination $packagePath -Force
+Move-Item -LiteralPath $packageZipPath -DestinationPath $packagePath -Force
 
 if ($DebugSymbols) {
     $debugFolder = Join-Path $distRoot "PersonalCloudLibrarySource-debug-symbols"
