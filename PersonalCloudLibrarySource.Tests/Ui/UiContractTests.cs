@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using System;
 using System.IO;
+using System.Linq;
 
 namespace PersonalCloudLibrarySource.Tests.Ui
 {
@@ -27,19 +28,27 @@ namespace PersonalCloudLibrarySource.Tests.Ui
         }
 
         [Test]
-        public void BrandAssets_ArePresentAndBuildOutputUsesAlphaPngs()
+        public void BrandAssets_ArePresentAndEncodedPngsUseAlpha()
         {
             var iconArtwork = FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-icon.svg");
             var wideArtwork = FindRepositoryFile("PersonalCloudLibrarySource", "Assets", "pcls-logo-wide.svg");
             var fullArtwork = FindRepositoryFile("docs", "assets", "pcls-logo-full.svg");
-            var iconPath = FindRepositoryFile("PersonalCloudLibrarySource", "bin", "Debug", "icon.png");
-            var wideLogoPath = FindRepositoryFile("PersonalCloudLibrarySource", "bin", "Debug", "Assets", "pcls-logo-wide.png");
+            var iconBase64Path = FindRepositoryFile("tools", "pcls-icon-flat.b64");
+            var widePartsDirectory = Path.GetDirectoryName(FindRepositoryFile("tools", "assets", "pcls-logo-wide.part01"));
 
             StringAssert.Contains("<svg", File.ReadAllText(iconArtwork));
             StringAssert.Contains("<svg", File.ReadAllText(wideArtwork));
             StringAssert.Contains("<svg", File.ReadAllText(fullArtwork));
-            Assert.That(ReadPngColorType(iconPath), Is.EqualTo(6), "Generated icon.png must be a truecolor PNG with alpha.");
-            Assert.That(ReadPngColorType(wideLogoPath), Is.EqualTo(6), "Generated wide logo must be a truecolor PNG with alpha.");
+
+            var iconBytes = Convert.FromBase64String(File.ReadAllText(iconBase64Path).Trim());
+            var wideBase64 = string.Concat(
+                Directory.GetFiles(widePartsDirectory, "pcls-logo-wide.part*")
+                    .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                    .Select(path => File.ReadAllText(path).Trim()));
+            var wideBytes = Convert.FromBase64String(wideBase64);
+
+            Assert.That(ReadPngColorType(iconBytes), Is.EqualTo(6), "Encoded icon.png must be a truecolor PNG with alpha.");
+            Assert.That(ReadPngColorType(wideBytes), Is.EqualTo(6), "Encoded wide logo must be a truecolor PNG with alpha.");
         }
 
         private static int CountOccurrences(string value, string token)
@@ -55,24 +64,18 @@ namespace PersonalCloudLibrarySource.Tests.Ui
             return count;
         }
 
-        private static byte ReadPngColorType(string path)
+        private static byte ReadPngColorType(byte[] bytes)
         {
-            using (var stream = File.OpenRead(path))
+            Assert.That(bytes, Is.Not.Null);
+            Assert.That(bytes.Length, Is.GreaterThanOrEqualTo(26));
+
+            var pngSignature = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 };
+            for (var index = 0; index < pngSignature.Length; index++)
             {
-                var header = new byte[26];
-                if (stream.Read(header, 0, header.Length) != header.Length)
-                {
-                    Assert.Fail("PNG file is too short: " + path);
-                }
-
-                var pngSignature = new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 };
-                for (var index = 0; index < pngSignature.Length; index++)
-                {
-                    Assert.That(header[index], Is.EqualTo(pngSignature[index]), "Invalid PNG signature: " + path);
-                }
-
-                return header[25];
+                Assert.That(bytes[index], Is.EqualTo(pngSignature[index]), "Invalid PNG signature.");
             }
+
+            return bytes[25];
         }
 
         private static string FindRepositoryFile(params string[] segments)
