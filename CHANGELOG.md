@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.2
+
+Feature-branch test pass prepared 7/12/2026
+
+- Added the approved PCLS cloud-controller icon, wide wordmark, and full dark logo artwork.
+- Generate true-alpha PNG branding during builds instead of using checkerboard-backed source images.
+- Improved setup-wizard and settings readability with Playnite theme foreground resources.
+- Show only the settings fields required by the selected source provider.
+- Synchronize the latest verification result with dashboard status and counts.
+- Include actionable manifest and rclone timeout details in verification messages.
+- Increased the default rclone timeout to 90 seconds and safely migrated the previous 30-second default while preserving custom values.
+- Include generated branding assets in extension packages.
+
 ## 0.2.0
 
 Manifest generation update completed 6/2/2026
