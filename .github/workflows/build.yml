@@ -6,20 +6,124 @@ on:
       - main
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out feature branch for isolated 0.3.2 pass
+        if: ${{ github.event_name == 'pull_request' && github.base_ref == 'feature/user-friendly-dashboard' && github.head_ref == 'ci/apply-0.3.2' }}
+        uses: actions/checkout@v4
+        with:
+          ref: feature/user-friendly-dashboard
+          fetch-depth: 0
+
+      - name: Check out normal build target
+        if: ${{ !(github.event_name == 'pull_request' && github.base_ref == 'feature/user-friendly-dashboard' && github.head_ref == 'ci/apply-0.3.2') }}
+        uses: actions/checkout@v4
 
       - uses: microsoft/setup-msbuild@v2
 
+      - name: Apply 0.3.2 fixes and assets
+        if: ${{ github.event_name == 'pull_request' && github.base_ref == 'feature/user-friendly-dashboard' && github.head_ref == 'ci/apply-0.3.2' }}
+        shell: pwsh
+        run: .\tools\apply-0.3.2-fixes.ps1
+
+      - name: Register packaged logo asset
+        if: ${{ github.event_name == 'pull_request' && github.base_ref == 'feature/user-friendly-dashboard' && github.head_ref == 'ci/apply-0.3.2' }}
+        shell: pwsh
+        run: |
+          $projectPath = '.\PersonalCloudLibrarySource\PersonalCloudLibrarySource.csproj'
+          $project = Get-Content -LiteralPath $projectPath -Raw
+          if ($project -notmatch 'Assets\\pcls-logo-wide.png') {
+            $old = @'
+    <None Include="icon.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+'@
+            $new = @'
+    <None Include="Assets\pcls-logo-wide.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="icon.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+'@
+            if (-not $project.Contains($old)) {
+              throw 'Could not find the icon asset block in the project file.'
+            }
+            Set-Content -LiteralPath $projectPath -Value ($project.Replace($old, $new)) -Encoding UTF8
+          }
+
       - name: Restore NuGet packages
-        run: nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln
+        run: nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln -Force
 
       - name: Build Debug
         run: msbuild .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln /t:Build /p:Configuration=Debug /p:Platform="Any CPU"
 
       - name: Run tests
         run: .\PersonalCloudLibrarySource.Tests\bin\Debug\PersonalCloudLibrarySource.Tests.exe --noheader
+
+      - name: Build and package Release
+        if: ${{ github.event_name == 'pull_request' && github.base_ref == 'feature/user-friendly-dashboard' && github.head_ref == 'ci/apply-0.3.2' }}
+        shell: pwsh
+        run: .\tools\package-extension.ps1
+
+      - name: Inspect packaged extension
+        if: ${{ github.event_name == 'pull_request' && github.base_ref == 'feature/user-friendly-dashboard' && github.head_ref == 'ci/apply-0.3.2' }}
+        shell: pwsh
+        run: |
+          $package = '.\dist\PersonalCloudLibrarySource-0.3.2.pext'
+          if (-not (Test-Path -LiteralPath $package)) {
+            throw "Package was not created: $package"
+          }
+          $inspect = Join-Path $env:RUNNER_TEMP 'pcls-package-inspect'
+          if (Test-Path -LiteralPath $inspect) {
+            Remove-Item -LiteralPath $inspect -Recurse -Force
+          }
+          New-Item -ItemType Directory -Path $inspect -Force | Out-Null
+          $zip = "$package.zip"
+          Copy-Item -LiteralPath $package -Destination $zip -Force
+          Expand-Archive -LiteralPath $zip -DestinationPath $inspect -Force
+          $required = @(
+            'PersonalCloudLibrarySource.dll',
+            'extension.yaml',
+            'icon.png',
+            'Localization\en_US.xaml',
+            'Assets\pcls-logo-wide.png'
+          )
+          foreach ($relative in $required) {
+            $path = Join-Path $inspect $relative
+            if (-not (Test-Path -LiteralPath $path)) {
+              throw "Packaged extension is missing: $relative"
+            }
+          }
+          $manifest = Get-Content -LiteralPath (Join-Path $inspect 'extension.yaml') -Raw
+          if ($manifest -notmatch '(?m)^Version:\s*0\.3\.2\s*$') {
+            throw 'Packaged extension manifest is not version 0.3.2.'
+          }
+          Write-Host 'Package inspection passed.'
+
+      - name: Commit verified implementation
+        if: ${{ github.event_name == 'pull_request' && github.base_ref == 'feature/user-friendly-dashboard' && github.head_ref == 'ci/apply-0.3.2' }}
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add PersonalCloudLibrarySource docs tools/package-extension.ps1
+          if (git diff --cached --quiet) {
+            throw 'The implementation pass produced no changes to commit.'
+          }
+          git commit -m "Implement 0.3.2 UI fixes and branding"
+          git push origin HEAD:feature/user-friendly-dashboard
+
+      - name: Upload test package
+        if: ${{ github.event_name == 'pull_request' && github.base_ref == 'feature/user-friendly-dashboard' && github.head_ref == 'ci/apply-0.3.2' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: PersonalCloudLibrarySource-0.3.2-test
+          path: dist/PersonalCloudLibrarySource-0.3.2.pext
+          if-no-files-found: error
