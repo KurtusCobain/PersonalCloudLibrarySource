@@ -101,7 +101,7 @@ if (Test-Path -LiteralPath $packageZipPath) {
 }
 
 Compress-Archive -Path (Join-Path $packageFolder "*") -DestinationPath $packageZipPath -Force
-Move-Item -LiteralPath $packageZipPath -DestinationPath $packagePath -Force
+Move-Item -LiteralPath $packageZipPath -Destination $packagePath -Force
 
 if ($DebugSymbols) {
     $debugFolder = Join-Path $distRoot "PersonalCloudLibrarySource-debug-symbols"
