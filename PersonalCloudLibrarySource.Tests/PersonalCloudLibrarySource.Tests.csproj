@@ -63,6 +63,7 @@
     <Compile Include="Repository\FullscreenWorkflowContractTests.cs" />
     <Compile Include="Repository\PathStateConsumerContractTests.cs" />
     <Compile Include="Repository\RuntimeSettingsSnapshotUsageTests.cs" />
+    <Compile Include="Repository\ReleaseValidationContractTests.cs" />
     <Compile Include="Repository\SetupWizardEditLifecycleContractTests.cs" />
     <Compile Include="Repository\TransferQueueWiringContractTests.cs" />
     <Compile Include="RcloneTimeoutDefaultsTests.cs" />

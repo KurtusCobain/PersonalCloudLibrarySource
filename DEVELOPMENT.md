@@ -50,4 +50,40 @@ Before publishing a release:
 
 The live pre-1.0 version is `0.3.2`. Do not add a 1.0 installer entry or final package URL/date/checksum until release qualification is complete.
 
-If Playnite Toolbox is available locally, use its pack/verify commands as part of release validation.
+## Official Playnite release validation
+
+Playnite distributes `Toolbox.exe` with Playnite. The validator searches an explicit
+`-ToolboxPath`, `PLAYNITE_TOOLBOX`, and the documented installed/portable Playnite
+locations, in that order. It does not download or redistribute Toolbox.
+
+The known installed locations are `%LOCALAPPDATA%\Playnite\Toolbox.exe`,
+`%LOCALAPPDATA%\Programs\Playnite\Toolbox.exe`, `%ProgramFiles%\Playnite\Toolbox.exe`,
+and `%ProgramFiles(x86)%\Playnite\Toolbox.exe`. For a portable installation in any
+other directory, use `-ToolboxPath` or `PLAYNITE_TOOLBOX`.
+
+Set the executable explicitly when Playnite is installed elsewhere, then run the
+non-mutating release gate:
+
+```powershell
+$env:PLAYNITE_TOOLBOX = 'C:\path\to\Playnite\Toolbox.exe'
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+  -File .\tools\validate-release.ps1 `
+  -PackagePath .\dist\PersonalCloudLibrarySource-0.3.2.pext
+```
+
+The script uses the official Playnite Toolbox syntax:
+`pack <extensionfolder> <targetfolder>`, `verify addon <manifest_path>`, and
+`verify installer <manifest_path>`. Packing uses a temporary staging/output folder;
+the source manifests, workflow, and extension tree are not edited. The script also
+parses all three YAML documents structurally and inspects the package's exact files,
+identity, and manifest-derived version.
+
+If Toolbox cannot be found, the release gate prints `PREREQUISITE_MISSING` and exits
+with exit code 2. This is a blocked official qualification, not a pass. Hosted CI can
+run the non-mutating contracts below, but a release still requires a recorded local
+run with the official executable:
+
+```powershell
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass `
+  -File .\tools\test-release-validation.ps1
+```
