@@ -105,8 +105,8 @@ namespace PersonalCloudLibrarySource
                 if (!completed)
                 {
                     playniteApi.Dialogs.ShowMessage(
-                        "Setup could not be saved. Review the current values and try again.",
-                        "Personal Cloud Library Setup");
+                        PclsResources.Get("LOCPLSSetupSaveFailed", "Setup could not be saved. Review the current values and try again."),
+                        PclsResources.Get("LOCPLSSetupWizardTitle", "Personal Cloud Library Setup"));
                     return false;
                 }
 
@@ -117,8 +117,8 @@ namespace PersonalCloudLibrarySource
             catch (Exception ex)
             {
                 playniteApi.Dialogs.ShowMessage(
-                    "Setup could not be saved: " + ex.Message,
-                    "Personal Cloud Library Setup");
+                    PclsResources.Format("LOCPLSSetupSaveFailedReason", "Setup could not be saved: {0}", ex.Message),
+                    PclsResources.Get("LOCPLSSetupWizardTitle", "Personal Cloud Library Setup"));
                 return false;
             }
         }
@@ -133,8 +133,8 @@ namespace PersonalCloudLibrarySource
             catch (Exception ex)
             {
                 playniteApi.Dialogs.ShowMessage(
-                    "The setup reminder state could not be saved: " + ex.Message,
-                    "Personal Cloud Library Setup");
+                    PclsResources.Format("LOCPLSSetupReminderSaveFailed", "The setup reminder state could not be saved: {0}", ex.Message),
+                    PclsResources.Get("LOCPLSSetupWizardTitle", "Personal Cloud Library Setup"));
             }
             editCompleted = true;
             CloseWindow();
@@ -160,8 +160,8 @@ namespace PersonalCloudLibrarySource
                 catch (Exception ex)
                 {
                     playniteApi.Dialogs.ShowMessage(
-                        "The setup reminder state could not be saved: " + ex.Message,
-                        "Personal Cloud Library Setup");
+                        PclsResources.Format("LOCPLSSetupReminderSaveFailed", "The setup reminder state could not be saved: {0}", ex.Message),
+                        PclsResources.Get("LOCPLSSetupWizardTitle", "Personal Cloud Library Setup"));
                 }
             }
 

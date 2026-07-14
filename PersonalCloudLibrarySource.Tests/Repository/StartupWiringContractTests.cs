@@ -10,7 +10,9 @@ namespace PersonalCloudLibrarySource.Tests.Repository
         public void StartupRefreshLabel_ClaimsOnlyDashboardAndStatusRefresh()
         {
             var xaml = Read("PersonalCloudLibrarySource", "PersonalCloudLibrarySourceSettingsView.xaml");
-            Assert.That(xaml, Does.Contain("Refresh dashboard and library status when Playnite starts"));
+            Assert.That(xaml, Does.Contain("LOCPLSSettingsRefreshStartup"));
+            var localization = Read("PersonalCloudLibrarySource", "Localization", "en_US.xaml");
+            Assert.That(localization, Does.Contain("Refresh dashboard and library status when Playnite starts"));
             Assert.That(xaml, Does.Not.Contain("Refresh Playnite Game Library when Playnite starts"));
         }
 

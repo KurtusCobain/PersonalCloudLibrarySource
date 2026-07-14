@@ -15,7 +15,9 @@ namespace PersonalCloudLibrarySource
             Action retry)
         {
             Job = job ?? throw new ArgumentNullException(nameof(job));
-            DisplayName = string.IsNullOrWhiteSpace(job.DisplayName) ? "Unnamed transfer" : job.DisplayName;
+            DisplayName = string.IsNullOrWhiteSpace(job.DisplayName)
+                ? PclsResources.Get("LOCPLSTransferUnnamed", "Unnamed transfer")
+                : job.DisplayName;
             StateText = GetStateText(job.State);
             ProgressText = GetProgressText(job);
             CanCancel = !job.IsTerminal &&
@@ -53,10 +55,28 @@ namespace PersonalCloudLibrarySource
         {
             switch (state)
             {
+                case CloudTransferState.Queued:
+                    return PclsResources.Get("LOCPLSTransferStateQueued", "Queued");
+                case CloudTransferState.Preparing:
+                    return PclsResources.Get("LOCPLSTransferStatePreparing", "Preparing");
+                case CloudTransferState.Connecting:
+                    return PclsResources.Get("LOCPLSTransferStateConnecting", "Connecting");
                 case CloudTransferState.CalculatingSize:
-                    return "Calculating size";
+                    return PclsResources.Get("LOCPLSTransferCalculatingSize", "Calculating size");
+                case CloudTransferState.Transferring:
+                    return PclsResources.Get("LOCPLSTransferStateTransferring", "Transferring");
+                case CloudTransferState.Verifying:
+                    return PclsResources.Get("LOCPLSTransferStateVerifying", "Verifying");
+                case CloudTransferState.Finalizing:
+                    return PclsResources.Get("LOCPLSTransferStateFinalizing", "Finalizing");
+                case CloudTransferState.Completed:
+                    return PclsResources.Get("LOCPLSTransferStateCompleted", "Completed");
+                case CloudTransferState.Cancelled:
+                    return PclsResources.Get("LOCPLSTransferStateCancelled", "Cancelled");
+                case CloudTransferState.Failed:
+                    return PclsResources.Get("LOCPLSTransferStateFailed", "Failed");
                 default:
-                    return state.ToString();
+                    return PclsResources.Get("LOCPLSTransferStateUnknown", "Unknown");
             }
         }
 
@@ -77,7 +97,7 @@ namespace PersonalCloudLibrarySource
 
             if (job.BytesTransferred > 0)
             {
-                return FormatBytes(job.BytesTransferred) + " transferred";
+            return PclsResources.Format("LOCPLSTransferBytesTransferred", "{0} transferred", FormatBytes(job.BytesTransferred));
             }
 
             return GetStateText(job.State);

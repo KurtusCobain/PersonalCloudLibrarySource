@@ -102,6 +102,7 @@
     <Compile Include="Transfers\TransferQueueServiceTests.cs" />
     <Compile Include="Transfers\TransferPartialPathPolicyTests.cs" />
     <Compile Include="Ui\UiContractTests.cs" />
+    <Compile Include="Ui\LocalizationContractTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

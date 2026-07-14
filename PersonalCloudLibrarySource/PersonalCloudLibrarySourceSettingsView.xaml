@@ -14,19 +14,19 @@
         </Grid.RowDefinitions>
 
         <StackPanel Grid.Row="0" Margin="0,0,0,12">
-            <TextBlock Text="Personal Cloud Library Source"
+            <TextBlock Text="{DynamicResource LOCPLSSettingsTitle}"
                        FontSize="20"
                        FontWeight="Bold" />
-            <TextBlock Text="Configure the library source, manifest, cache, notifications, and troubleshooting tools. Everyday actions are also available from the Cloud Library dashboard."
+            <TextBlock Text="{DynamicResource LOCPLSSettingsDescription}"
                        TextWrapping="Wrap"
                        Margin="0,5,0,0" />
         </StackPanel>
 
         <TabControl Grid.Row="1">
-            <TabItem Header="General">
+            <TabItem Header="{DynamicResource LOCPLSSettingsGeneralTab}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="14">
-                        <GroupBox Header="Setup status" Margin="0,0,0,14">
+                        <GroupBox Header="{DynamicResource LOCPLSSettingsSetupStatus}" Margin="0,0,0,14">
                             <StackPanel Margin="12">
                                 <TextBlock Text="{Binding SetupStatusHeadline}"
                                            FontSize="15"
@@ -38,36 +38,36 @@
                             </StackPanel>
                         </GroupBox>
 
-                        <CheckBox Content="Enable this library source"
+                        <CheckBox Content="{DynamicResource LOCPLSSettingsEnableSource}"
                                   IsChecked="{Binding Settings.Enabled}"
                                   Margin="0,0,0,12" />
 
-                        <TextBlock Text="Library display name" FontWeight="SemiBold" />
+                        <TextBlock Text="{DynamicResource LOCPLSSettingsDisplayName}" FontWeight="SemiBold" />
                         <TextBox Text="{Binding Settings.LibraryDisplayName, UpdateSourceTrigger=PropertyChanged}"
                                  Margin="0,5,0,14" />
 
-                        <GroupBox Header="Playnite access" Margin="0,0,0,14">
+                        <GroupBox Header="{DynamicResource LOCPLSSettingsPlayniteAccess}" Margin="0,0,0,14">
                             <StackPanel Margin="12">
-                                <CheckBox Content="Show the top-panel Cloud Library button"
+                                <CheckBox Content="{DynamicResource LOCPLSSettingsShowTopPanel}"
                                           IsChecked="{Binding Settings.ShowTopPanelButton}"
                                           Margin="0,0,0,8" />
-                                <CheckBox Content="Show the Cloud Library sidebar dashboard"
+                                <CheckBox Content="{DynamicResource LOCPLSSettingsShowSidebar}"
                                           IsChecked="{Binding Settings.ShowSidebarDashboard}"
                                           Margin="0,0,0,8" />
-                                <CheckBox Content="Open the Cloud Library dashboard when Playnite starts"
+                                <CheckBox Content="{DynamicResource LOCPLSSettingsOpenDashboardStartup}"
                                           IsChecked="{Binding Settings.OpenDashboardAtStartup}"
                                           Margin="0,0,0,8" />
-                                <CheckBox Content="Show setup reminders when configuration needs attention"
+                                <CheckBox Content="{DynamicResource LOCPLSSettingsShowReminders}"
                                           IsChecked="{Binding Settings.ShowSetupReminders}" />
                             </StackPanel>
                         </GroupBox>
 
-                        <GroupBox Header="Startup behavior">
+                        <GroupBox Header="{DynamicResource LOCPLSSettingsStartupBehavior}">
                             <StackPanel Margin="12">
-                                <CheckBox Content="Refresh dashboard and library status when Playnite starts"
+                                <CheckBox Content="{DynamicResource LOCPLSSettingsRefreshStartup}"
                                           IsChecked="{Binding Settings.AutoRefreshOnApplicationStart}"
                                           Margin="0,0,0,8" />
-                                <CheckBox Content="Generate the manifest from the configured folder when Playnite starts"
+                                <CheckBox Content="{DynamicResource LOCPLSSettingsGenerateStartup}"
                                           IsChecked="{Binding Settings.AutoGenerateManifestOnApplicationStart}" />
                             </StackPanel>
                         </GroupBox>
@@ -75,20 +75,20 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Source">
+            <TabItem Header="{DynamicResource LOCPLSSettingsSourceTab}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="14">
-                        <TextBlock Text="Source type" FontWeight="SemiBold" />
+                        <TextBlock Text="{DynamicResource LOCPLSSourceType}" FontWeight="SemiBold" />
                         <ComboBox ItemsSource="{Binding ProviderTypeOptions}"
                                   SelectedItem="{Binding Settings.SourceProviderType, UpdateSourceTrigger=PropertyChanged}"
                                   HorizontalAlignment="Left"
                                   MinWidth="260"
                                   Margin="0,5,0,5" />
-                        <TextBlock Text="Choose one source type. Only the fields required for that source are shown below."
+                        <TextBlock Text="{DynamicResource LOCPLSSettingsSourceDescription}"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,16" />
 
-                        <GroupBox Header="Existing manifest file" Margin="0,0,0,14">
+                        <GroupBox Header="{DynamicResource LOCPLSSetupExistingManifest}" Margin="0,0,0,14">
                             <GroupBox.Style>
                                 <Style TargetType="GroupBox">
                                     <Setter Property="Visibility" Value="Collapsed" />
@@ -109,20 +109,20 @@
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Grid.ColumnSpan="2"
-                                           Text="Manifest JSON path"
+                                           Text="{DynamicResource LOCPLSSettingsManifestJsonPath}"
                                            FontWeight="SemiBold" />
                                 <TextBox Grid.Row="1" Grid.Column="0"
                                          Text="{Binding Settings.LocalManifestPath, UpdateSourceTrigger=PropertyChanged}"
                                          Margin="0,5,8,0" />
                                 <Button Grid.Row="1" Grid.Column="1"
-                                        Content="Browse"
+                                        Content="{DynamicResource LOCPLSSetupBrowse}"
                                         Width="90"
                                         Margin="0,5,0,0"
                                         Click="BrowseLocalManifestPath_Click" />
                             </Grid>
                         </GroupBox>
 
-                        <GroupBox Header="Local drive, external drive, or NAS folder" Margin="0,0,0,14">
+                        <GroupBox Header="{DynamicResource LOCPLSSettingsLocalFolderGroup}" Margin="0,0,0,14">
                             <GroupBox.Style>
                                 <Style TargetType="GroupBox">
                                     <Setter Property="Visibility" Value="Collapsed" />
@@ -145,18 +145,18 @@
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
                                 <TextBlock Grid.Row="0" Grid.ColumnSpan="2"
-                                           Text="Library root folder or network path"
+                                           Text="{DynamicResource LOCPLSSettingsLibraryRootPath}"
                                            FontWeight="SemiBold" />
                                 <TextBox Grid.Row="1" Grid.Column="0"
                                          Text="{Binding Settings.LocalLibraryRoot, UpdateSourceTrigger=PropertyChanged}"
                                          Margin="0,5,8,12" />
                                 <Button Grid.Row="1" Grid.Column="1"
-                                        Content="Browse"
+                                        Content="{DynamicResource LOCPLSSetupBrowse}"
                                         Width="90"
                                         Margin="0,5,0,12"
                                         Click="BrowseLocalLibraryRoot_Click" />
                                 <TextBlock Grid.Row="2" Grid.ColumnSpan="2"
-                                           Text="Manifest path relative to the library root (optional)"
+                                           Text="{DynamicResource LOCPLSSettingsRelativeManifestPath}"
                                            FontWeight="SemiBold" />
                                 <TextBox Grid.Row="3" Grid.ColumnSpan="2"
                                          Text="{Binding Settings.ManifestRelativePath, UpdateSourceTrigger=PropertyChanged}"
@@ -164,7 +164,7 @@
                             </Grid>
                         </GroupBox>
 
-                        <GroupBox Header="Cloud storage through rclone">
+                        <GroupBox Header="{DynamicResource LOCPLSSettingsRcloneGroup}">
                             <GroupBox.Style>
                                 <Style TargetType="GroupBox">
                                     <Setter Property="Visibility" Value="Collapsed" />
@@ -191,33 +191,33 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="rclone executable" FontWeight="SemiBold" />
+                                <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="{DynamicResource LOCPLSSetupRcloneExecutable}" FontWeight="SemiBold" />
                                 <TextBox Grid.Row="1" Grid.Column="0"
                                          Text="{Binding Settings.RcloneExecutablePath, UpdateSourceTrigger=PropertyChanged}"
                                          Margin="0,5,8,12" />
                                 <Button Grid.Row="1" Grid.Column="1"
-                                        Content="Browse"
+                                        Content="{DynamicResource LOCPLSSetupBrowse}"
                                         Width="90"
                                         Margin="0,5,0,12"
                                         Click="BrowseRcloneExecutablePath_Click" />
-                                <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="Configured remote name" FontWeight="SemiBold" />
+                                <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="{DynamicResource LOCPLSSetupRcloneRemoteName}" FontWeight="SemiBold" />
                                 <TextBox Grid.Row="3" Grid.ColumnSpan="2"
                                          Text="{Binding Settings.RcloneRemoteName, UpdateSourceTrigger=PropertyChanged}"
                                          Margin="0,5,0,12" />
-                                <TextBlock Grid.Row="4" Grid.ColumnSpan="2" Text="Remote manifest path" FontWeight="SemiBold" />
+                                <TextBlock Grid.Row="4" Grid.ColumnSpan="2" Text="{DynamicResource LOCPLSSetupRcloneManifestPath}" FontWeight="SemiBold" />
                                 <TextBox Grid.Row="5" Grid.ColumnSpan="2"
                                          Text="{Binding Settings.RcloneManifestPath, UpdateSourceTrigger=PropertyChanged}"
                                          Margin="0,5,0,12" />
-                                <TextBlock Grid.Row="6" Grid.ColumnSpan="2" Text="Remote content root" FontWeight="SemiBold" />
+                                <TextBlock Grid.Row="6" Grid.ColumnSpan="2" Text="{DynamicResource LOCPLSSetupRcloneContentRoot}" FontWeight="SemiBold" />
                                 <TextBox Grid.Row="7" Grid.ColumnSpan="2"
                                          Text="{Binding Settings.RcloneContentRoot, UpdateSourceTrigger=PropertyChanged}"
                                          Margin="0,5,0,12" />
                                 <WrapPanel Grid.Row="8" Grid.ColumnSpan="2">
-                                    <Button Content="Test rclone connection"
+                                    <Button Content="{DynamicResource LOCPLSSettingsTestRclone}"
                                             Click="TestRcloneConnection_Click"
                                             Margin="0,0,8,8"
                                             Padding="10,5" />
-                                    <Button Content="Test manifest load"
+                                    <Button Content="{DynamicResource LOCPLSSettingsTestManifest}"
                                             Click="TestManifestLoad_Click"
                                             Margin="0,0,8,8"
                                             Padding="10,5" />
@@ -228,19 +228,19 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Manifest">
+            <TabItem Header="{DynamicResource LOCPLSSettingsManifestTab}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="14">
-                        <TextBlock Text="Generate a version 3 manifest from a local folder, external drive, mapped drive, synced folder, or NAS root without leaving Playnite. Existing externally managed manifests are never rewritten automatically."
+                        <TextBlock Text="{DynamicResource LOCPLSSettingsManifestDescription}"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,12" />
                         <WrapPanel Margin="0,0,0,10">
-                            <Button Content="Generate manifest from folder" Click="GenerateManifestFromFolder_Click" Margin="0,0,8,8" Padding="10,5" />
-                            <Button Content="Open generated manifest" Click="OpenGeneratedManifest_Click" Margin="0,0,8,8" Padding="10,5" />
-                            <Button Content="Open generation report" Click="OpenGeneratedReport_Click" Margin="0,0,8,8" Padding="10,5" />
-                            <Button Content="Create sample manifest" Click="CreateSampleManifest_Click" Margin="0,0,8,8" Padding="10,5" />
+                            <Button Content="{DynamicResource LOCPLSSettingsGenerateManifest}" Click="GenerateManifestFromFolder_Click" Margin="0,0,8,8" Padding="10,5" />
+                            <Button Content="{DynamicResource LOCPLSSettingsOpenGeneratedManifest}" Click="OpenGeneratedManifest_Click" Margin="0,0,8,8" Padding="10,5" />
+                            <Button Content="{DynamicResource LOCPLSSettingsOpenGenerationReport}" Click="OpenGeneratedReport_Click" Margin="0,0,8,8" Padding="10,5" />
+                            <Button Content="{DynamicResource LOCPLSSettingsCreateSampleManifest}" Click="CreateSampleManifest_Click" Margin="0,0,8,8" Padding="10,5" />
                         </WrapPanel>
-                        <GroupBox Header="Last generated manifest">
+                        <GroupBox Header="{DynamicResource LOCPLSSettingsLastGenerated}">
                             <Grid Margin="12">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
@@ -252,11 +252,11 @@
                                     <RowDefinition Height="Auto" />
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
-                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Path" FontWeight="SemiBold" />
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="{DynamicResource LOCPLSSettingsPath}" FontWeight="SemiBold" />
                                 <TextBox Grid.Row="0" Grid.Column="2" Text="{Binding Settings.LastGeneratedManifestPath}" IsReadOnly="True" />
-                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Generated" FontWeight="SemiBold" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="{DynamicResource LOCPLSSettingsGenerated}" FontWeight="SemiBold" Margin="0,10,0,0" />
                                 <TextBox Grid.Row="1" Grid.Column="2" Text="{Binding Settings.LastManifestGeneratedAt}" IsReadOnly="True" Margin="0,10,0,0" />
-                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Items" FontWeight="SemiBold" Margin="0,10,0,0" />
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="{DynamicResource LOCPLSSettingsItems}" FontWeight="SemiBold" Margin="0,10,0,0" />
                                 <TextBox Grid.Row="2" Grid.Column="2" Text="{Binding Settings.LastManifestItemCount}" IsReadOnly="True" HorizontalAlignment="Left" Width="140" Margin="0,10,0,0" />
                             </Grid>
                         </GroupBox>
@@ -264,77 +264,77 @@
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Downloads &amp; Cache">
+            <TabItem Header="{DynamicResource LOCPLSSettingsDownloadsTab}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="14">
-                        <TextBlock Text="Local cache folder" FontWeight="SemiBold" />
+                        <TextBlock Text="{DynamicResource LOCPLSSettingsLocalCache}" FontWeight="SemiBold" />
                         <Grid Margin="0,5,0,14">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <TextBox Grid.Column="0" Text="{Binding Settings.LocalCacheFolder, UpdateSourceTrigger=PropertyChanged}" Margin="0,0,8,0" />
-                            <Button Grid.Column="1" Content="Browse" Width="90" Click="BrowseLocalCacheFolder_Click" />
+                            <Button Grid.Column="1" Content="{DynamicResource LOCPLSSetupBrowse}" Width="90" Click="BrowseLocalCacheFolder_Click" />
                         </Grid>
-                        <CheckBox Content="Allow Install to download or copy games into the local cache" IsChecked="{Binding Settings.AllowDownloads}" Margin="0,0,0,8" />
-                        <CheckBox Content="Mark games uninstalled when cached files are missing" IsChecked="{Binding Settings.TreatMissingFilesAsUninstalled}" Margin="0,0,0,8" />
-                        <CheckBox Content="Verify transferred files before marking a game installed" IsChecked="{Binding Settings.VerifyAfterTransfer}" Margin="0,0,0,8" />
-                        <CheckBox Content="Remove incomplete temporary files after failed or cancelled transfers" IsChecked="{Binding Settings.RemoveIncompleteTransferFiles}" Margin="0,0,0,14" />
-                        <TextBlock Text="Maximum concurrent transfers (1–4)" FontWeight="SemiBold" />
+                        <CheckBox Content="{DynamicResource LOCPLSSettingsAllowDownloads}" IsChecked="{Binding Settings.AllowDownloads}" Margin="0,0,0,8" />
+                        <CheckBox Content="{DynamicResource LOCPLSSetupMissingFiles}" IsChecked="{Binding Settings.TreatMissingFilesAsUninstalled}" Margin="0,0,0,8" />
+                        <CheckBox Content="{DynamicResource LOCPLSSettingsVerifyTransfers}" IsChecked="{Binding Settings.VerifyAfterTransfer}" Margin="0,0,0,8" />
+                        <CheckBox Content="{DynamicResource LOCPLSSettingsRemoveIncomplete}" IsChecked="{Binding Settings.RemoveIncompleteTransferFiles}" Margin="0,0,0,14" />
+                        <TextBlock Text="{DynamicResource LOCPLSSettingsConcurrency}" FontWeight="SemiBold" />
                         <TextBox Text="{Binding Settings.TransferConcurrency, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Width="120" Margin="0,5,0,14" />
-                        <TextBlock Text="Uninstall behavior" FontWeight="SemiBold" />
+                        <TextBlock Text="{DynamicResource LOCPLSSettingsUninstallBehavior}" FontWeight="SemiBold" />
                         <ComboBox ItemsSource="{Binding UninstallBehaviorOptions}" SelectedItem="{Binding Settings.UninstallBehavior, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" MinWidth="280" Margin="0,5,0,14" />
-                        <Button Content="Open cache folder" Click="OpenCacheFolder_Click" HorizontalAlignment="Left" Padding="10,5" />
+                        <Button Content="{DynamicResource LOCPLSOpenCacheFolder}" Click="OpenCacheFolder_Click" HorizontalAlignment="Left" Padding="10,5" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Notifications">
+            <TabItem Header="{DynamicResource LOCPLSSettingsNotificationsTab}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="14">
-                        <TextBlock Text="Choose which meaningful events create Playnite notifications. Transfer progress stays inside the dashboard to avoid notification spam."
+                        <TextBlock Text="{DynamicResource LOCPLSSettingsNotificationsDescription}"
                                    TextWrapping="Wrap"
                                    Margin="0,0,0,14" />
-                        <CheckBox Content="Library update results" IsChecked="{Binding Settings.NotifyLibraryUpdates}" Margin="0,0,0,9" />
-                        <CheckBox Content="Transfer completed" IsChecked="{Binding Settings.NotifyTransferCompleted}" Margin="0,0,0,9" />
-                        <CheckBox Content="Transfer failed" IsChecked="{Binding Settings.NotifyTransferFailed}" Margin="0,0,0,9" />
-                        <CheckBox Content="Source unavailable" IsChecked="{Binding Settings.NotifySourceUnavailable}" Margin="0,0,0,9" />
-                        <CheckBox Content="Verification warnings" IsChecked="{Binding Settings.NotifyVerificationWarnings}" />
+                        <CheckBox Content="{DynamicResource LOCPLSSettingsNotifyLibraryUpdates}" IsChecked="{Binding Settings.NotifyLibraryUpdates}" Margin="0,0,0,9" />
+                        <CheckBox Content="{DynamicResource LOCPLSSettingsNotifyTransferCompleted}" IsChecked="{Binding Settings.NotifyTransferCompleted}" Margin="0,0,0,9" />
+                        <CheckBox Content="{DynamicResource LOCPLSSettingsNotifyTransferFailed}" IsChecked="{Binding Settings.NotifyTransferFailed}" Margin="0,0,0,9" />
+                        <CheckBox Content="{DynamicResource LOCPLSSettingsNotifySourceUnavailable}" IsChecked="{Binding Settings.NotifySourceUnavailable}" Margin="0,0,0,9" />
+                        <CheckBox Content="{DynamicResource LOCPLSSettingsNotifyVerificationWarnings}" IsChecked="{Binding Settings.NotifyVerificationWarnings}" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Diagnostics">
+            <TabItem Header="{DynamicResource LOCPLSSettingsDiagnosticsTab}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="14">
-                        <CheckBox Content="Enable detailed import diagnostics" IsChecked="{Binding Settings.EnableDiagnostics}" Margin="0,0,0,14" />
+                        <CheckBox Content="{DynamicResource LOCPLSSettingsEnableDiagnostics}" IsChecked="{Binding Settings.EnableDiagnostics}" Margin="0,0,0,14" />
                         <WrapPanel>
-                            <Button Content="Verify setup and generate report" Click="VerifySetup_Click" Margin="0,0,8,8" Padding="10,5" />
-                            <Button Content="Open latest verification report" Click="OpenLatestVerificationReport_Click" Margin="0,0,8,8" Padding="10,5" />
-                            <Button Content="Open diagnostics folder" Click="OpenDiagnosticsFolder_Click" Margin="0,0,8,8" Padding="10,5" />
-                            <Button Content="Open reports folder" Click="OpenReportsFolder_Click" Margin="0,0,8,8" Padding="10,5" />
-                            <Button Content="Open plugin data folder" Click="OpenPluginDataFolder_Click" Margin="0,0,8,8" Padding="10,5" />
-                            <Button Content="How to update library" Click="ShowUpdateLibraryInstructions_Click" Margin="0,0,8,8" Padding="10,5" />
+                            <Button Content="{DynamicResource LOCPLSSettingsVerifySetup}" Click="VerifySetup_Click" Margin="0,0,8,8" Padding="10,5" />
+                            <Button Content="{DynamicResource LOCPLSOpenLatestReport}" Click="OpenLatestVerificationReport_Click" Margin="0,0,8,8" Padding="10,5" />
+                            <Button Content="{DynamicResource LOCPLSSettingsOpenDiagnostics}" Click="OpenDiagnosticsFolder_Click" Margin="0,0,8,8" Padding="10,5" />
+                            <Button Content="{DynamicResource LOCPLSSettingsOpenReports}" Click="OpenReportsFolder_Click" Margin="0,0,8,8" Padding="10,5" />
+                            <Button Content="{DynamicResource LOCPLSSettingsOpenPluginData}" Click="OpenPluginDataFolder_Click" Margin="0,0,8,8" Padding="10,5" />
+                            <Button Content="{DynamicResource LOCPLSUpdateLibraryHelp}" Click="ShowUpdateLibraryInstructions_Click" Margin="0,0,8,8" Padding="10,5" />
                         </WrapPanel>
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
-            <TabItem Header="Advanced">
+            <TabItem Header="{DynamicResource LOCPLSSettingsAdvancedTab}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="14">
-                        <TextBlock Text="rclone timeout in seconds (5–300)" FontWeight="SemiBold" />
+                        <TextBlock Text="{DynamicResource LOCPLSSettingsRcloneTimeout}" FontWeight="SemiBold" />
                         <TextBox Text="{Binding Settings.RcloneTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Width="120" Margin="0,5,0,16" />
-                        <GroupBox Header="Dangerous file removal option" Margin="0,0,0,14">
+                        <GroupBox Header="{DynamicResource LOCPLSSettingsDangerousRemoval}" Margin="0,0,0,14">
                             <StackPanel Margin="12">
-                                <CheckBox Content="Allow uninstall outside the managed cache folder" IsChecked="{Binding Settings.AllowUninstallOutsideCacheFolder}" Margin="0,0,0,7" />
-                                <TextBlock Text="Keep this disabled unless you fully understand the configured paths. Normal uninstall only removes plugin-managed cached copies and never removes cloud, NAS, or source-library files."
+                                <CheckBox Content="{DynamicResource LOCPLSSettingsAllowOutsideCache}" IsChecked="{Binding Settings.AllowUninstallOutsideCacheFolder}" Margin="0,0,0,7" />
+                                <TextBlock Text="{DynamicResource LOCPLSSettingsOutsideCacheWarning}"
                                            TextWrapping="Wrap" />
                             </StackPanel>
                         </GroupBox>
-                        <GroupBox Header="Legal-use boundary">
+                        <GroupBox Header="{DynamicResource LOCPLSSettingsLegalBoundary}">
                             <TextBlock Margin="12"
-                                       Text="This plugin does not provide games, ROMs, BIOS files, cracks, keys, artwork, storefront access, or download sources. It only imports and manages entries from manifests and storage locations supplied by the user."
+                                       Text="{DynamicResource LOCPLSSettingsLegalDescription}"
                                        TextWrapping="Wrap" />
                         </GroupBox>
                     </StackPanel>

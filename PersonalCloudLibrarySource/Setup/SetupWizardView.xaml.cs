@@ -71,7 +71,9 @@ namespace PersonalCloudLibrarySource
                     return;
                 }
 
-                viewModel.ReactivateReviewAfterSaveFailure("Setup was not saved. Review the values and try again.");
+                viewModel.ReactivateReviewAfterSaveFailure(PclsResources.Get(
+                    "LOCPLSSetupNotSaved",
+                    "Setup was not saved. Review the values and try again."));
             }
 
             RefreshView();
@@ -87,7 +89,11 @@ namespace PersonalCloudLibrarySource
         {
             var dialog = new OpenFileDialog
             {
-                Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*",
+                Filter = PclsResources.Format(
+                    "LOCPLSJsonFileFilter",
+                    "JSON files ({0})|{0}|All files ({1})|{1}",
+                    "*.json",
+                    "*.*"),
                 CheckFileExists = true
             };
 
@@ -105,7 +111,7 @@ namespace PersonalCloudLibrarySource
         private void BrowseLibraryRoot_Click(object sender, RoutedEventArgs e)
         {
             var selected = BrowseForFolder(
-                "Choose the local, external, or network library folder.",
+                PclsResources.Get("LOCPLSSetupChooseLibraryFolder", "Choose the local, external, or network library folder."),
                 viewModel.Draft.LocalLibraryRoot);
             if (!string.IsNullOrWhiteSpace(selected))
             {
@@ -116,7 +122,7 @@ namespace PersonalCloudLibrarySource
         private void BrowseCache_Click(object sender, RoutedEventArgs e)
         {
             var selected = BrowseForFolder(
-                "Choose the local cache folder.",
+                PclsResources.Get("LOCPLSSetupChooseCacheFolder", "Choose the local cache folder."),
                 viewModel.Draft.CachePath);
             if (!string.IsNullOrWhiteSpace(selected))
             {
@@ -128,7 +134,12 @@ namespace PersonalCloudLibrarySource
         {
             var dialog = new OpenFileDialog
             {
-                Filter = "rclone executable (rclone.exe)|rclone.exe|Executable files (*.exe)|*.exe|All files (*.*)|*.*",
+                Filter = PclsResources.Format(
+                    "LOCPLSRcloneExecutableFilter",
+                    "rclone executable ({0})|{0}|Executable files ({1})|{1}|All files ({2})|{2}",
+                    "rclone.exe",
+                    "*.exe",
+                    "*.*"),
                 CheckFileExists = true
             };
 
@@ -157,7 +168,11 @@ namespace PersonalCloudLibrarySource
             RefreshSummary();
 
             var stepNumber = Math.Min(5, (int)viewModel.CurrentStep + 1);
-            StepIndicatorText.Text = "Step " + stepNumber + " of 5 — " + GetStepTitle(viewModel.CurrentStep);
+            StepIndicatorText.Text = PclsResources.Format(
+                "LOCPLSSetupStepIndicator",
+                "Step {0} of 5 — {1}",
+                stepNumber,
+                GetStepTitle(viewModel.CurrentStep));
             ValidationBorder.Visibility = viewModel.ValidationErrors.Count > 0
                 ? Visibility.Visible
                 : Visibility.Collapsed;
@@ -207,8 +222,8 @@ namespace PersonalCloudLibrarySource
             ReviewSourceTypeText.Text = sourceType;
             ReviewSourcePathText.Text = sourcePath;
             ReviewInstallBehaviorText.Text = viewModel.Draft.AllowDownloads
-                ? "Download or copy when Install is selected"
-                : "Catalog only";
+                ? PclsResources.Get("LOCPLSSetupInstallDownloads", "Download or copy when Install is selected")
+                : PclsResources.Get("LOCPLSSetupInstallCatalogOnly", "Catalog only");
         }
 
         private string GetSourceDescription()
@@ -223,7 +238,7 @@ namespace PersonalCloudLibrarySource
                     var root = viewModel.Draft.RcloneContentRoot;
                     if (string.IsNullOrWhiteSpace(remote))
                     {
-                        return "Not configured";
+                return PclsResources.Get("LOCPLSNotConfigured", "Not configured");
                     }
                     return string.IsNullOrWhiteSpace(root) ? remote + ":" : remote + ":" + root;
                 default:
@@ -236,15 +251,15 @@ namespace PersonalCloudLibrarySource
             switch (sourceKind)
             {
                 case SetupSourceKind.LocalFolder:
-                    return "Local or external drive";
+                    return PclsResources.Get("LOCPLSSetupSourceLocal", "Local or external drive");
                 case SetupSourceKind.NetworkFolder:
-                    return "NAS or network folder";
+                    return PclsResources.Get("LOCPLSSetupSourceNetwork", "NAS or network folder");
                 case SetupSourceKind.RcloneRemote:
-                    return "Cloud storage through rclone";
+                    return PclsResources.Get("LOCPLSSourceRclone", "Cloud storage through rclone");
                 case SetupSourceKind.ExistingManifest:
-                    return "Existing manifest file";
+                    return PclsResources.Get("LOCPLSSourceExistingManifest", "Existing manifest file");
                 default:
-                    return "Not selected";
+                    return PclsResources.Get("LOCPLSNotSelected", "Not selected");
             }
         }
 
@@ -253,23 +268,25 @@ namespace PersonalCloudLibrarySource
             switch (step)
             {
                 case SetupWizardStep.ConfigureSource:
-                    return "Configure source";
+                    return PclsResources.Get("LOCPLSSetupStepConfigure", "Configure source");
                 case SetupWizardStep.ScanPreview:
-                    return "Review source";
+                    return PclsResources.Get("LOCPLSSetupStepReviewSource", "Review source");
                 case SetupWizardStep.CacheBehavior:
-                    return "Cache behavior";
+                    return PclsResources.Get("LOCPLSSetupStepCache", "Cache behavior");
                 case SetupWizardStep.Review:
-                    return "Final review";
+                    return PclsResources.Get("LOCPLSSetupStepFinalReview", "Final review");
                 case SetupWizardStep.Completed:
-                    return "Completed";
+                    return PclsResources.Get("LOCPLSSetupStepCompleted", "Completed");
                 default:
-                    return "Choose source";
+                    return PclsResources.Get("LOCPLSSetupStepChoose", "Choose source");
             }
         }
 
         private static string EmptyFallback(string value)
         {
-            return string.IsNullOrWhiteSpace(value) ? "Not configured" : value;
+            return string.IsNullOrWhiteSpace(value)
+                ? PclsResources.Get("LOCPLSNotConfigured", "Not configured")
+                : value;
         }
 
         private static string BrowseForFolder(string description, string selectedPath)

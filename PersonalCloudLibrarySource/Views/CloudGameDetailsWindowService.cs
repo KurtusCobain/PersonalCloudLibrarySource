@@ -27,7 +27,10 @@ namespace PersonalCloudLibrarySource
                     ShowMinimizeButton = false,
                     ShowMaximizeButton = true
                 });
-                window.Title = viewModel.Title + " — Personal Cloud Library";
+                window.Title = PclsResources.Format(
+                    "LOCPLSGameDetailsWindowTitle",
+                    "{0} — Personal Cloud Library",
+                    viewModel.Title);
                 window.Content = new CloudGameDetailsView
                 {
                     DataContext = viewModel

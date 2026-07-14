@@ -64,7 +64,7 @@ namespace PersonalCloudLibrarySource
         }
 
         public CloudLibraryDashboardState State => stateStore.Current;
-        public string StatusText => State?.StatusText ?? "Needs setup";
+        public string StatusText => State?.StatusText ?? PclsResources.Get("LOCPLSStatusNeedsSetup", "Needs setup");
         public string SourceTypeDisplayName => State?.SourceTypeDisplayName ?? FriendlySourceNameProvider.GetDisplayName(null);
         public string SourceDescription => EmptyFallback(State?.SourceDescription);
         public string ManifestDescription => EmptyFallback(State?.ManifestDescription);
@@ -126,7 +126,9 @@ namespace PersonalCloudLibrarySource
 
         private static string EmptyFallback(string value)
         {
-            return string.IsNullOrWhiteSpace(value) ? "Not configured" : value;
+            return string.IsNullOrWhiteSpace(value)
+                ? PclsResources.Get("LOCPLSNotConfigured", "Not configured")
+                : value;
         }
 
         private void StateStore_PropertyChanged(object sender, PropertyChangedEventArgs e)

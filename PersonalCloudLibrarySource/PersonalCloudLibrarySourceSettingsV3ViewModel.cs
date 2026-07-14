@@ -101,24 +101,24 @@ namespace PersonalCloudLibrarySource
 
                 var passed = report.ConfigurationErrorsCount == 0 && report.ManifestLoadSucceeded;
                 SetupStatusHeadline = passed
-                    ? "Setup verification completed."
-                    : "Setup verification found issues.";
+                    ? PclsResources.Get("LOCPLSVerificationCompleted", "Setup verification completed.")
+                    : PclsResources.Get("LOCPLSVerificationIssues", "Setup verification found issues.");
                 SetupStatusDetails = report.ManifestLoadSucceeded
-                    ? report.TotalManifestItems + " manifest items were checked."
-                    : "Manifest load failed: " + report.ManifestLoadError;
+                    ? PclsResources.Format("LOCPLSVerificationItemsChecked", "{0} manifest items were checked.", report.TotalManifestItems)
+                    : PclsResources.Format("LOCPLSManifestLoadFailed", "Manifest load failed: {0}", report.ManifestLoadError);
 
                 MessageBox.Show(
                     VerificationMessageBuilder.Build(report),
-                    "Personal Cloud Library Source");
+                    PclsResources.Get("LOCPLSSettingsTitle", "Personal Cloud Library Source"));
             }
             catch (Exception ex)
             {
                 VerificationDashboardStateService.LatestReport = null;
-                SetupStatusHeadline = "Setup verification failed.";
+                SetupStatusHeadline = PclsResources.Get("LOCPLSVerificationFailed", "Setup verification failed.");
                 SetupStatusDetails = ex.Message;
                 MessageBox.Show(
-                    "Setup verification failed: " + ex.Message,
-                    "Personal Cloud Library Source");
+                    PclsResources.Format("LOCPLSVerificationFailedReason", "Setup verification failed: {0}", ex.Message),
+                    PclsResources.Get("LOCPLSSettingsTitle", "Personal Cloud Library Source"));
             }
         }
     }

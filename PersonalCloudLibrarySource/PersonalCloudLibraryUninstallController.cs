@@ -27,7 +27,7 @@ namespace PersonalCloudLibrarySource
             this.settings = settings;
             this.workflowNotifications = workflowNotifications ?? CreateNotifications(playniteApi);
             this.deletionExecutor = deletionExecutor ?? new SafeCacheDeletionExecutor();
-            Name = "Remove cached copy";
+            Name = PclsResources.Get("LOCPLSUninstallControllerName", "Remove cached copy");
         }
 
         public override void Uninstall(UninstallActionArgs args)
@@ -44,7 +44,9 @@ namespace PersonalCloudLibrarySource
                     workflowNotifications.Failure(
                         "uninstall",
                         Game.GameId,
-                        "Remove cached copy needs a deterministic uninstall behavior. Open plugin settings in Desktop mode, choose file-only or install-folder removal, then try again.");
+                        PclsResources.Get(
+                            "LOCPLSUninstallBehaviorRequired",
+                            "Remove cached copy needs a deterministic uninstall behavior. Open plugin settings in Desktop mode, choose file-only or install-folder removal, then try again."));
                     return;
                 }
             }
@@ -60,11 +62,13 @@ namespace PersonalCloudLibrarySource
             if (!string.IsNullOrWhiteSpace(refusalReason))
             {
                 logger.Warn($"Personal Cloud Library Source refused uninstall for {Game.GameId}: {refusalReason}");
-                workflowNotifications.Failure("uninstall", Game.GameId,
-                    "Remove cached copy was refused." + Environment.NewLine + Environment.NewLine +
-                    "Item: " + item.Title + Environment.NewLine +
-                    "Reason: " + refusalReason + Environment.NewLine + Environment.NewLine +
-                    "Next: review LocalCacheFolder and uninstall safety settings.");
+                workflowNotifications.Failure("uninstall", Game.GameId, PclsResources.Format(
+                    "LOCPLSUninstallRefusedNotification",
+                    "Remove cached copy was refused.{0}{0}Item: {1}{0}Reason: {2}{0}{0}Next: review {3} and uninstall safety settings.",
+                    Environment.NewLine,
+                    item.Title,
+                    refusalReason,
+                    nameof(PersonalCloudLibrarySourceSettings.LocalCacheFolder)));
                 return;
             }
 
@@ -77,10 +81,12 @@ namespace PersonalCloudLibrarySource
                 if (!deletion.Allowed)
                 {
                     logger.Info($"Personal Cloud Library Source uninstall skipped for {Game.GameId}: {deletion.Reason}.");
-                    workflowNotifications.Warning("uninstall", Game.GameId,
-                        "Remove cached copy was skipped." + Environment.NewLine + Environment.NewLine +
-                        "Item: " + item.Title + Environment.NewLine +
-                        "Reason: " + deletion.Reason);
+                    workflowNotifications.Warning("uninstall", Game.GameId, PclsResources.Format(
+                        "LOCPLSUninstallSkippedNotification",
+                        "Remove cached copy was skipped.{0}{0}Item: {1}{0}Reason: {2}",
+                        Environment.NewLine,
+                        item.Title,
+                        deletion.Reason));
                     return;
                 }
 
@@ -95,20 +101,24 @@ namespace PersonalCloudLibrarySource
                     InvokeOnUninstalled();
                 }
                 logger.Info($"Personal Cloud Library Source uninstall succeeded for {Game.GameId}: deleted {targetPath}.");
-                workflowNotifications.Success("uninstall", Game.GameId,
-                    "Remove cached copy completed." + Environment.NewLine + Environment.NewLine +
-                    "Item: " + item.Title + Environment.NewLine +
-                    "Result: the requested cached target was removed safely." + Environment.NewLine +
-                    "Cached state: " + (postDeletionState.IsCached ? "other cached content remains." : "no cached content remains.") + Environment.NewLine + Environment.NewLine +
-                    "Next: run Update Game Library if you want Playnite to refresh the installed state immediately.");
+                workflowNotifications.Success("uninstall", Game.GameId, PclsResources.Format(
+                    "LOCPLSUninstallCompletedNotification",
+                    "Remove cached copy completed.{0}{0}Item: {1}{0}Result: the requested cached target was removed safely.{0}Cached state: {2}{0}{0}Next: run Update Game Library if you want Playnite to refresh the installed state immediately.",
+                    Environment.NewLine,
+                    item.Title,
+                    postDeletionState.IsCached
+                        ? PclsResources.Get("LOCPLSUninstallOtherContentRemains", "other cached content remains.")
+                        : PclsResources.Get("LOCPLSUninstallNoContentRemains", "no cached content remains.")));
             }
             catch (Exception ex)
             {
                 logger.Error(ex, $"Personal Cloud Library Source uninstall failed for {Game.GameId}: targetPath={targetPath}");
-                workflowNotifications.Failure("uninstall", Game.GameId,
-                    "Remove cached copy failed." + Environment.NewLine + Environment.NewLine +
-                    "Item: " + item.Title + Environment.NewLine +
-                    "Reason: " + ex.Message);
+                workflowNotifications.Failure("uninstall", Game.GameId, PclsResources.Format(
+                    "LOCPLSUninstallFailedNotification",
+                    "Remove cached copy failed.{0}{0}Item: {1}{0}Reason: {2}",
+                    Environment.NewLine,
+                    item.Title,
+                    ex.Message));
             }
         }
 

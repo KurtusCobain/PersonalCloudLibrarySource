@@ -21,11 +21,11 @@ namespace PersonalCloudLibrarySource
             }
 
             var item = target.Item;
-            Title = item?.Title ?? target.Game?.Name ?? "Unknown game";
+            Title = item?.Title ?? target.Game?.Name ?? PclsResources.Get("LOCPLSGameUnknown", "Unknown game");
             Platform = EmptyFallback(item?.Platform);
             InstallationState = target.PolicyContext?.HasCachedPath == true || target.Game?.IsInstalled == true
-                ? "Cached locally"
-                : "Available from source";
+                ? PclsResources.Get("LOCPLSGameCachedLocally", "Cached locally")
+                : PclsResources.Get("LOCPLSGameAvailableFromSource", "Available from source");
             SourceType = EmptyFallback(item?.SourceType);
             SourcePath = EmptyFallback(target.SourceDisplayPath);
             CachePath = EmptyFallback(target.CacheDisplayPath);
@@ -64,7 +64,9 @@ namespace PersonalCloudLibrarySource
 
         private static string EmptyFallback(string value)
         {
-            return string.IsNullOrWhiteSpace(value) ? "Not available" : value;
+            return string.IsNullOrWhiteSpace(value)
+                ? PclsResources.Get("LOCPLSNotAvailable", "Not available")
+                : value;
         }
     }
 }

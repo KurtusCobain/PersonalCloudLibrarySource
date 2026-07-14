@@ -69,6 +69,7 @@
     <Compile Include="Dashboard\LibraryStatusService.cs" />
     <Compile Include="Dashboard\VerificationDashboardStateService.cs" />
     <Compile Include="LibraryVerificationReport.cs" />
+    <Compile Include="Localization\PclsResources.cs" />
     <Compile Include="LibraryVerificationService.cs" />
     <Compile Include="LocalFileCopier.cs" />
     <Compile Include="ManifestGenerationOptions.cs" />

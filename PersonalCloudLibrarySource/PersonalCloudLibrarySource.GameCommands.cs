@@ -133,7 +133,7 @@ namespace PersonalCloudLibrarySource
                     section,
                     "LOCPLSGameCopySourcePath",
                     "Copy Source Path",
-                    () => CopyText(target.SourceDisplayPath, "Source path copied.")));
+                    () => CopyText(target.SourceDisplayPath, PclsResources.Get("LOCPLSSourcePathCopied", "Source path copied."))));
             }
 
             if (availability.CanCopyCachePath)
@@ -142,7 +142,7 @@ namespace PersonalCloudLibrarySource
                     section,
                     "LOCPLSGameCopyCachePath",
                     "Copy Local Cache Path",
-                    () => CopyText(target.CacheDisplayPath, "Cache path copied.")));
+                    () => CopyText(target.CacheDisplayPath, PclsResources.Get("LOCPLSCachePathCopied", "Cache path copied."))));
             }
 
             if (availability.CanRemoveSelectedCachedCopies)
@@ -193,7 +193,7 @@ namespace PersonalCloudLibrarySource
                     "Copy Source Paths",
                     () => CopyText(
                         string.Join(Environment.NewLine, targets.Select(target => target.SourceDisplayPath)),
-                        "Source paths copied.")));
+                        PclsResources.Get("LOCPLSSourcePathsCopied", "Source paths copied."))));
             }
 
             if (availability.CanRemoveSelectedCachedCopies)
@@ -277,8 +277,8 @@ namespace PersonalCloudLibrarySource
                 () => OpenCachedLocation(target),
                 () => OpenGameSourceLocation(target),
                 () => VerifyGameTarget(target),
-                () => CopyText(target.SourceDisplayPath, "Source path copied."),
-                () => CopyText(target.CacheDisplayPath, "Cache path copied.")));
+                () => CopyText(target.SourceDisplayPath, PclsResources.Get("LOCPLSSourcePathCopied", "Source path copied.")),
+                () => CopyText(target.CacheDisplayPath, PclsResources.Get("LOCPLSCachePathCopied", "Cache path copied."))));
         }
 
         private void OpenCachedLocation(GameCommandTarget target)
@@ -297,7 +297,7 @@ namespace PersonalCloudLibrarySource
             }
 
             playniteApi.Dialogs.ShowMessage(
-                "The cached file or folder is missing.",
+                PclsResources.Get("LOCPLSCachedPathMissing", "The cached file or folder is missing."),
                 GetDashboardResource("LOCPLSDashboardTitle", "Personal Cloud Library"));
         }
 
@@ -317,7 +317,7 @@ namespace PersonalCloudLibrarySource
             }
 
             playniteApi.Dialogs.ShowMessage(
-                "The source file or folder is unavailable. Cloud source paths can still be copied from the details view.",
+                PclsResources.Get("LOCPLSGameSourceUnavailable", "The source file or folder is unavailable. Cloud source paths can still be copied from the details view."),
                 GetDashboardResource("LOCPLSDashboardTitle", "Personal Cloud Library"));
         }
 
@@ -334,45 +334,52 @@ namespace PersonalCloudLibrarySource
 
             foreach (var target in targets)
             {
-                var title = target.Item?.Title ?? target.Game?.Name ?? "Unknown game";
+                var title = target.Item?.Title ?? target.Game?.Name ?? PclsResources.Get("LOCPLSGameUnknown", "Unknown game");
                 var warnings = new List<string>();
                 if (target.Item == null)
                 {
-                    warnings.Add("manifest entry missing");
+                    warnings.Add(PclsResources.Get("LOCPLSVerifyManifestMissing", "manifest entry missing"));
                 }
                 else
                 {
                     if (string.IsNullOrWhiteSpace(target.SourceDisplayPath))
                     {
-                        warnings.Add("source path missing");
+                        warnings.Add(PclsResources.Get("LOCPLSVerifySourcePathMissing", "source path missing"));
                     }
 
                     if (target.PolicyContext.HasCachedPath && !target.PolicyContext.CanRemoveCachedCopy)
                     {
                         warnings.Add(string.IsNullOrWhiteSpace(target.UninstallRefusalReason)
-                            ? "cached path is not safely removable"
+                            ? PclsResources.Get("LOCPLSVerifyCacheUnsafe", "cached path is not safely removable")
                             : target.UninstallRefusalReason);
                     }
                 }
 
                 warningCount += warnings.Count;
                 lines.Add(warnings.Count == 0
-                    ? title + ": ready"
+                    ? title + PclsResources.Get("LOCPLSVerifyReadySuffix", ": ready")
                     : title + ": " + string.Join(", ", warnings));
             }
 
             playniteApi.Dialogs.ShowMessage(
-                "Entries checked: " + targets.Count + Environment.NewLine +
-                "Warnings: " + warningCount + Environment.NewLine + Environment.NewLine +
-                string.Join(Environment.NewLine, lines),
+                PclsResources.Format(
+                    "LOCPLSVerifyEntriesResult",
+                    "Entries checked: {0}{2}Warnings: {1}{2}{2}{3}",
+                    targets.Count,
+                    warningCount,
+                    Environment.NewLine,
+                    string.Join(Environment.NewLine, lines)),
                 GetDashboardResource("LOCPLSGameVerifyEntry", "Verify Cloud Library Entry"));
         }
 
         private void RemoveSelectedCachedCopies(IReadOnlyList<GameCommandTarget> targets)
         {
             var result = playniteApi.Dialogs.ShowMessage(
-                "Remove the managed cached copies for " + targets.Count + " selected games?" + Environment.NewLine +
-                "Source files and manifest entries will not be removed.",
+                PclsResources.Format(
+                    "LOCPLSRemoveSelectedConfirmation",
+                    "Remove the managed cached copies for {0} selected games?{1}Source files and manifest entries will not be removed.",
+                    targets.Count,
+                    Environment.NewLine),
                 GetDashboardResource("LOCPLSGameRemoveSelectedCachedCopies", "Remove Selected Cached Copies"),
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
@@ -407,7 +414,7 @@ namespace PersonalCloudLibrarySource
             {
                 logger.Error(ex, "Personal Cloud Library Source could not copy a path to the clipboard.");
                 playniteApi.Dialogs.ShowErrorMessage(
-                    "The path could not be copied: " + ex.Message,
+                    PclsResources.Format("LOCPLSCopyPathFailed", "The path could not be copied: {0}", ex.Message),
                     GetDashboardResource("LOCPLSDashboardTitle", "Personal Cloud Library"));
             }
         }

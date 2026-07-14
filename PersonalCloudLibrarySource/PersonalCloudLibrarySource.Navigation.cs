@@ -394,7 +394,7 @@ namespace PersonalCloudLibrarySource
             UpdateNavigationItemState();
             dashboardWindowService.OpenDashboard();
             playniteApi.Dialogs.ShowMessage(
-                "Setup was saved successfully. Run Update Game Library in Playnite to import or refresh the catalog.",
+                PclsResources.Get("LOCPLSSetupSaved", "Setup was saved successfully. Run Update Game Library in Playnite to import or refresh the catalog."),
                 GetDashboardResource("LOCPLSSetupWizardTitle", "Personal Cloud Library Setup"));
         }
 
@@ -422,14 +422,14 @@ namespace PersonalCloudLibrarySource
             }
 
             playniteApi.Dialogs.ShowMessage(
-                "This cloud source is accessed through rclone. Open the dashboard or plugin settings to review the configured remote and content root.",
+                PclsResources.Get("LOCPLSRcloneSourceInstructions", "This cloud source is accessed through rclone. Open the dashboard or plugin settings to review the configured remote and content root."),
                 GetDashboardResource("LOCPLSDashboardTitle", "Personal Cloud Library"));
         }
 
         private void ShowSourceUnavailableMessage()
         {
             playniteApi.Dialogs.ShowMessage(
-                "The configured source location is missing or unavailable.",
+                PclsResources.Get("LOCPLSConfiguredSourceUnavailable", "The configured source location is missing or unavailable."),
                 GetDashboardResource("LOCPLSDashboardTitle", "Personal Cloud Library"));
         }
 

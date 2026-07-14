@@ -102,19 +102,19 @@ namespace PersonalCloudLibrarySource
             switch (status)
             {
                 case DashboardStatusKind.NeedsSetup:
-                    return "Needs setup";
+                    return PclsResources.Get("LOCPLSStatusNeedsSetup", "Needs setup");
                 case DashboardStatusKind.SourceUnavailable:
-                    return "Source unavailable";
+                    return PclsResources.Get("LOCPLSStatusSourceUnavailable", "Source unavailable");
                 case DashboardStatusKind.VerificationWarnings:
-                    return "Verification warnings";
+                    return PclsResources.Get("LOCPLSStatusVerificationWarnings", "Verification warnings");
                 case DashboardStatusKind.Updating:
-                    return "Updating";
+                    return PclsResources.Get("LOCPLSStatusUpdating", "Updating");
                 case DashboardStatusKind.Downloading:
-                    return "Downloading";
+                    return PclsResources.Get("LOCPLSStatusDownloading", "Downloading");
                 case DashboardStatusKind.TransferFailed:
-                    return "Transfer failed";
+                    return PclsResources.Get("LOCPLSStatusTransferFailed", "Transfer failed");
                 default:
-                    return "Ready";
+                    return PclsResources.Get("LOCPLSStatusReady", "Ready");
             }
         }
     }

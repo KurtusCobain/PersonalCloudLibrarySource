@@ -39,7 +39,7 @@ namespace PersonalCloudLibrarySource
         private static DashboardActivityRecord CreateRecord(CloudTransferJob job)
         {
             var displayName = string.IsNullOrWhiteSpace(job.DisplayName)
-                ? "Unnamed game"
+                ? PclsResources.Get("LOCPLSActivityUnnamedGame", "Unnamed game")
                 : job.DisplayName.Trim();
             var timestamp = job.CompletedAt ?? DateTime.UtcNow;
 
@@ -49,7 +49,7 @@ namespace PersonalCloudLibrarySource
                     return new DashboardActivityRecord
                     {
                         Kind = DashboardActivityKind.TransferCompleted,
-                        Message = displayName + " is ready to play.",
+                        Message = PclsResources.Format("LOCPLSActivityReady", "{0} is ready to play.", displayName),
                         TimestampUtc = timestamp,
                         GameId = job.GameId
                     };
@@ -58,10 +58,13 @@ namespace PersonalCloudLibrarySource
                     return new DashboardActivityRecord
                     {
                         Kind = DashboardActivityKind.TransferFailed,
-                        Message = displayName + " failed: " +
-                                  (string.IsNullOrWhiteSpace(job.ErrorSummary)
-                                      ? "Transfer failed."
-                                      : job.ErrorSummary.Trim()),
+                        Message = PclsResources.Format(
+                            "LOCPLSActivityFailed",
+                            "{0} failed: {1}",
+                            displayName,
+                            string.IsNullOrWhiteSpace(job.ErrorSummary)
+                                ? PclsResources.Get("LOCPLSActivityTransferFailed", "Transfer failed.")
+                                : job.ErrorSummary.Trim()),
                         TimestampUtc = timestamp,
                         GameId = job.GameId
                     };
@@ -70,7 +73,7 @@ namespace PersonalCloudLibrarySource
                     return new DashboardActivityRecord
                     {
                         Kind = DashboardActivityKind.TransferCancelled,
-                        Message = displayName + " transfer was cancelled.",
+                        Message = PclsResources.Format("LOCPLSActivityCancelled", "{0} transfer was cancelled.", displayName),
                         TimestampUtc = timestamp,
                         GameId = job.GameId
                     };
