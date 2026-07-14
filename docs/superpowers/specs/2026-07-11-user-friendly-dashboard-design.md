@@ -1,5 +1,7 @@
 # Personal Cloud Library Source — User-Friendly Dashboard Design
 
+> **Historical status:** This 2026-07-11 design preserves its original 0.3.0 target and feature assumptions. It is a historical design record, not current release guidance; use the repository README and current release checklist for live status.
+
 **Status:** Ready for user review  
 **Target release:** 0.3.0  
 **Development branch:** `feature/user-friendly-dashboard`  

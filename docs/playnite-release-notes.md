@@ -1,28 +1,16 @@
-# Playnite Release Notes
+# Release notes preparation
 
-Manifest generation update completed 6/2/2026
+The live extension version is 0.3.2. The following work is present on the 1.0 preparation branch but is not a 1.0 release declaration:
 
-## 0.2.0
+- guided Desktop setup and provider-specific validation
+- sequential settings migration and edit-session safety
+- centralized manifest loading, parsing, path resolution, state mapping, and import outcomes
+- queue-owned local and rclone transfers with cancellation, retry, progress, shutdown, partial-file, and verification contracts
+- guarded cache removal that rejects unsafe targets
+- Desktop dashboard queue and recent-activity presentation
+- localized current settings and workflow feedback
+- reports and diagnostics beneath plugin user data
 
-Personal Cloud Library Source imports a user-supplied JSON manifest into Playnite as a normal library source.
+Before final release notes are published, the release checklist must record installed Desktop, Fullscreen, provider, upgrade, and package qualification. No row should be described as passing before that evidence exists.
 
-This release packages the guided setup, universal manifest generation, verification reports, and settings theme polish updates for the Playnite add-on browser.
-
-Highlights:
-
-- LocalFile, LocalFolder, and RcloneRemote provider modes.
-- Universal manifest generation with `tools/generate-manifest.ps1`.
-- Generic rclone support for cloud providers.
-- Local folder, external drive, mounted drive, and NAS support.
-- Cloud-only entries appear as uninstalled.
-- Cached entries launch through Playnite.
-- Manual `Download to local cache` action for supported missing entries.
-- Optional import diagnostics.
-- Verification report output for setup and troubleshooting.
-- Dark-theme readability fixes for the settings status card.
-
-Limitations:
-
-- No automatic download before launch.
-- No native cloud provider APIs.
-- No bundled content.
+Historical release details remain in [the changelog](../CHANGELOG.md).

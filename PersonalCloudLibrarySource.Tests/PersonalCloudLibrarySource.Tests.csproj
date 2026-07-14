@@ -59,6 +59,7 @@
     <Compile Include="Repository\ProjectSourceInclusionTests.cs" />
     <Compile Include="Repository\DeadCodeContractTests.cs" />
     <Compile Include="Repository\ImportFailureWiringContractTests.cs" />
+    <Compile Include="Repository\LiveDocumentationContractTests.cs" />
     <Compile Include="Repository\FullscreenWorkflowContractTests.cs" />
     <Compile Include="Repository\PathStateConsumerContractTests.cs" />
     <Compile Include="Repository\RuntimeSettingsSnapshotUsageTests.cs" />

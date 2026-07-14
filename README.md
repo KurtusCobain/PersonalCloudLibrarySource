@@ -1,155 +1,78 @@
 # Personal Cloud Library Source
 
-Personal Cloud Library Source is a Playnite `GameLibrary` plugin for importing a user-supplied personal cloud, NAS, external-drive, or local library catalog into Playnite.
+Personal Cloud Library Source (PCLS) is a Playnite `GameLibrary` plugin that imports a user-supplied manifest for a personal cloud, NAS, external-drive, or local library. It catalogs content; it does not provide or stream games.
 
-It supports:
+## Current status
 
-- `LocalFile`
-- `LocalFolder`
-- `RcloneRemote`
+The live development version is `0.3.2`. The branch is being prepared for 1.0 qualification, but it is not a 1.0 release. Installed-provider, Fullscreen, and upgrade qualification remain release gates; see [Known limits](docs/known-limits.md).
 
-Manifest generation update completed 6/2/2026
+## Supported providers
 
-## What It Does
+- `LocalFile`: reads a JSON manifest from a local path. Content sources may be absolute or relative to the manifest folder.
+- `LocalFolder`: reads a manifest beneath a library root and copies selected files or directories into the local cache.
+- `RcloneRemote`: reads and downloads through a user-configured rclone remote.
 
-- Imports manifest entries into Playnite as a normal library source.
-- Preserves stable game IDs from the manifest.
-- Represents cached local files as installed and playable.
-- Represents missing-local or cloud-only entries safely as uninstalled.
-- Supports manual `Download to local cache` actions for eligible items.
-- Supports safe `Remove cached copy` uninstall actions for cache-owned paths.
-- Generates a v3 manifest from a local folder, external drive, mapped drive, or NAS path from inside Playnite settings.
-- Generates a public-safe verification report for manifest, cache, and path-resolution troubleshooting.
+Local folders can point at fixed disks, external drives, mapped drives, UNC/NAS paths, or synced cloud folders. Availability, credentials, and stable drive mappings remain the user's responsibility.
 
-## What It Does Not Do
+## Setup
 
-This does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, storefront access, or download sources.
+Open **Add-ons -> Extension settings -> Libraries -> Personal Cloud Library Source** in Playnite Desktop, or use the Desktop setup wizard.
 
-It does not auto-download an entire cloud library on startup.
+For local or NAS content:
 
-It does not delete source files or cloud files.
+1. Select `LocalFile` or `LocalFolder`.
+2. Choose the manifest file or library root and relative manifest path.
+3. Choose a local cache folder.
+4. Run **Verify setup**, save settings, and run **Update Game Library**.
 
-## Current Release Status
+For `RcloneRemote`:
 
-The current release target is `0.2.0`.
+1. Install rclone separately and run `rclone config`.
+2. Confirm the remote with `rclone listremotes` and test the manifest with `rclone cat remote:path/to/manifest.json`.
+3. Enter the executable path, remote name, manifest path, optional content root, and timeout in PCLS.
+4. Run **Test rclone connection** and **Verify setup**, save settings, and update the library.
 
-This repository now includes the packaged v0.2 guided-setup, manifest-generation, verification-reporting, and settings-theme polish release. See:
+The default configured rclone timeout is 90 seconds, with accepted values from 5 to 300 seconds. Manifest `rclone cat` reads and the settings `rclone listremotes` test use it as a total process deadline. Queued downloads instead require first output or error activity within at most 30 seconds, then apply the configured timeout between later activity; an active transfer may therefore run longer than 90 seconds.
 
-- [CHANGELOG.md](CHANGELOG.md)
-- [docs/playnite-release-notes.md](docs/playnite-release-notes.md)
+Detailed guides:
 
-## Normal User Setup
+- [Setup wizard](docs/setup-wizard.md)
+- [Local folder, external drive, and NAS setup](docs/setup-local-folder.md)
+- [Rclone setup](docs/setup-rclone.md)
+- [Manifest format](docs/manifest-format.md)
+- [Automatic manifest generation](docs/automatic-manifest-generation.md)
 
-For a local folder, external drive, mapped drive, or NAS path:
+## Game and cache behavior
 
-1. Open Playnite.
-2. Open **Add-ons -> Extension settings -> Libraries -> Personal Cloud Library Source**.
-3. Choose `LocalFolder`.
-4. Browse to your library root.
-5. Click **Generate manifest from folder**.
-6. Review the summary and save settings.
-7. Run **Update Game Library** in Playnite.
+Manifest entries import as normal Playnite games with stable IDs. A valid cached launch path is shown as installed and playable; a missing cache path can remain visible as uninstalled. Eligible entries can be copied or downloaded to the cache. Transfers are queued, can be cancelled or retried, and verify destination existence/size before completion.
 
-For a cloud provider through rclone:
+Cache deletion is deliberately narrow. Uninstall removes only an authorized cached file or install folder. It refuses filesystem roots, the cache root itself, paths outside the configured cache by default, and unsafe reparse-point paths. It never deletes the manifest, local source library, or rclone remote content.
 
-1. Configure your remote with `rclone config`.
-2. Choose `RcloneRemote`.
-3. Fill in the rclone executable path, remote name, manifest path, and optional content root.
-4. Use **Verify setup** or **Test rclone connection**.
-5. Run **Update Game Library** in Playnite.
+## Desktop and Fullscreen
 
-## Guided Manifest Generation
+Desktop owns setup, settings, manifest generation, verification reports, the dashboard, and custom details views. Fullscreen does not have a dedicated setup wizard or dashboard.
 
-The v0.2 setup flow adds local manifest generation directly inside Playnite settings.
+Imported game metadata and standard Playnite play/install/uninstall controllers do not depend on Desktop-only windows. Notifications provide workflow feedback outside those windows. Automated contracts cover this boundary, but the installed Fullscreen matrix has not yet been manually qualified.
 
-The generated manifest is written to the plugin user data path, not the extension install folder.
+## Upgrades
 
-Verification reports and diagnostics are also written under the plugin user data path.
+Settings migration is sequential and preserves configured values while applying safer defaults. In particular, the former default 30-second rclone timeout migrates to 90 seconds, while custom timeout values remain unchanged. Back up Playnite data before upgrading and verify provider/cache paths afterward. See [Upgrades](docs/upgrades.md).
 
-Use this for:
+## Troubleshooting, diagnostics, and reports
 
-- local folders
-- external drives
-- mapped drives
-- NAS paths
-- synced local cloud folders
+Start with **Verify setup** and review the latest verification report. Import diagnostics, when enabled, and generated reports are written beneath the plugin user-data directory, never the extension install directory. Reports use summaries and capped samples rather than dumping a complete private manifest.
 
-See:
+- [Troubleshooting](docs/troubleshooting.md)
+- [Reports and diagnostics](docs/reports-and-diagnostics.md)
 
-- [docs/setup-wizard.md](docs/setup-wizard.md)
-- [docs/automatic-manifest-generation.md](docs/automatic-manifest-generation.md)
-- [docs/reports-and-diagnostics.md](docs/reports-and-diagnostics.md)
-- [docs/setup-local-folder.md](docs/setup-local-folder.md)
+## Legal-use boundary
 
-## Advanced or Manual Manifest Generation
+PCLS does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, storefront access, scraping, or download sources. Users must only index and copy content they own or have rights to use and must configure their own storage providers. See [Legal use](docs/legal-use.md).
 
-Advanced users can still generate manifests outside Playnite:
+## Known limits
 
-- `tools/generate-manifest.ps1`
-- `tools/generate-rclone-manifest.ps1`
+PCLS is a catalog-and-cache workflow, not streaming. It does not auto-download a whole library at startup. Dedicated Fullscreen management UI is out of scope. Removable/mapped/NAS availability and real-provider behavior depend on the environment and still require installed qualification. See the complete [Known limits](docs/known-limits.md).
 
-These tools are useful for scripted workflows or advanced rclone scanning.
+## Development and packaging
 
-See:
-
-- [docs/manifest-format.md](docs/manifest-format.md)
-- [docs/setup-rclone.md](docs/setup-rclone.md)
-
-## Cache and Download Behavior
-
-- `sourceType = file` items download with `rclone copyto` in `RcloneRemote` mode.
-- `sourceType = directory` items download with `rclone copy` in `RcloneRemote` mode.
-- Local-folder copies use local filesystem copy helpers.
-- The plugin only reports a `Play` action when the expected local cached launch path exists.
-- Cloud-only or missing-local items remain visible as uninstalled when `TreatMissingFilesAsUninstalled` is enabled.
-
-Planned v0.3 notes:
-
-- [docs/auto-cache-before-launch.md](docs/auto-cache-before-launch.md)
-
-## Legal and Use Boundaries
-
-Users are responsible for only indexing files they own or have rights to use.
-
-Cloud providers and rclone remotes are configured by the user.
-
-See:
-
-- [docs/legal-use.md](docs/legal-use.md)
-
-## Troubleshooting
-
-See:
-
-- [docs/reports-and-diagnostics.md](docs/reports-and-diagnostics.md)
-- [docs/troubleshooting.md](docs/troubleshooting.md)
-
-## Documentation Index
-
-- [docs/setup-wizard.md](docs/setup-wizard.md)
-- [docs/automatic-manifest-generation.md](docs/automatic-manifest-generation.md)
-- [docs/setup-local-folder.md](docs/setup-local-folder.md)
-- [docs/setup-rclone.md](docs/setup-rclone.md)
-- [docs/manifest-format.md](docs/manifest-format.md)
-- [docs/reports-and-diagnostics.md](docs/reports-and-diagnostics.md)
-- [docs/legal-use.md](docs/legal-use.md)
-- [docs/troubleshooting.md](docs/troubleshooting.md)
-
-## Development and Packaging
-
-See:
-
-- [DEVELOPMENT.md](DEVELOPMENT.md)
-- [CONTRIBUTING.md](CONTRIBUTING.md)
-- [SECURITY.md](SECURITY.md)
-
-The repo includes:
-
-- `PersonalCloudLibrarySource/extension.yaml`
-- `playnite-addon/addon-database.yaml`
-- `playnite-addon/installer.yaml`
-- `tools/package-extension.ps1`
-
-`AddonId` remains:
-
-`PersonalCloudLibrarySource_61993828-67a8-4468-93a2-293442e36328`
+See [Development](DEVELOPMENT.md), [Contributing](CONTRIBUTING.md), and [Security](SECURITY.md). Distribution metadata lives in `PersonalCloudLibrarySource/extension.yaml` and `playnite-addon/`; the stable `AddonId` is `PersonalCloudLibrarySource_61993828-67a8-4468-93a2-293442e36328`.

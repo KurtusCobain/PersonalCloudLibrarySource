@@ -1,72 +1,32 @@
-# Playnite Add-on Listing Reference
+# Playnite add-on listing reference
 
 ![Personal Cloud Library Source workflow](images/pcls-workflow.png)
 
-## Short Description
+## Short description
 
-Import a user-supplied cloud, NAS, external drive, or local manifest into Playnite's normal library view.
+Import a user-supplied cloud, NAS, external-drive, or local manifest into Playnite and cache selected content locally.
 
-Manifest generation update completed 6/2/2026
+## Long description
 
-## Long Description
+Personal Cloud Library Source imports a user-supplied manifest into Playnite's normal library view. Cloud-only entries can appear before download, receive Playnite metadata, be copied or downloaded to a guarded local cache, launch locally, and later be removed from the cache while keeping the catalog entry.
 
-Personal Cloud Library Source imports a user-supplied cloud, NAS, external-drive, or local manifest into Playnite's normal library view. Cloud-only entries can appear before download, be enriched with Playnite metadata, downloaded or copied to a local cache when needed, launched locally, and later uninstalled from cache while keeping the catalog entry.
+It supports `LocalFile`, `LocalFolder`, and `RcloneRemote`. Local roots can point at fixed disks, external drives, mapped drives, synced cloud folders, or UNC/NAS paths. Cloud providers are accessed through rclone configured separately by the user.
 
-This does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, storefront access, or download sources. It catalogs user-supplied entries and copies or downloads user-owned files from configured local folders or rclone remotes.
-
-## Features
-
-- Normal Playnite library source integration.
-- LocalFile, LocalFolder, and RcloneRemote provider modes.
-- Support for local folders, external drives, mapped drives, NAS shares, and synced cloud folders.
-- Generic rclone support for Google Drive, OneDrive, Dropbox, and other rclone remotes.
-- In-Playnite manifest generation for local folders, external drives, mapped drives, and NAS roots.
-- Advanced manual manifest generation tools for scripted local and rclone workflows.
-- Cloud-only entries import as uninstalled.
-- Cached entries launch locally through Playnite.
-- Manual download/cache action for supported missing entries.
-- Manual cache cleanup/uninstall action for installed cached entries.
-- Optional import diagnostics.
-- Configurable library display name.
+Desktop provides guided setup, verification, manifest generation, reports, diagnostics, and a transfer dashboard. Imported games use standard Playnite metadata and play/install/uninstall controllers; PCLS has no dedicated Fullscreen setup wizard or dashboard.
 
 ## Requirements
 
-- Playnite.
-- A manifest file, either generated or user-created.
-- rclone installed and configured only when using RcloneRemote mode.
-- Local access to files when using LocalFile or LocalFolder mode.
+- Playnite and a valid JSON manifest.
+- A writable local cache folder for install/download workflows.
+- Source access and credentials supplied by the user.
+- Rclone installed and configured only for `RcloneRemote`.
 
-## What It Does Not Provide
+## Safety and limits
 
-This does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, storefront access, or download sources.
+Cache uninstall refuses unsafe paths and never deletes source or remote content. PCLS does not stream games, auto-download an entire library, provide content, or provide cloud accounts. Users are responsible for only indexing content they own or have rights to use.
 
-## Provider Examples
+The live development version is 0.3.2 during 1.0 preparation. Installed provider, Fullscreen, and upgrade qualification must not be inferred from this listing.
 
-- `LocalFile`: read one manifest JSON file from disk.
-- `LocalFolder`: read a manifest and copy files from an external drive, mapped drive, NAS share, or synced cloud folder.
-- `RcloneRemote`: read a manifest with `rclone cat` and copy selected files with `rclone copyto` or `rclone copy`.
+![Provider settings](images/pcls-settings-provider.png)
 
-## Setup Summary
-
-1. Install the add-on.
-2. Choose a provider mode in settings.
-3. Point the plugin at a manifest.
-4. Set a local cache folder.
-5. Run Playnite's library update.
-6. Use Playnite metadata tools to enrich imported entries.
-7. Download or cache selected entries when ready to play.
-8. Remove cached copies later without removing manifest entries or Playnite metadata.
-
-## Legal and Use Disclaimer
-
-Personal Cloud Library Source is for user-supplied personal libraries only. Cloud providers and rclone remotes are configured by the user.
-
-## Suggested Tags
-
-- Library source
-- Cloud library
-- Local library
-- rclone
-- NAS
-- External drive
-- Metadata organization
+![Cache and uninstall settings](images/pcls-settings-cache-uninstall.png)

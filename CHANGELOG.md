@@ -1,8 +1,19 @@
 # Changelog
 
+## Unreleased - 1.0 preparation
+
+- Consolidated setup, path resolution, cache-deletion policy, transfer queue ownership, and workflow notifications behind tested services.
+- Added sequential settings migration and safe edit/cancel/save behavior.
+- Added Desktop dashboard queue/activity presentation with bounded in-memory activity history.
+- Localized current user-facing settings and workflow feedback.
+- Rewrote live documentation around verified behavior and recorded distribution-link checks.
+- Installed provider, Fullscreen, upgrade, and package qualification remain pending; this section is not a 1.0 release declaration.
+
 ## 0.3.2
 
 Feature-branch test pass prepared 7/12/2026
+
+This remains the current development version while 1.0 qualification is in progress.
 
 - Added the approved PCLS cloud-controller icon, wide wordmark, and full dark logo artwork.
 - Generate true-alpha PNG branding during builds instead of using checkerboard-backed source images.

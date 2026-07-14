@@ -1,5 +1,7 @@
 # User-Friendly Dashboard Implementation Plan
 
+> **Historical status:** This 2026-07-11 plan preserves its original 0.3.0 target and branch assumptions. It is a historical implementation record, not current release guidance; use the repository README and current release checklist for live status.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Deliver Personal Cloud Library Source 0.3.0 with native Playnite toolbar/sidebar/menu access, a shared dashboard, guided setup, context-aware game actions, observable transfer progress, safer cache handling, migrated settings, localization, and release validation.
