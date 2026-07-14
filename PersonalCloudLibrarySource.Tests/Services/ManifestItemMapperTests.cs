@@ -93,5 +93,24 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(games[0].IsInstalled, Is.False);
             Assert.That(games[0].InstallDirectory, Is.EqualTo(Path.Combine(cacheRoot, item.Id)));
         }
+
+        [Test]
+        public void Map_CachedFile_ExposesStandardPlayPathAndWorkingDirectory()
+        {
+            var cache = Path.Combine(testRoot, "cache");
+            var launch = Path.Combine(cache, "one", "play.exe");
+            Directory.CreateDirectory(Path.GetDirectoryName(launch));
+            File.WriteAllText(launch, "stub");
+            var item = new PersonalCloudLibraryItem { Id = "one", Title = "One", CachePath = "one/play.exe" };
+            var settings = new PersonalCloudLibrarySourceSettingsV3 { LocalCacheFolder = cache, TreatMissingFilesAsUninstalled = true };
+
+            var game = new ManifestItemMapper().Map(new[] { item }, settings, new List<string>())[0];
+
+            Assert.That(game.IsInstalled, Is.True);
+            Assert.That(game.GameActions, Has.Count.EqualTo(1));
+            Assert.That(game.GameActions[0].IsPlayAction, Is.True);
+            Assert.That(game.GameActions[0].Path, Is.EqualTo(launch));
+            Assert.That(game.GameActions[0].WorkingDir, Is.EqualTo(Path.GetDirectoryName(launch)));
+        }
     }
 }

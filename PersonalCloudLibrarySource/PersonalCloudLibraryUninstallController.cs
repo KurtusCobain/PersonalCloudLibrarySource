@@ -3,7 +3,6 @@ using Playnite.SDK.Models;
 using Playnite.SDK.Plugins;
 using System;
 using System.IO;
-using System.Windows;
 
 namespace PersonalCloudLibrarySource
 {
@@ -11,20 +10,23 @@ namespace PersonalCloudLibrarySource
     {
         private static readonly ILogger logger = LogManager.GetLogger();
 
-        private readonly IPlayniteAPI playniteApi;
         private readonly PersonalCloudLibraryItem item;
         private readonly PersonalCloudLibrarySourceSettings settings;
-        private readonly SafeCacheDeletionExecutor deletionExecutor = new SafeCacheDeletionExecutor();
+        private readonly SafeCacheDeletionExecutor deletionExecutor;
+        private readonly GameWorkflowNotificationService workflowNotifications;
 
         public PersonalCloudLibraryUninstallController(
             IPlayniteAPI playniteApi,
             Game game,
             PersonalCloudLibraryItem item,
-            PersonalCloudLibrarySourceSettings settings) : base(game)
+            PersonalCloudLibrarySourceSettings settings,
+            GameWorkflowNotificationService workflowNotifications = null,
+            SafeCacheDeletionExecutor deletionExecutor = null) : base(game)
         {
-            this.playniteApi = playniteApi;
             this.item = item;
             this.settings = settings;
+            this.workflowNotifications = workflowNotifications ?? CreateNotifications(playniteApi);
+            this.deletionExecutor = deletionExecutor ?? new SafeCacheDeletionExecutor();
             Name = "Remove cached copy";
         }
 
@@ -37,6 +39,14 @@ namespace PersonalCloudLibrarySource
             if (string.Equals(behavior, PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior, StringComparison.OrdinalIgnoreCase))
             {
                 behavior = ChooseUninstallBehavior();
+                if (string.IsNullOrWhiteSpace(behavior))
+                {
+                    workflowNotifications.Failure(
+                        "uninstall",
+                        Game.GameId,
+                        "Remove cached copy needs a deterministic uninstall behavior. Open plugin settings in Desktop mode, choose file-only or install-folder removal, then try again.");
+                    return;
+                }
             }
 
             var requestedTargetPath = ResolveTargetPath(behavior, launchPath, installDirectory);
@@ -50,12 +60,11 @@ namespace PersonalCloudLibrarySource
             if (!string.IsNullOrWhiteSpace(refusalReason))
             {
                 logger.Warn($"Personal Cloud Library Source refused uninstall for {Game.GameId}: {refusalReason}");
-                playniteApi?.Dialogs?.ShowMessage(
+                workflowNotifications.Failure("uninstall", Game.GameId,
                     "Remove cached copy was refused." + Environment.NewLine + Environment.NewLine +
                     "Item: " + item.Title + Environment.NewLine +
                     "Reason: " + refusalReason + Environment.NewLine + Environment.NewLine +
-                    "Next: review LocalCacheFolder and uninstall safety settings.",
-                    "Personal Cloud Library Source");
+                    "Next: review LocalCacheFolder and uninstall safety settings.");
                 return;
             }
 
@@ -68,11 +77,10 @@ namespace PersonalCloudLibrarySource
                 if (!deletion.Allowed)
                 {
                     logger.Info($"Personal Cloud Library Source uninstall skipped for {Game.GameId}: {deletion.Reason}.");
-                    playniteApi?.Dialogs?.ShowMessage(
+                    workflowNotifications.Warning("uninstall", Game.GameId,
                         "Remove cached copy was skipped." + Environment.NewLine + Environment.NewLine +
                         "Item: " + item.Title + Environment.NewLine +
-                        "Reason: " + deletion.Reason,
-                        "Personal Cloud Library Source");
+                        "Reason: " + deletion.Reason);
                     return;
                 }
 
@@ -87,49 +95,26 @@ namespace PersonalCloudLibrarySource
                     InvokeOnUninstalled();
                 }
                 logger.Info($"Personal Cloud Library Source uninstall succeeded for {Game.GameId}: deleted {targetPath}.");
-                playniteApi?.Dialogs?.ShowMessage(
+                workflowNotifications.Success("uninstall", Game.GameId,
                     "Remove cached copy completed." + Environment.NewLine + Environment.NewLine +
                     "Item: " + item.Title + Environment.NewLine +
                     "Result: the requested cached target was removed safely." + Environment.NewLine +
                     "Cached state: " + (postDeletionState.IsCached ? "other cached content remains." : "no cached content remains.") + Environment.NewLine + Environment.NewLine +
-                    "Next: run Update Game Library if you want Playnite to refresh the installed state immediately.",
-                    "Personal Cloud Library Source");
+                    "Next: run Update Game Library if you want Playnite to refresh the installed state immediately.");
             }
             catch (Exception ex)
             {
                 logger.Error(ex, $"Personal Cloud Library Source uninstall failed for {Game.GameId}: targetPath={targetPath}");
-                playniteApi?.Dialogs?.ShowMessage(
+                workflowNotifications.Failure("uninstall", Game.GameId,
                     "Remove cached copy failed." + Environment.NewLine + Environment.NewLine +
                     "Item: " + item.Title + Environment.NewLine +
-                    "Reason: " + ex.Message,
-                    "Personal Cloud Library Source");
+                    "Reason: " + ex.Message);
             }
         }
 
         private string ChooseUninstallBehavior()
         {
-            if (playniteApi?.Dialogs == null)
-            {
-                logger.Warn("Personal Cloud Library Source AskEachTime uninstall requested, but no Playnite dialog API was available. Defaulting to RemoveCachedFileOnly.");
-                return PersonalCloudLibrarySourceSettings.RemoveCachedFileOnlyUninstallBehavior;
-            }
-
-            var result = playniteApi.Dialogs.ShowMessage(
-                "Remove the cached install folder? Choose No to remove only the cached launch file.",
-                "Personal Cloud Library Source",
-                MessageBoxButton.YesNoCancel,
-                MessageBoxImage.Question);
-
-            if (result == MessageBoxResult.Yes)
-            {
-                return PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior;
-            }
-
-            if (result == MessageBoxResult.No)
-            {
-                return PersonalCloudLibrarySourceSettings.RemoveCachedFileOnlyUninstallBehavior;
-            }
-
+            logger.Warn("Personal Cloud Library Source AskEachTime uninstall is unavailable in a standard controller. Select a deterministic uninstall behavior in plugin settings.");
             return string.Empty;
         }
 
@@ -153,6 +138,17 @@ namespace PersonalCloudLibrarySource
             return string.IsNullOrWhiteSpace(behavior)
                 ? PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior
                 : behavior;
+        }
+
+        private static GameWorkflowNotificationService CreateNotifications(IPlayniteAPI playniteApi)
+        {
+            var sink = new PlayniteGameWorkflowNotificationSink(playniteApi?.Notifications);
+            return playniteApi == null
+                ? new GameWorkflowNotificationService(sink)
+                : new GameWorkflowNotificationService(
+                    sink,
+                    new PlayniteImportUiDispatcher(playniteApi),
+                    ex => logger.Warn(ex, "Personal Cloud Library Source could not publish an uninstall notification."));
         }
     }
 }

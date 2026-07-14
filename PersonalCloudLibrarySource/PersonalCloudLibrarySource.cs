@@ -174,29 +174,10 @@ namespace PersonalCloudLibrarySource
                         continue;
                     }
 
-                    var sourcePath = GetItemSourcePath(item);
-                    if (string.IsNullOrWhiteSpace(sourcePath))
+                    var workflow = new GameWorkflowPolicyService().Evaluate(item, pluginSettings);
+                    if (!workflow.CanInstall)
                     {
-                        logger.Warn($"Personal Cloud Library Source item {item.Id} has no sourcePath or legacy remotePath and cannot be downloaded.");
-                        return installActions;
-                    }
-
-                    var launchPath = ResolveLaunchPath(item, pluginSettings);
-                    var installDirectory = ResolveInstallDirectory(item, pluginSettings, launchPath);
-                    var itemState = new LibraryItemStateResolver().Resolve(
-                        item,
-                        launchPath,
-                        installDirectory,
-                        pluginSettings.TreatMissingFilesAsUninstalled);
-                    if (itemState.IsCached)
-                    {
-                        logger.Info($"Personal Cloud Library Source install action not returned for {item.Id}: launch file already exists.");
-                        return installActions;
-                    }
-
-                    if (!CanResolveSourcePath(pluginSettings, sourcePath))
-                    {
-                        logger.Info($"Personal Cloud Library Source install action not returned for {item.Id}: provider cannot resolve sourcePath.");
+                        logger.Info($"Personal Cloud Library Source install action not returned for {item.Id}: {workflow.InstallRefusalReason}");
                         return installActions;
                     }
 
@@ -259,40 +240,18 @@ namespace PersonalCloudLibrarySource
                         continue;
                     }
 
-                    var launchPath = ResolveLaunchPath(item, pluginSettings);
-                    var installDirectory = ResolveInstallDirectory(item, pluginSettings, launchPath);
-                    var itemState = new LibraryItemStateResolver().Resolve(
-                        item,
-                        launchPath,
-                        installDirectory,
-                        pluginSettings.TreatMissingFilesAsUninstalled);
-                    var launchExists = itemState.HasPlayAction;
-                    var installDirectoryExists = itemState.IsCached && !launchExists;
-                    string refusalReason;
-                    var targetPath = ResolveSafeUninstallTarget(
-                        pluginSettings,
-                        ResolveUninstallTargetPath(item, pluginSettings, launchPath, installDirectory),
-                        out refusalReason);
+                    var workflow = new GameWorkflowPolicyService().Evaluate(item, pluginSettings);
+                    var launchExists = workflow.State.HasPlayAction;
+                    var installDirectoryExists = workflow.State.IsCached && !launchExists;
+                    var targetPath = workflow.UninstallTarget;
                     var insideCache = IsPathInsideCacheFolder(targetPath, pluginSettings.LocalCacheFolder);
 
                     logger.Info(
-                        $"Personal Cloud Library Source uninstall action check: gameId={item.Id}; title={item.Title}; launchPath={launchPath}; launchExists={launchExists}; installDirectory={installDirectory}; installDirectoryExists={installDirectoryExists}; behavior={pluginSettings.UninstallBehavior}; targetPath={targetPath}; insideCache={insideCache}; refusalReason={refusalReason}");
+                        $"Personal Cloud Library Source uninstall action check: gameId={item.Id}; title={item.Title}; launchPath={workflow.Paths.LaunchPath}; launchExists={launchExists}; installDirectory={workflow.Paths.InstallDirectory}; installDirectoryExists={installDirectoryExists}; behavior={pluginSettings.UninstallBehavior}; targetPath={targetPath}; insideCache={insideCache}; refusalReason={workflow.UninstallRefusalReason}");
 
-                    if (!launchExists && !installDirectoryExists)
+                    if (!workflow.CanUninstall)
                     {
-                        logger.Info($"Personal Cloud Library Source uninstall action not returned for {item.Id}: cached file/folder is missing.");
-                        return uninstallActions;
-                    }
-
-                    if (!string.IsNullOrWhiteSpace(refusalReason))
-                    {
-                        logger.Warn($"Personal Cloud Library Source uninstall action not returned for {item.Id}: {refusalReason}");
-                        return uninstallActions;
-                    }
-
-                    if (!File.Exists(targetPath) && !Directory.Exists(targetPath))
-                    {
-                        logger.Info($"Personal Cloud Library Source uninstall action not returned for {item.Id}: uninstall target does not exist.");
+                        logger.Info($"Personal Cloud Library Source uninstall action not returned for {item.Id}: {workflow.UninstallRefusalReason}");
                         return uninstallActions;
                     }
 

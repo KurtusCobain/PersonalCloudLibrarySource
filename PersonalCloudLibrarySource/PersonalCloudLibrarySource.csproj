@@ -93,6 +93,8 @@
     <Compile Include="SafeFileWriteService.cs" />
     <Compile Include="Services\GameCommandPolicyService.cs" />
     <Compile Include="Services\GameCommandService.cs" />
+    <Compile Include="Services\GameWorkflowPolicyService.cs" />
+    <Compile Include="Services\GameWorkflowNotificationService.cs" />
     <Compile Include="Services\ImportNotificationService.cs" />
     <Compile Include="Services\ImportOutcomeService.cs" />
     <Compile Include="Services\ManifestLoader.cs" />

@@ -9,7 +9,6 @@ namespace PersonalCloudLibrarySource
     {
         private static readonly ILogger logger = LogManager.GetLogger();
 
-        private readonly IPlayniteAPI playniteApi;
         private readonly PersonalCloudLibraryItem item;
         private readonly PersonalCloudLibrarySourceSettings settings;
         private readonly RcloneFileCopier rcloneFileCopier;
@@ -17,6 +16,7 @@ namespace PersonalCloudLibrarySource
         private readonly CloudTransferManager transferManager;
         private readonly CloudTransferExecutor transferExecutor;
         private readonly TransferQueueService transferQueue;
+        private readonly GameWorkflowNotificationService workflowNotifications;
 
         public RcloneInstallController(
             IPlayniteAPI playniteApi,
@@ -27,9 +27,9 @@ namespace PersonalCloudLibrarySource
             LocalFileCopier localFileCopier,
             CloudTransferManager transferManager = null,
             CloudTransferExecutor transferExecutor = null,
-            TransferQueueService transferQueue = null) : base(game)
+            TransferQueueService transferQueue = null,
+            GameWorkflowNotificationService workflowNotifications = null) : base(game)
         {
-            this.playniteApi = playniteApi;
             this.item = item;
             this.settings = settings;
             this.rcloneFileCopier = rcloneFileCopier;
@@ -37,6 +37,7 @@ namespace PersonalCloudLibrarySource
             this.transferManager = transferManager;
             this.transferExecutor = transferExecutor;
             this.transferQueue = transferQueue;
+            this.workflowNotifications = workflowNotifications ?? CreateNotifications(playniteApi);
             Name = "Download to local cache";
         }
 
@@ -161,7 +162,7 @@ namespace PersonalCloudLibrarySource
                 if (cancelled)
                 {
                     logger.Info($"Personal Cloud Library Source transfer cancelled for item {item.Id}.");
-                    ShowSummary(
+                    workflowNotifications.Warning("install", Game.GameId,
                         "Download to local cache was cancelled." + System.Environment.NewLine + System.Environment.NewLine +
                         "Item: " + item.Title + System.Environment.NewLine +
                         "Partial files were removed and the game remains uninstalled.");
@@ -177,7 +178,7 @@ namespace PersonalCloudLibrarySource
                     logger.Error($"Personal Cloud Library Source failed to download item {item.Id}: {message}");
                 }
 
-                ShowSummary(
+                workflowNotifications.Failure("install", Game.GameId,
                     "Download to local cache failed." + System.Environment.NewLine + System.Environment.NewLine +
                     "Item: " + item.Title + System.Environment.NewLine +
                     "Source type: " + sourceType + System.Environment.NewLine +
@@ -197,7 +198,7 @@ namespace PersonalCloudLibrarySource
             if (!itemState.IsCached)
             {
                 logger.Warn($"Personal Cloud Library Source downloaded item {item.Id}, but the expected launch file was not found.");
-                ShowSummary(
+                workflowNotifications.Warning("install", Game.GameId,
                     "Download to local cache finished with warnings." + System.Environment.NewLine + System.Environment.NewLine +
                     "Item: " + item.Title + System.Environment.NewLine +
                     "Source type: " + sourceType + System.Environment.NewLine +
@@ -215,7 +216,7 @@ namespace PersonalCloudLibrarySource
             }));
 
             logger.Info($"Personal Cloud Library Source downloaded item {item.Id} to local cache.");
-            ShowSummary(
+            workflowNotifications.Success("install", Game.GameId,
                 "Download to local cache completed." + System.Environment.NewLine + System.Environment.NewLine +
                 "Item: " + item.Title + System.Environment.NewLine +
                 "Source type: " + sourceType + System.Environment.NewLine +
@@ -224,9 +225,16 @@ namespace PersonalCloudLibrarySource
                 "Next: launch the item from Playnite or run Update Game Library if you want Playnite to refresh its view.");
         }
 
-        private void ShowSummary(string message)
+        private static GameWorkflowNotificationService CreateNotifications(IPlayniteAPI playniteApi)
         {
-            playniteApi?.Dialogs?.ShowMessage(message, "Personal Cloud Library Source");
+            var sink = new PlayniteGameWorkflowNotificationSink(playniteApi?.Notifications);
+            return playniteApi == null
+                ? new GameWorkflowNotificationService(sink)
+                : new GameWorkflowNotificationService(
+                    sink,
+                    new PlayniteImportUiDispatcher(playniteApi),
+                    ex => logger.Warn(ex, "Personal Cloud Library Source could not publish an install notification."));
         }
+
     }
 }
