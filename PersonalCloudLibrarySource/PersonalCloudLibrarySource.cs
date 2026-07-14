@@ -20,6 +20,8 @@ namespace PersonalCloudLibrarySource
         private readonly LibraryVerificationService libraryVerificationService = new LibraryVerificationService();
         private readonly SafeFileWriteService safeFileWriteService = new SafeFileWriteService();
         private readonly ManifestLoader manifestLoader = new ManifestLoader();
+        private readonly ImportOutcomeService importOutcomeService = new ImportOutcomeService();
+        private readonly ImportNotificationService importNotificationService;
         private readonly object validatedManifestItemsSync = new object();
         private IReadOnlyDictionary<string, PersonalCloudLibraryItem> validatedManifestItems =
             new Dictionary<string, PersonalCloudLibraryItem>(StringComparer.OrdinalIgnoreCase);
@@ -36,6 +38,11 @@ namespace PersonalCloudLibrarySource
         public PersonalCloudLibrarySource(IPlayniteAPI api) : base(api)
         {
             playniteApi = api;
+            importNotificationService = new ImportNotificationService(
+                new PlayniteImportNotificationSink(api.Notifications),
+                new PlayniteImportUiDispatcher(api),
+                ResourceProvider.GetString,
+                () => playniteApi.MainView.OpenPluginSettings(Id));
             settings = new PersonalCloudLibrarySourceSettingsV3ViewModel(this);
             InitializeDashboardNavigation();
             Client = new PersonalCloudLibrarySourceClient(navigationService.OpenDashboard);
@@ -48,42 +55,81 @@ namespace PersonalCloudLibrarySource
 
         public override IEnumerable<GameMetadata> GetGames(LibraryGetGamesArgs args)
         {
-            var importedGames = new List<GameMetadata>();
-            var diagnostics = new List<string>();
-            PersonalCloudLibrarySourceSettings pluginSettings = null;
+            var pluginSettings = settings.GetRuntimeSettingsSnapshot();
+            if (pluginSettings == null || !pluginSettings.Enabled)
+            {
+                logger.Info("Personal Cloud Library Source is disabled. No games imported.");
+                return new List<GameMetadata>();
+            }
+
+            var outcome = importOutcomeService.Import(pluginSettings, rcloneManifestReader.ReadManifestJson);
+            PublishImportOutcome(outcome, pluginSettings);
+            if (!outcome.Succeeded)
+            {
+                logger.Error("Personal Cloud Library Source failed to import the manifest: " + outcome.Error);
+            }
+            else
+            {
+                logger.Info($"Personal Cloud Library Source imported {outcome.Games.Count} manifest entries.");
+            }
+
+            return ImportExecutionPolicy.Complete(outcome);
+        }
+
+        private void PublishImportOutcome(
+            ImportOutcome outcome,
+            PersonalCloudLibrarySourceSettings pluginSettings)
+        {
+            var snapshot = outcome.Succeeded
+                ? outcome.ValidItems
+                    .Where(item => item != null && !string.IsNullOrWhiteSpace(item.Id))
+                    .ToDictionary(item => item.Id, item => item, StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, PersonalCloudLibraryItem>(StringComparer.OrdinalIgnoreCase);
+            lock (validatedManifestItemsSync)
+            {
+                validatedManifestItems = snapshot;
+            }
+
+            var diagnostics = new List<string>
+            {
+                "provider=" + GetProviderType(pluginSettings),
+                "libraryDisplayName=" + ResolveLibraryDisplayName(pluginSettings),
+                "manifestPath=" + ResolveManifestDescription(pluginSettings),
+                "importSucceeded=" + outcome.Succeeded
+            };
+            diagnostics.AddRange(outcome.Diagnostics);
+            var diagnosticsPath = WriteImportDiagnostics(pluginSettings, diagnostics, !outcome.Succeeded);
+            VerificationDashboardStateService.LatestReport =
+                ImportDashboardStateService.CreateReport(outcome, diagnosticsPath);
 
             try
             {
-                pluginSettings = settings.GetRuntimeSettingsSnapshot();
-
-                if (pluginSettings == null || !pluginSettings.Enabled)
+                if (outcome.Succeeded)
                 {
-                    logger.Info("Personal Cloud Library Source is disabled. No games imported.");
-                    return importedGames;
+                    importNotificationService.Clear();
                 }
-
-                var providerType = GetProviderType(pluginSettings);
-                diagnostics.Add($"provider={providerType}");
-                diagnostics.Add($"libraryDisplayName={ResolveLibraryDisplayName(pluginSettings)}");
-                diagnostics.Add($"manifestPath={ResolveManifestDescription(pluginSettings)}");
-
-                var manifest = LoadValidatedManifest(pluginSettings);
-                diagnostics.Add($"itemCount={manifest.Items.Count}");
-                importedGames = ConvertManifestItemsToGameMetadata(manifest, pluginSettings, diagnostics);
-                diagnostics.Add($"returnedGameCount={importedGames.Count}");
+                else
+                {
+                    importNotificationService.ShowFailure(outcome);
+                }
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "Personal Cloud Library Source failed to import the manifest.");
-                diagnostics.Add($"importError={ex.Message}");
-            }
-            finally
-            {
-                WriteImportDiagnostics(pluginSettings, diagnostics);
+                logger.Warn(ex, "Personal Cloud Library Source could not update its import notification.");
             }
 
-            logger.Info($"Personal Cloud Library Source imported {importedGames.Count} manifest entries.");
-            return importedGames;
+            RefreshDashboardStateOnUiThread();
+        }
+
+        private void RefreshDashboardStateOnUiThread()
+        {
+            if (playniteApi?.MainView?.UIDispatcher == null)
+            {
+                RefreshDashboardState();
+                return;
+            }
+
+            playniteApi.MainView.UIDispatcher.BeginInvoke(new Action(RefreshDashboardState));
         }
 
         public override IEnumerable<InstallController> GetInstallActions(GetInstallActionsArgs args)
@@ -584,11 +630,14 @@ namespace PersonalCloudLibrarySource
             return pluginSettings.LocalManifestPath;
         }
 
-        private void WriteImportDiagnostics(PersonalCloudLibrarySourceSettings pluginSettings, List<string> diagnostics)
+        private string WriteImportDiagnostics(
+            PersonalCloudLibrarySourceSettings pluginSettings,
+            IReadOnlyList<string> diagnostics,
+            bool force)
         {
-            if (pluginSettings == null || !pluginSettings.EnableDiagnostics)
+            if (pluginSettings == null || (!force && !pluginSettings.EnableDiagnostics))
             {
-                return;
+                return string.Empty;
             }
 
             try
@@ -596,10 +645,12 @@ namespace PersonalCloudLibrarySource
                 var diagnosticsDirectory = ResolveDiagnosticsDirectory();
                 var diagnosticsPath = Path.Combine(diagnosticsDirectory, "last-import-diagnostics.txt");
                 safeFileWriteService.WriteAllLines(diagnosticsPath, diagnostics);
+                return diagnosticsPath;
             }
             catch (Exception ex)
             {
                 logger.Warn(ex, "Personal Cloud Library Source could not write import diagnostics.");
+                return string.Empty;
             }
         }
 

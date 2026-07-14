@@ -34,6 +34,7 @@ namespace PersonalCloudLibrarySource
             if (!report.ManifestLoadSucceeded)
             {
                 context.SourceAvailable = false;
+                context.ManifestItemCount = 0;
                 return context;
             }
 

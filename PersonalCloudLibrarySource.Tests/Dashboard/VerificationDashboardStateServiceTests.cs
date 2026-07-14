@@ -7,7 +7,7 @@ namespace PersonalCloudLibrarySource.Tests.Dashboard
     public class VerificationDashboardStateServiceTests
     {
         [Test]
-        public void Apply_FailedManifestMarksSourceUnavailableAndPreservesKnownLibraryCounts()
+        public void Apply_FailedManifestClearsUnprovenManifestCountAndPreservesLiveLibraryCounts()
         {
             var context = new LibraryStatusContext
             {
@@ -28,7 +28,7 @@ namespace PersonalCloudLibrarySource.Tests.Dashboard
             var result = InvokeApply(context, report);
 
             Assert.That(result.SourceAvailable, Is.False);
-            Assert.That(result.ManifestItemCount, Is.EqualTo(4));
+            Assert.That(result.ManifestItemCount, Is.Zero);
             Assert.That(result.ImportedGameCount, Is.EqualTo(4));
             Assert.That(result.CachedGameCount, Is.EqualTo(4));
             Assert.That(result.WarningCount, Is.GreaterThanOrEqualTo(1));

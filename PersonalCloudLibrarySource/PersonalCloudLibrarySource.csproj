@@ -62,6 +62,7 @@
     <Compile Include="Dashboard\CloudLibrarySidebarItem.cs" />
     <Compile Include="Dashboard\DashboardStateStore.cs" />
     <Compile Include="Dashboard\FriendlySourceNameProvider.cs" />
+    <Compile Include="Dashboard\ImportDashboardStateService.cs" />
     <Compile Include="Dashboard\LibraryStatusService.cs" />
     <Compile Include="Dashboard\VerificationDashboardStateService.cs" />
     <Compile Include="LibraryVerificationReport.cs" />
@@ -89,6 +90,8 @@
     <Compile Include="SafeFileWriteService.cs" />
     <Compile Include="Services\GameCommandPolicyService.cs" />
     <Compile Include="Services\GameCommandService.cs" />
+    <Compile Include="Services\ImportNotificationService.cs" />
+    <Compile Include="Services\ImportOutcomeService.cs" />
     <Compile Include="Services\ManifestLoader.cs" />
     <Compile Include="Services\ManifestItemMapper.cs" />
     <Compile Include="Services\ManifestParserValidator.cs" />

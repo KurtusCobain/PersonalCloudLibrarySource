@@ -88,4 +88,8 @@
     <sys:String x:Key="LOCPLSGameDetailsCachePath">Cache path</sys:String>
     <sys:String x:Key="LOCPLSGameDetailsInstallDirectory">Install directory</sys:String>
     <sys:String x:Key="LOCPLSGameDetailsNotesHeading">Notes</sys:String>
+    <sys:String x:Key="LOCPLSImportFailureNotification">Personal Cloud Library could not refresh its manifest: {0} Select this notification to open the plugin settings and recovery tools.</sys:String>
+    <sys:String x:Key="LOCPLSImportFailureSourceUnavailable">The configured source is missing, unavailable, or timed out.</sys:String>
+    <sys:String x:Key="LOCPLSImportFailureInvalidManifest">The manifest is not valid JSON or is missing required data.</sys:String>
+    <sys:String x:Key="LOCPLSImportFailureUnsupportedSchema">The manifest uses an unsupported schema version.</sys:String>
 </ResourceDictionary>

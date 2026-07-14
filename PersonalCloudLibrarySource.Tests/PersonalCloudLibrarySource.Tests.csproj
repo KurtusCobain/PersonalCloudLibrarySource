@@ -47,8 +47,10 @@
     <Compile Include="Dashboard\DashboardActivityServiceTests.cs" />
     <Compile Include="Dashboard\LibraryStatusServiceTests.cs" />
     <Compile Include="Dashboard\VerificationDashboardStateServiceTests.cs" />
+    <Compile Include="Dashboard\ImportDashboardStateServiceTests.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Repository\ProjectSourceInclusionTests.cs" />
+    <Compile Include="Repository\ImportFailureWiringContractTests.cs" />
     <Compile Include="Repository\PathStateConsumerContractTests.cs" />
     <Compile Include="Repository\RuntimeSettingsSnapshotUsageTests.cs" />
     <Compile Include="Repository\SetupWizardEditLifecycleContractTests.cs" />
@@ -56,6 +58,8 @@
     <Compile Include="Services\GameCommandPolicyServiceTests.cs" />
     <Compile Include="Services\GameCommandServiceTests.cs" />
     <Compile Include="Services\ManifestParserValidatorTests.cs" />
+    <Compile Include="Services\ImportNotificationServiceTests.cs" />
+    <Compile Include="Services\ImportOutcomeServiceTests.cs" />
     <Compile Include="Services\ManifestLoaderTests.cs" />
     <Compile Include="Services\ManifestItemMapperTests.cs" />
     <Compile Include="Services\PathResolverTests.cs" />
