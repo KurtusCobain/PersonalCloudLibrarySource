@@ -193,15 +193,21 @@ try {
         Assert-ThrowsLike { Test-ReleasePackage -PackagePath $extra -ExtensionPath (Join-Path $root 'PersonalCloudLibrarySource\extension.yaml') } 'unexpected.*Leaked.cs'
     }
 
-    Test-Case 'Official Toolbox output must already use the manifest-derived filename' {
+    Test-Case 'Official Toolbox output must use the Toolbox identity and version filename' {
         $root = Join-Path $testRoot 'official-name'
         New-TestRepository $root
         $output = Join-Path $root 'official'
         New-Item $output -ItemType Directory -Force | Out-Null
+        $officialName = 'PersonalCloudLibrarySource_61993828-67a8-4468-93a2-293442e36328_0_3_2.pext'
+        New-TestPackage $root (Join-Path $output $officialName)
+        $result = Test-OfficialToolboxOutput -OutputDirectory $output -ExtensionPath (Join-Path $root 'PersonalCloudLibrarySource\extension.yaml')
+        Assert-True ($result.PackageName -eq 'PersonalCloudLibrarySource-0.3.2.pext') 'Official package content inspection did not preserve the distribution identity.'
+
+        Remove-Item -LiteralPath (Join-Path $output $officialName) -Force
         New-TestPackage $root (Join-Path $output 'WrongName.pext')
         Assert-ThrowsLike {
             Test-OfficialToolboxOutput -OutputDirectory $output -ExtensionPath (Join-Path $root 'PersonalCloudLibrarySource\extension.yaml')
-        } 'filename|PersonalCloudLibrarySource-0.3.2.pext'
+        } 'filename|PersonalCloudLibrarySource_61993828-67a8-4468-93a2-293442e36328_0_3_2.pext'
     }
 
     Test-Case 'Missing Toolbox is an explicit non-success prerequisite and does not mutate release inputs' {

@@ -254,14 +254,28 @@ function Test-OfficialToolboxOutput {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$OutputDirectory, [Parameter(Mandatory)][string]$ExtensionPath)
     $extension = Read-DistributionYaml $ExtensionPath
+    $id = Get-RequiredYamlScalar $extension 'Id'
     $version = Get-RequiredYamlScalar $extension 'Version'
-    $expectedName = "PersonalCloudLibrarySource-$version.pext"
+    $expectedName = "${id}_$($version.Replace('.', '_')).pext"
     $packages = @(Get-ChildItem -LiteralPath $OutputDirectory -Filter '*.pext' -File)
     if ($packages.Count -ne 1) { throw "Toolbox output must contain exactly one .pext; found $($packages.Count)." }
     if ($packages[0].Name -cne $expectedName) {
         throw "Official Toolbox output filename must be '$expectedName', found '$($packages[0].Name)'."
     }
-    Test-ReleasePackage -PackagePath $packages[0].FullName -ExtensionPath $ExtensionPath
+
+    # Toolbox has its own ID/version filename convention. Validate that exact name
+    # first, then use the distribution filename only as an adapter for the shared
+    # package content and manifest inspection.
+    $inspectionRoot = Join-Path ([IO.Path]::GetTempPath()) ('pcls-toolbox-inspect-' + [guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Path $inspectionRoot -Force | Out-Null
+    try {
+        $inspectionPath = Join-Path $inspectionRoot "PersonalCloudLibrarySource-$version.pext"
+        Copy-Item -LiteralPath $packages[0].FullName -Destination $inspectionPath
+        Test-ReleasePackage -PackagePath $inspectionPath -ExtensionPath $ExtensionPath
+    }
+    finally {
+        Remove-Item -LiteralPath $inspectionRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
 }
 
 Export-ModuleMember -Function Find-PlayniteToolbox, Read-DistributionYaml, Assert-ReleaseSurfaces, Test-ReleasePackage, Test-OfficialToolboxOutput
