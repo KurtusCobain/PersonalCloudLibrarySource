@@ -210,6 +210,67 @@ namespace PersonalCloudLibrarySource.Tests.Startup
             Assert.That(sink.Calls, Is.EqualTo(new[] { "refresh", "dashboard" }));
         }
 
+        [Test]
+        public void Dispose_CompletedService_ReleasesCancellationSourceAndRejectsRestart()
+        {
+            var sink = new RecordingSink();
+            var service = new StartupActionService(sink);
+            var context = ValidContext(generate: true);
+            context.ManifestGenerationEligible = true;
+            service.Start(context).GetAwaiter().GetResult();
+
+            service.Dispose();
+            service.Dispose();
+
+            Assert.Throws<ObjectDisposedException>(() => service.Start(ValidContext()));
+            Assert.Throws<ObjectDisposedException>(() =>
+            {
+                var waitHandle = sink.ObservedCancellationToken.WaitHandle;
+            });
+        }
+
+        [Test]
+        public void Dispose_ActiveService_CancelsThenReleasesCancellationSourceAfterTaskCompletes()
+        {
+            var sink = new RecordingSink { BlockGenerationUntilCancellation = true };
+            var service = new StartupActionService(sink);
+            var context = ValidContext(generate: true);
+            context.ManifestGenerationEligible = true;
+            var task = service.Start(context);
+            Assert.That(sink.GenerationStarted.WaitOne(TimeSpan.FromSeconds(2)), Is.True);
+
+            service.Dispose();
+
+            Assert.That(task.Wait(TimeSpan.FromSeconds(2)), Is.True);
+            Assert.Throws<ObjectDisposedException>(() =>
+            {
+                var waitHandle = sink.ObservedCancellationToken.WaitHandle;
+            });
+        }
+
+        [Test]
+        public void Start_ImmediateDispose_NeverFaultsQueuedStartupDelegate()
+        {
+            var faultedTasks = new List<Task>();
+
+            for (var index = 0; index < 2000; index++)
+            {
+                var service = new StartupActionService(new RecordingSink());
+                var task = service.Start(new StartupActionContext { PluginEnabled = false });
+                service.Dispose();
+                try
+                {
+                    task.Wait(TimeSpan.FromSeconds(2));
+                }
+                catch (AggregateException)
+                {
+                    faultedTasks.Add(task);
+                }
+            }
+
+            Assert.That(faultedTasks, Is.Empty, "Dispose must not null the token source captured by queued startup work.");
+        }
+
         private static StartupActionContext ValidContext(bool generate = false, bool refresh = false)
         {
             return new StartupActionContext
@@ -233,12 +294,14 @@ namespace PersonalCloudLibrarySource.Tests.Startup
             public ManualResetEvent GenerationStarted { get; } = new ManualResetEvent(false);
             public ManualResetEvent ReleaseGeneration { get; } = new ManualResetEvent(false);
             public Exception Failure { get; private set; }
+            public CancellationToken ObservedCancellationToken { get; private set; }
 
             public void OpenSetupWizard(CancellationToken cancellationToken) => Calls.Add("wizard");
             public void ShowSetupReminder(CancellationToken cancellationToken) => Calls.Add("reminder");
 
             public void GenerateManifest(CancellationToken cancellationToken)
             {
+                ObservedCancellationToken = cancellationToken;
                 Calls.Add("generate");
                 GenerationStarted.Set();
                 if (ThrowOnGenerate)

@@ -17,16 +17,18 @@ namespace PersonalCloudLibrarySource.Tests.Repository
         }
 
         [Test]
-        public void PluginStartup_IsOwnedByStartupServiceAndShutdownCancelsItFirst()
+        public void PluginStartup_IsOwnedByStartupServiceAndShutdownCancelsThenDisposesItFirst()
         {
             var source = Read("PersonalCloudLibrarySource", "PersonalCloudLibrarySource.Navigation.cs");
             var run = source.IndexOf("startupActionService.Start(");
             var cancel = source.IndexOf("startupActionService.Stop(");
+            var dispose = source.IndexOf("startupActionService.Dispose();");
             var queueShutdown = source.IndexOf("DisposeTransferManager();");
 
             Assert.That(run, Is.GreaterThanOrEqualTo(0));
             Assert.That(cancel, Is.GreaterThanOrEqualTo(0));
-            Assert.That(queueShutdown, Is.GreaterThan(cancel));
+            Assert.That(dispose, Is.GreaterThan(cancel));
+            Assert.That(queueShutdown, Is.GreaterThan(dispose));
         }
 
         [Test]

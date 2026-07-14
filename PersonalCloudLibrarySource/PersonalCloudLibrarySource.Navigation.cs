@@ -244,7 +244,7 @@ namespace PersonalCloudLibrarySource
             {
                 logger.Warn("Personal Cloud Library Source startup work did not stop within the shutdown timeout.");
             }
-
+            startupActionService.Dispose();
             if (settings?.Settings != null)
             {
                 settings.Settings.PropertyChanged -= DashboardSettings_PropertyChanged;

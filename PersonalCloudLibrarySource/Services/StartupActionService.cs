@@ -26,13 +26,14 @@ namespace PersonalCloudLibrarySource
         void ReportFailure(Exception exception, CancellationToken cancellationToken);
     }
 
-    public sealed class StartupActionService
+    public sealed class StartupActionService : IDisposable
     {
         private readonly IStartupActionSink sink;
         private readonly object sync = new object();
         private readonly Action<Exception> observeFault;
         private CancellationTokenSource cancellation;
         private Task startupTask;
+        private bool disposed;
 
         public StartupActionService(
             IStartupActionSink sink,
@@ -46,13 +47,20 @@ namespace PersonalCloudLibrarySource
         {
             lock (sync)
             {
+                if (disposed)
+                {
+                    throw new ObjectDisposedException(nameof(StartupActionService));
+                }
+
                 if (startupTask != null)
                 {
                     return startupTask;
                 }
 
-                cancellation = new CancellationTokenSource();
-                startupTask = Task.Run(() => RunCore(context, cancellation.Token));
+                var ownedCancellation = new CancellationTokenSource();
+                var cancellationToken = ownedCancellation.Token;
+                cancellation = ownedCancellation;
+                startupTask = Task.Run(() => RunCore(context, cancellationToken));
                 return startupTask;
             }
         }
@@ -80,6 +88,42 @@ namespace PersonalCloudLibrarySource
                 ObserveFault(ex.Flatten());
                 return true;
             }
+        }
+
+        public void Dispose()
+        {
+            CancellationTokenSource ownedCancellation;
+            Task observedTask;
+            lock (sync)
+            {
+                if (disposed)
+                {
+                    return;
+                }
+
+                disposed = true;
+                ownedCancellation = cancellation;
+                cancellation = null;
+                observedTask = startupTask;
+            }
+
+            if (ownedCancellation == null)
+            {
+                return;
+            }
+
+            ownedCancellation.Cancel();
+            if (observedTask == null || observedTask.IsCompleted)
+            {
+                ownedCancellation.Dispose();
+                return;
+            }
+
+            observedTask.ContinueWith(
+                _ => ownedCancellation.Dispose(),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
         }
 
         private void RunCore(StartupActionContext context, CancellationToken cancellationToken)
