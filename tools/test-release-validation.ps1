@@ -13,6 +13,23 @@ function Assert-True {
     if (-not $Condition) { throw $Message }
 }
 
+function Get-Sha256Hex {
+    param([Parameter(Mandatory)][string]$Path)
+    $stream = [IO.File]::OpenRead((Resolve-Path -LiteralPath $Path).Path)
+    try {
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        try {
+            return ([BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '')
+        }
+        finally {
+            $sha256.Dispose()
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 function Assert-ThrowsLike {
     param([scriptblock]$Action, [string]$Pattern)
     $caught = $null
@@ -191,7 +208,7 @@ try {
         $root = Join-Path $testRoot 'missing-toolbox'
         New-TestRepository $root
         $paths = @('PersonalCloudLibrarySource\extension.yaml', 'playnite-addon\addon-database.yaml', 'playnite-addon\installer.yaml')
-        $before = @{}; foreach ($relative in $paths) { $before[$relative] = (Get-FileHash (Join-Path $root $relative) -Algorithm SHA256).Hash }
+        $before = @{}; foreach ($relative in $paths) { $before[$relative] = Get-Sha256Hex (Join-Path $root $relative) }
         $validator = Join-Path $PSScriptRoot 'validate-release.ps1'
         $oldPreference = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
@@ -201,7 +218,7 @@ try {
         Assert-True ($exit -ne 0) 'Missing Toolbox must fail the release gate.'
         Assert-True (($output -join "`n") -match 'PREREQUISITE_MISSING.*Toolbox.exe') 'Missing Toolbox result was not explicit.'
         foreach ($relative in $paths) {
-            Assert-True (((Get-FileHash (Join-Path $root $relative) -Algorithm SHA256).Hash) -eq $before[$relative]) "Validator mutated $relative."
+            Assert-True ((Get-Sha256Hex (Join-Path $root $relative)) -eq $before[$relative]) "Validator mutated $relative."
         }
     }
 }
