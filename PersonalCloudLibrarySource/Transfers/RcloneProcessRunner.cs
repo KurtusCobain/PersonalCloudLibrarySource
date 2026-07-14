@@ -7,6 +7,18 @@ namespace PersonalCloudLibrarySource
 {
     public sealed class RcloneProcessRunner : IRcloneProcessRunner
     {
+        private readonly IRcloneProcessFactory processFactory;
+
+        public RcloneProcessRunner()
+            : this(new RcloneProcessFactory())
+        {
+        }
+
+        public RcloneProcessRunner(IRcloneProcessFactory processFactory)
+        {
+            this.processFactory = processFactory ?? throw new ArgumentNullException(nameof(processFactory));
+        }
+
         public RcloneProcessResult Run(
             RcloneTransferRequest request,
             CancellationToken cancellationToken,
@@ -23,7 +35,7 @@ namespace PersonalCloudLibrarySource
 
             try
             {
-                using (var process = new Process())
+                using (var process = processFactory.Create())
                 {
                     process.StartInfo = new ProcessStartInfo
                     {
@@ -37,13 +49,25 @@ namespace PersonalCloudLibrarySource
                         CreateNoWindow = true
                     };
 
+                    RcloneActivityTimeout activityTimeout = null;
+
                     DataReceivedEventHandler outputHandler = (sender, args) =>
                     {
-                        HandleLine(args.Data, output, syncRoot, progress);
+                        HandleLine(
+                            args.Data,
+                            output,
+                            syncRoot,
+                            progress,
+                            () => activityTimeout?.RecordActivity(DateTime.UtcNow));
                     };
                     DataReceivedEventHandler errorHandler = (sender, args) =>
                     {
-                        HandleLine(args.Data, error, syncRoot, progress);
+                        HandleLine(
+                            args.Data,
+                            error,
+                            syncRoot,
+                            progress,
+                            () => activityTimeout?.RecordActivity(DateTime.UtcNow));
                     };
                     process.OutputDataReceived += outputHandler;
                     process.ErrorDataReceived += errorHandler;
@@ -53,28 +77,45 @@ namespace PersonalCloudLibrarySource
                         return RcloneProcessResult.Failure("rclone did not start.");
                     }
 
+                    var connectTimeoutSeconds = NormalizeTimeout(
+                        request.ConnectTimeoutSeconds,
+                        request.TimeoutSeconds);
+                    var inactivityTimeoutSeconds = NormalizeTimeout(
+                        request.InactivityTimeoutSeconds,
+                        request.TimeoutSeconds);
+                    activityTimeout = new RcloneActivityTimeout(
+                        DateTime.UtcNow,
+                        TimeSpan.FromSeconds(connectTimeoutSeconds),
+                        TimeSpan.FromSeconds(inactivityTimeoutSeconds));
                     process.BeginOutputReadLine();
                     process.BeginErrorReadLine();
-                    var timeoutSeconds = request.TimeoutSeconds >= 5 && request.TimeoutSeconds <= 86400
-                        ? request.TimeoutSeconds
-                        : 30;
-                    var deadline = DateTime.UtcNow.AddSeconds(timeoutSeconds);
 
                     while (!process.WaitForExit(200))
                     {
                         if (cancellationToken.IsCancellationRequested)
                         {
-                            TryKill(process);
-                            process.WaitForExit();
-                            return RcloneProcessResult.Cancelled("rclone transfer cancelled.");
+                            return TryStop(process)
+                                ? RcloneProcessResult.Cancelled("rclone transfer cancelled.")
+                                : RcloneProcessResult.Failure("rclone cancellation could not stop the child process.");
                         }
 
-                        if (DateTime.UtcNow >= deadline)
+                        var expiredKind = activityTimeout.GetExpiredKind(DateTime.UtcNow);
+                        if (expiredKind != RcloneTimeoutKind.None)
                         {
-                            TryKill(process);
-                            process.WaitForExit();
+                            if (!TryStop(process))
+                            {
+                                return RcloneProcessResult.Failure(
+                                    "rclone timed out and the child process could not be stopped.",
+                                    GetText(error, syncRoot),
+                                    null,
+                                    -1,
+                                    true);
+                            }
+
                             return RcloneProcessResult.Failure(
-                                "rclone transfer timed out after " + timeoutSeconds + " seconds.",
+                                expiredKind == RcloneTimeoutKind.Connect
+                                    ? "rclone did not report activity within " + connectTimeoutSeconds + " seconds."
+                                    : "rclone transfer was inactive for " + inactivityTimeoutSeconds + " seconds.",
                                 GetText(error, syncRoot),
                                 null,
                                 -1,
@@ -115,7 +156,8 @@ namespace PersonalCloudLibrarySource
             string line,
             StringBuilder target,
             object syncRoot,
-            Action<long, long?> progress)
+            Action<long, long?> progress,
+            Action activity)
         {
             if (line == null)
             {
@@ -127,12 +169,24 @@ namespace PersonalCloudLibrarySource
                 target.AppendLine(line);
             }
 
+            activity?.Invoke();
+
             long transferred;
             long total;
             if (RcloneProgressParser.TryParse(line, out transferred, out total))
             {
                 progress?.Invoke(transferred, total);
             }
+        }
+
+        private static int NormalizeTimeout(int value, int fallback)
+        {
+            if (value >= 5 && value <= 86400)
+            {
+                return value;
+            }
+
+            return fallback >= 5 && fallback <= 86400 ? fallback : 30;
         }
 
         private static string GetText(StringBuilder builder, object syncRoot)
@@ -143,17 +197,33 @@ namespace PersonalCloudLibrarySource
             }
         }
 
-        private static void TryKill(Process process)
+        private static bool TryStop(IRcloneProcessHandle process)
         {
+            if (process == null)
+            {
+                return true;
+            }
+
+            var killSucceeded = true;
             try
             {
-                if (process != null && !process.HasExited)
+                if (!process.HasExited)
                 {
-                    process.Kill();
+                    try
+                    {
+                        process.Kill();
+                    }
+                    catch
+                    {
+                        killSucceeded = false;
+                    }
                 }
+
+                return process.WaitForExit(5000) && killSucceeded;
             }
             catch
             {
+                return false;
             }
         }
     }

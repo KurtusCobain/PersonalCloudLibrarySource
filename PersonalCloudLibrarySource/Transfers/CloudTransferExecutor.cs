@@ -4,7 +4,16 @@ using System.Threading;
 
 namespace PersonalCloudLibrarySource
 {
-    public sealed class CloudTransferExecutor
+    public interface ICloudTransferExecutor
+    {
+        CloudTransferExecutionResult ExecuteLocal(Guid jobId, bool isDirectory);
+
+        CloudTransferExecutionResult ExecuteRclone(
+            Guid jobId,
+            PersonalCloudLibrarySourceSettings settings);
+    }
+
+    public sealed class CloudTransferExecutor : ICloudTransferExecutor
     {
         private readonly CloudTransferManager manager;
         private readonly LocalTransferAdapter localAdapter;
@@ -33,8 +42,13 @@ namespace PersonalCloudLibrarySource
         public CloudTransferExecutionResult ExecuteLocal(Guid jobId, bool isDirectory)
         {
             var job = manager.GetJob(jobId);
-            if (!WaitForExecutionTurn(job))
+            if (!CanExecute(job))
             {
+                if (job.CancellationToken.IsCancellationRequested)
+                {
+                    TransitionToCancelledIfNeeded(job);
+                }
+
                 return CloudTransferExecutionResult.CancelledResult();
             }
 
@@ -45,13 +59,17 @@ namespace PersonalCloudLibrarySource
                     ? localAdapter.CopyDirectory(
                         job.Source,
                         job.Destination,
+                        job.Id,
                         job.CancellationToken,
-                        (transferred, total) => UpdateProgressIfActive(job, transferred, total))
+                        (transferred, total) => UpdateProgressIfActive(job, transferred, total),
+                        phase => UpdatePhaseIfActive(job, phase))
                     : localAdapter.CopyFile(
                         job.Source,
                         job.Destination,
+                        job.Id,
                         job.CancellationToken,
-                        (transferred, total) => UpdateProgressIfActive(job, transferred, total));
+                        (transferred, total) => UpdateProgressIfActive(job, transferred, total),
+                        phase => UpdatePhaseIfActive(job, phase));
 
                 return CompleteTransfer(job, result, isDirectory);
             }
@@ -72,22 +90,28 @@ namespace PersonalCloudLibrarySource
             PersonalCloudLibrarySourceSettings settings)
         {
             var job = manager.GetJob(jobId);
-            if (!WaitForExecutionTurn(job))
+            if (!CanExecute(job))
             {
+                if (job.CancellationToken.IsCancellationRequested)
+                {
+                    TransitionToCancelledIfNeeded(job);
+                }
+
                 return CloudTransferExecutionResult.CancelledResult();
             }
 
             try
             {
                 manager.Transition(job.Id, CloudTransferState.Connecting);
-                manager.Transition(job.Id, CloudTransferState.Transferring);
                 var result = rcloneAdapter.Copy(
                     settings,
                     job.Source,
                     job.Destination,
                     job.IsDirectory,
+                    job.Id,
                     job.CancellationToken,
-                    (transferred, total) => UpdateProgressIfActive(job, transferred, total));
+                    (transferred, total) => UpdateProgressIfActive(job, transferred, total),
+                    phase => UpdatePhaseIfActive(job, phase));
 
                 return CompleteTransfer(job, result, job.IsDirectory);
             }
@@ -127,7 +151,6 @@ namespace PersonalCloudLibrarySource
                     : CloudTransferExecutionResult.Failure(job.ErrorSummary);
             }
 
-            manager.Transition(job.Id, CloudTransferState.Verifying);
             if (!VerifyDestination(job.Destination, isDirectory, result.TotalBytes))
             {
                 var message = "Transferred data did not pass destination verification.";
@@ -135,25 +158,24 @@ namespace PersonalCloudLibrarySource
                 return CloudTransferExecutionResult.Failure(message);
             }
 
-            manager.Transition(job.Id, CloudTransferState.Finalizing);
+            if (job.State == CloudTransferState.Transferring)
+            {
+                manager.Transition(job.Id, CloudTransferState.Verifying);
+            }
+
+            if (job.State == CloudTransferState.Verifying)
+            {
+                manager.Transition(job.Id, CloudTransferState.Finalizing);
+            }
+
             manager.Transition(job.Id, CloudTransferState.Completed);
             return result;
         }
 
-        private bool WaitForExecutionTurn(CloudTransferJob job)
+        private static bool CanExecute(CloudTransferJob job)
         {
-            while (job.State == CloudTransferState.Queued)
-            {
-                if (job.CancellationToken.IsCancellationRequested)
-                {
-                    TransitionToCancelledIfNeeded(job);
-                    return false;
-                }
-
-                Thread.Sleep(50);
-            }
-
-            return job.State == CloudTransferState.Preparing;
+            return job.State == CloudTransferState.Preparing &&
+                   !job.CancellationToken.IsCancellationRequested;
         }
 
         private void UpdateProgressIfActive(CloudTransferJob job, long transferred, long? total)
@@ -161,6 +183,14 @@ namespace PersonalCloudLibrarySource
             if (job.IsActive)
             {
                 manager.UpdateProgress(job.Id, transferred, total);
+            }
+        }
+
+        private void UpdatePhaseIfActive(CloudTransferJob job, CloudTransferState phase)
+        {
+            if (job.IsActive && job.State != phase)
+            {
+                manager.Transition(job.Id, phase);
             }
         }
 

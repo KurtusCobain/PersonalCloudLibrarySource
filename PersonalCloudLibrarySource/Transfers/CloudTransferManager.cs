@@ -159,6 +159,12 @@ namespace PersonalCloudLibrarySource
                         "Transfer job cannot move from " + job.State + " to " + nextState + ".");
                 }
 
+                if (nextState == CloudTransferState.Finalizing &&
+                    job.CancellationToken.IsCancellationRequested)
+                {
+                    throw new OperationCanceledException(job.CancellationToken);
+                }
+
                 if (nextState == CloudTransferState.Cancelled)
                 {
                     job.RequestCancellation();
@@ -200,14 +206,13 @@ namespace PersonalCloudLibrarySource
                     return false;
                 }
 
-                if (!IsTransitionAllowed(job.State, CloudTransferState.Cancelled))
+                if (job.State == CloudTransferState.Finalizing ||
+                    job.CancellationToken.IsCancellationRequested)
                 {
                     return false;
                 }
 
                 job.RequestCancellation();
-                job.SetState(CloudTransferState.Cancelled, null);
-                StartQueuedJobsLocked();
             }
 
             OnChanged();

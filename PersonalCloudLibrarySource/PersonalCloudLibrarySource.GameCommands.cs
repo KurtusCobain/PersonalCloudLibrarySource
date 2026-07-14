@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading.Tasks;
 using System.Windows;
 
 namespace PersonalCloudLibrarySource
@@ -223,7 +222,7 @@ namespace PersonalCloudLibrarySource
                 return;
             }
 
-            GetTransferManager().Cancel(active.Id);
+            GetTransferQueue().Cancel(active.Id);
         }
 
         private void RetryLastTransfer(GameCommandTarget target)
@@ -245,18 +244,8 @@ namespace PersonalCloudLibrarySource
                 return;
             }
 
-            var retry = manager.Retry(previous.Id);
-            if (string.Equals(
-                previous.ProviderType,
-                PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
-                StringComparison.OrdinalIgnoreCase))
-            {
-                var settingsSnapshot = settings.GetRuntimeSettingsSnapshot();
-                Task.Run(() => GetTransferExecutor().ExecuteRclone(retry.Id, settingsSnapshot));
-                return;
-            }
-
-            Task.Run(() => GetTransferExecutor().ExecuteLocal(retry.Id, retry.IsDirectory));
+            var settingsSnapshot = settings.GetRuntimeSettingsSnapshot();
+            GetTransferQueue().Retry(previous.Id, settingsSnapshot);
         }
 
         private GameMenuItem CreateGameMenuItem(

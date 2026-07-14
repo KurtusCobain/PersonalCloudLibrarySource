@@ -51,6 +51,20 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void TransitionToFinalizing_WhenCancellationWonRace_RejectsCommitAtomically()
+        {
+            var manager = new CloudTransferManager(1);
+            var job = manager.Enqueue(Guid.NewGuid(), "Game", "source", "dest", "LocalFolder");
+            manager.Transition(job.Id, CloudTransferState.Transferring);
+            manager.Transition(job.Id, CloudTransferState.Verifying);
+            Assert.That(manager.Cancel(job.Id), Is.True);
+
+            Assert.Throws<OperationCanceledException>(() =>
+                manager.Transition(job.Id, CloudTransferState.Finalizing));
+            Assert.That(job.State, Is.EqualTo(CloudTransferState.Verifying));
+        }
+
+        [Test]
         public void UpdateProgress_AggregatesKnownByteTotals()
         {
             var manager = new CloudTransferManager(2);
@@ -124,6 +138,10 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             manager.Transition(failed.Id, CloudTransferState.Failed, "failed");
             var cancelled = manager.Enqueue(gameId, "Cancelled", "source-2", "dest-2", "LocalFolder");
             manager.Cancel(cancelled.Id);
+            Assert.That(cancelled.CancellationToken.IsCancellationRequested, Is.True);
+            Assert.That(cancelled.State, Is.Not.EqualTo(CloudTransferState.Cancelled),
+                "the observed worker owns terminal transition after cleanup");
+            manager.Transition(cancelled.Id, CloudTransferState.Cancelled);
 
             var retryable = manager.GetLatestRetryableJobForGame(gameId);
 

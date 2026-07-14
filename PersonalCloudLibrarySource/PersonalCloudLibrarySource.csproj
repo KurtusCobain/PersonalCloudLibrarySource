@@ -117,11 +117,15 @@
     <Compile Include="Transfers\CloudTransferManager.cs" />
     <Compile Include="Transfers\LocalTransferAdapter.cs" />
     <Compile Include="Transfers\RcloneCommandBuilder.cs" />
+    <Compile Include="Transfers\RcloneActivityTimeout.cs" />
     <Compile Include="Transfers\RcloneProcessRunner.cs" />
+    <Compile Include="Transfers\RcloneProcessHandle.cs" />
     <Compile Include="Transfers\RcloneProgressParser.cs" />
     <Compile Include="Transfers\RcloneTransferAdapter.cs" />
     <Compile Include="Transfers\RcloneTransferModels.cs" />
     <Compile Include="Transfers\TransferActivityTracker.cs" />
+    <Compile Include="Transfers\TransferQueueService.cs" />
+    <Compile Include="Transfers\TransferPartialPathPolicy.cs" />
     <Compile Include="Views\CloudGameDetailsView.xaml.cs">
       <DependentUpon>CloudGameDetailsView.xaml</DependentUpon>
     </Compile>

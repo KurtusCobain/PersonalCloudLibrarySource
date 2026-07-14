@@ -21,10 +21,40 @@ namespace PersonalCloudLibrarySource
             CancellationToken cancellationToken,
             Action<long, long?> progress)
         {
-            var partialPath = string.IsNullOrWhiteSpace(destinationPath)
-                ? string.Empty
-                : destinationPath + ".pcls-partial";
+            return CopyFileCore(
+                sourcePath,
+                destinationPath,
+                string.IsNullOrWhiteSpace(destinationPath) ? string.Empty : destinationPath + ".pcls-partial",
+                cancellationToken,
+                progress,
+                null);
+        }
 
+        public CloudTransferExecutionResult CopyFile(
+            string sourcePath,
+            string destinationPath,
+            Guid jobId,
+            CancellationToken cancellationToken,
+            Action<long, long?> progress,
+            Action<CloudTransferState> phase = null)
+        {
+            return CopyFileCore(
+                sourcePath,
+                destinationPath,
+                TransferPartialPathPolicy.Create(destinationPath, jobId),
+                cancellationToken,
+                progress,
+                phase);
+        }
+
+        private CloudTransferExecutionResult CopyFileCore(
+            string sourcePath,
+            string destinationPath,
+            string partialPath,
+            CancellationToken cancellationToken,
+            Action<long, long?> progress,
+            Action<CloudTransferState> phase)
+        {
             try
             {
                 if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
@@ -58,12 +88,15 @@ namespace PersonalCloudLibrarySource
                     0,
                     progress);
 
-                cancellationToken.ThrowIfCancellationRequested();
+                phase?.Invoke(CloudTransferState.Verifying);
                 if (!File.Exists(partialPath) || new FileInfo(partialPath).Length != totalBytes)
                 {
                     throw new IOException("The copied file did not pass size verification.");
                 }
 
+                cancellationToken.ThrowIfCancellationRequested();
+                phase?.Invoke(CloudTransferState.Finalizing);
+                cancellationToken.ThrowIfCancellationRequested();
                 File.Move(partialPath, destinationPath);
                 return CloudTransferExecutionResult.Success(transferred, totalBytes);
             }
@@ -85,13 +118,42 @@ namespace PersonalCloudLibrarySource
             CancellationToken cancellationToken,
             Action<long, long?> progress)
         {
-            var normalizedDestination = string.IsNullOrWhiteSpace(destinationDirectory)
-                ? string.Empty
-                : destinationDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            var partialDirectory = string.IsNullOrWhiteSpace(normalizedDestination)
-                ? string.Empty
-                : normalizedDestination + ".pcls-partial";
+            var normalized = NormalizeDirectoryDestination(destinationDirectory);
+            return CopyDirectoryCore(
+                sourceDirectory,
+                normalized,
+                string.IsNullOrWhiteSpace(normalized) ? string.Empty : normalized + ".pcls-partial",
+                cancellationToken,
+                progress,
+                null);
+        }
 
+        public CloudTransferExecutionResult CopyDirectory(
+            string sourceDirectory,
+            string destinationDirectory,
+            Guid jobId,
+            CancellationToken cancellationToken,
+            Action<long, long?> progress,
+            Action<CloudTransferState> phase = null)
+        {
+            var normalized = NormalizeDirectoryDestination(destinationDirectory);
+            return CopyDirectoryCore(
+                sourceDirectory,
+                normalized,
+                TransferPartialPathPolicy.Create(normalized, jobId),
+                cancellationToken,
+                progress,
+                phase);
+        }
+
+        private CloudTransferExecutionResult CopyDirectoryCore(
+            string sourceDirectory,
+            string normalizedDestination,
+            string partialDirectory,
+            CancellationToken cancellationToken,
+            Action<long, long?> progress,
+            Action<CloudTransferState> phase)
+        {
             try
             {
                 if (string.IsNullOrWhiteSpace(sourceDirectory) || !Directory.Exists(sourceDirectory))
@@ -150,7 +212,7 @@ namespace PersonalCloudLibrarySource
                         progress);
                 }
 
-                cancellationToken.ThrowIfCancellationRequested();
+                phase?.Invoke(CloudTransferState.Verifying);
                 var copiedBytes = Directory.GetFiles(partialDirectory, "*", SearchOption.AllDirectories)
                     .Sum(file => new FileInfo(file).Length);
                 if (copiedBytes != totalBytes)
@@ -158,6 +220,9 @@ namespace PersonalCloudLibrarySource
                     throw new IOException("The copied directory did not pass size verification.");
                 }
 
+                cancellationToken.ThrowIfCancellationRequested();
+                phase?.Invoke(CloudTransferState.Finalizing);
+                cancellationToken.ThrowIfCancellationRequested();
                 Directory.Move(partialDirectory, normalizedDestination);
                 return CloudTransferExecutionResult.Success(transferred, totalBytes);
             }
@@ -171,6 +236,13 @@ namespace PersonalCloudLibrarySource
                 DeleteDirectoryIfExists(partialDirectory);
                 return CloudTransferExecutionResult.Failure(ex.Message, ex);
             }
+        }
+
+        private static string NormalizeDirectoryDestination(string destinationDirectory)
+        {
+            return string.IsNullOrWhiteSpace(destinationDirectory)
+                ? string.Empty
+                : destinationDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         }
 
         private long CopyFileContents(

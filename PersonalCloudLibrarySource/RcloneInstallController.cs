@@ -16,6 +16,7 @@ namespace PersonalCloudLibrarySource
         private readonly LocalFileCopier localFileCopier;
         private readonly CloudTransferManager transferManager;
         private readonly CloudTransferExecutor transferExecutor;
+        private readonly TransferQueueService transferQueue;
 
         public RcloneInstallController(
             IPlayniteAPI playniteApi,
@@ -25,7 +26,8 @@ namespace PersonalCloudLibrarySource
             RcloneFileCopier rcloneFileCopier,
             LocalFileCopier localFileCopier,
             CloudTransferManager transferManager = null,
-            CloudTransferExecutor transferExecutor = null) : base(game)
+            CloudTransferExecutor transferExecutor = null,
+            TransferQueueService transferQueue = null) : base(game)
         {
             this.playniteApi = playniteApi;
             this.item = item;
@@ -34,6 +36,7 @@ namespace PersonalCloudLibrarySource
             this.localFileCopier = localFileCopier;
             this.transferManager = transferManager;
             this.transferExecutor = transferExecutor;
+            this.transferQueue = transferQueue;
             Name = "Download to local cache";
         }
 
@@ -56,7 +59,26 @@ namespace PersonalCloudLibrarySource
             if (string.Equals(providerType, PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType, System.StringComparison.OrdinalIgnoreCase))
             {
                 var rcloneSourcePath = PersonalCloudLibrarySource.ResolveRcloneSourcePath(settings, sourcePath);
-                if (transferManager != null && transferExecutor != null)
+                if (transferQueue != null)
+                {
+                    var destinationPath = sourceType == "directory"
+                        ? destinationFolderPath
+                        : destinationFilePath;
+                    var job = transferQueue.EnqueueRclone(
+                        Game.Id,
+                        string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
+                        rcloneSourcePath,
+                        destinationPath,
+                        providerType,
+                        sourceType == "directory",
+                        settings);
+                    var result = transferQueue.GetCompletion(job.Id).GetAwaiter().GetResult();
+                    succeeded = result.Succeeded;
+                    cancelled = result.Cancelled;
+                    message = result.Message;
+                    exception = result.Exception;
+                }
+                else if (transferManager != null && transferExecutor != null)
                 {
                     var destinationPath = sourceType == "directory"
                         ? destinationFolderPath
@@ -87,7 +109,25 @@ namespace PersonalCloudLibrarySource
             else
             {
                 var localSourcePath = PersonalCloudLibrarySource.ResolveLocalFolderSourcePath(settings, sourcePath);
-                if (transferManager != null && transferExecutor != null)
+                if (transferQueue != null)
+                {
+                    var destinationPath = sourceType == "directory"
+                        ? destinationFolderPath
+                        : destinationFilePath;
+                    var job = transferQueue.EnqueueLocal(
+                        Game.Id,
+                        string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
+                        localSourcePath,
+                        destinationPath,
+                        providerType,
+                        sourceType == "directory");
+                    var result = transferQueue.GetCompletion(job.Id).GetAwaiter().GetResult();
+                    succeeded = result.Succeeded;
+                    cancelled = result.Cancelled;
+                    message = result.Message;
+                    exception = result.Exception;
+                }
+                else if (transferManager != null && transferExecutor != null)
                 {
                     var destinationPath = sourceType == "directory"
                         ? destinationFolderPath

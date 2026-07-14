@@ -54,6 +54,7 @@
     <Compile Include="Repository\PathStateConsumerContractTests.cs" />
     <Compile Include="Repository\RuntimeSettingsSnapshotUsageTests.cs" />
     <Compile Include="Repository\SetupWizardEditLifecycleContractTests.cs" />
+    <Compile Include="Repository\TransferQueueWiringContractTests.cs" />
     <Compile Include="RcloneTimeoutDefaultsTests.cs" />
     <Compile Include="Services\GameCommandPolicyServiceTests.cs" />
     <Compile Include="Services\GameCommandServiceTests.cs" />
@@ -78,8 +79,12 @@
     <Compile Include="Transfers\LocalTransferAdapterTests.cs" />
     <Compile Include="Transfers\RcloneCommandBuilderTests.cs" />
     <Compile Include="Transfers\RcloneProgressParserTests.cs" />
+    <Compile Include="Transfers\RcloneProcessRunnerTests.cs" />
+    <Compile Include="Transfers\RcloneActivityTimeoutTests.cs" />
     <Compile Include="Transfers\RcloneTransferAdapterTests.cs" />
     <Compile Include="Transfers\TransferActivityTrackerTests.cs" />
+    <Compile Include="Transfers\TransferQueueServiceTests.cs" />
+    <Compile Include="Transfers\TransferPartialPathPolicyTests.cs" />
     <Compile Include="Ui\UiContractTests.cs" />
   </ItemGroup>
   <ItemGroup>

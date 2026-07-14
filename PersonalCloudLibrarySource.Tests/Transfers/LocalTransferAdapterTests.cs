@@ -120,5 +120,25 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(result.Message, Does.Contain("already exists"));
             Assert.That(File.ReadAllText(destination), Is.EqualTo("existing"));
         }
+
+        [Test]
+        public void CopyFile_JobOwnedPartialPathIsUniqueAndRemovedAfterAtomicMove()
+        {
+            var source = Path.Combine(testRoot, "source-owned.txt");
+            var destination = Path.Combine(testRoot, "cache", "owned.txt");
+            var jobId = Guid.NewGuid();
+            File.WriteAllText(source, "owned");
+
+            var result = new LocalTransferAdapter().CopyFile(
+                source,
+                destination,
+                jobId,
+                CancellationToken.None,
+                null);
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(File.Exists(destination), Is.True);
+            Assert.That(File.Exists(TransferPartialPathPolicy.Create(destination, jobId)), Is.False);
+        }
     }
 }

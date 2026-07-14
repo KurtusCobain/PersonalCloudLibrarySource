@@ -57,6 +57,8 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             var manager = new CloudTransferManager(1);
             var job = manager.Enqueue(Guid.NewGuid(), "Game", "source", "destination", "LocalFolder");
             manager.Cancel(job.Id);
+            Assert.That(job.CancellationToken.IsCancellationRequested, Is.True);
+            manager.Transition(job.Id, CloudTransferState.Cancelled);
             var tracker = new TransferActivityTracker();
 
             var record = tracker.CollectNew(manager.Jobs)[0];

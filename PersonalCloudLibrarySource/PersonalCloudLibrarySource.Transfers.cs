@@ -6,6 +6,7 @@ namespace PersonalCloudLibrarySource
     {
         private CloudTransferManager transferManager;
         private CloudTransferExecutor transferExecutor;
+        private TransferQueueService transferQueue;
 
         internal CloudTransferManager GetTransferManager()
         {
@@ -31,6 +32,16 @@ namespace PersonalCloudLibrarySource
             return transferExecutor;
         }
 
+        internal TransferQueueService GetTransferQueue()
+        {
+            if (transferQueue == null)
+            {
+                transferQueue = new TransferQueueService(GetTransferManager(), GetTransferExecutor());
+            }
+
+            return transferQueue;
+        }
+
         private int GetActiveTransferCount()
         {
             return GetTransferManager().ActiveCount;
@@ -45,7 +56,15 @@ namespace PersonalCloudLibrarySource
         {
             if (transferManager != null)
             {
-                transferManager.SetMaxConcurrentTransfers(settings?.GetRuntimeSettingsSnapshot()?.TransferConcurrency ?? 1);
+                var concurrency = settings?.GetRuntimeSettingsSnapshot()?.TransferConcurrency ?? 1;
+                if (transferQueue != null)
+                {
+                    transferQueue.SetMaxConcurrentTransfers(concurrency);
+                }
+                else
+                {
+                    transferManager.SetMaxConcurrentTransfers(concurrency);
+                }
             }
         }
 
@@ -84,6 +103,13 @@ namespace PersonalCloudLibrarySource
 
         private void DisposeTransferManager()
         {
+            if (transferQueue != null)
+            {
+                transferQueue.Shutdown(TimeSpan.FromSeconds(10));
+                transferQueue.Dispose();
+                transferQueue = null;
+            }
+
             if (transferManager != null)
             {
                 transferManager.Changed -= TransferManager_Changed;

@@ -8,13 +8,14 @@ namespace PersonalCloudLibrarySource.Tests.Repository
     public class RuntimeSettingsSnapshotUsageTests
     {
         [Test]
-        public void RetryTask_CapturesSnapshotBeforeStartingBackgroundWork()
+        public void RetryQueue_CapturesSnapshotBeforeEnqueuingBackgroundWork()
         {
             var source = ReadProductionSource("PersonalCloudLibrarySource.GameCommands.cs");
 
             Assert.That(source, Does.Contain("var settingsSnapshot = settings.GetRuntimeSettingsSnapshot();"));
-            Assert.That(source, Does.Contain("ExecuteRclone(retry.Id, settingsSnapshot)"));
-            Assert.That(source, Does.Not.Contain("ExecuteRclone(retry.Id, settings.Settings)"));
+            Assert.That(source, Does.Contain("GetTransferQueue().Retry(previous.Id, settingsSnapshot)"));
+            Assert.That(source, Does.Not.Contain("GetTransferQueue().Retry(previous.Id, settings.Settings)"));
+            Assert.That(source, Does.Not.Contain("Task.Run"));
         }
 
         [Test]

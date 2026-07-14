@@ -126,6 +126,103 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(File.ReadAllText(destination), Is.EqualTo("existing"));
         }
 
+        [Test]
+        public void Copy_JobOwnedPartialPathIsPassedToRunnerAndRemovedAfterFinalization()
+        {
+            var destination = Path.Combine(testRoot, "cache", "owned.zip");
+            var jobId = Guid.NewGuid();
+            var runner = new FakeRcloneProcessRunner(request =>
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(request.DestinationPath));
+                File.WriteAllText(request.DestinationPath, "owned");
+                return RcloneProcessResult.Success("ok");
+            });
+
+            var result = new RcloneTransferAdapter(runner).Copy(
+                CreateSettings(),
+                "library/owned.zip",
+                destination,
+                false,
+                jobId,
+                CancellationToken.None,
+                null);
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(runner.LastRequest.DestinationPath, Is.EqualTo(TransferPartialPathPolicy.Create(destination, jobId)));
+            Assert.That(File.Exists(runner.LastRequest.DestinationPath), Is.False);
+        }
+
+        [Test]
+        public void Copy_CancellationCleanupFailure_IsReportedAsFailureNotCancellation()
+        {
+            var destination = Path.Combine(testRoot, "cache", "locked.zip");
+            var jobId = Guid.NewGuid();
+            FileStream lockStream = null;
+            try
+            {
+                var runner = new FakeRcloneProcessRunner(request =>
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(request.DestinationPath));
+                    lockStream = new FileStream(request.DestinationPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                    lockStream.WriteByte(1);
+                    lockStream.Flush();
+                    return RcloneProcessResult.Cancelled("cancelled");
+                });
+
+                var result = new RcloneTransferAdapter(runner).Copy(
+                    CreateSettings(),
+                    "library/locked.zip",
+                    destination,
+                    false,
+                    jobId,
+                    CancellationToken.None,
+                    null);
+
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(result.Cancelled, Is.False);
+                Assert.That(result.Message, Does.Contain("cleanup"));
+            }
+            finally
+            {
+                lockStream?.Dispose();
+                var partial = TransferPartialPathPolicy.Create(destination, jobId);
+                if (File.Exists(partial))
+                {
+                    File.Delete(partial);
+                }
+            }
+        }
+
+        [Test]
+        public void Copy_ThrowingFinalProgressCallback_FailsBeforeCommitAndCleansPartial()
+        {
+            var destination = Path.Combine(testRoot, "cache", "progress.zip");
+            var jobId = Guid.NewGuid();
+            var runner = new FakeRcloneProcessRunner(request =>
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(request.DestinationPath));
+                File.WriteAllText(request.DestinationPath, "verified cloud content");
+                return RcloneProcessResult.Success("ok");
+            })
+            {
+                ReportProgress = false
+            };
+
+            var result = new RcloneTransferAdapter(runner).Copy(
+                CreateSettings(),
+                "library/progress.zip",
+                destination,
+                false,
+                jobId,
+                CancellationToken.None,
+                (transferred, total) => throw new InvalidOperationException("progress consumer failed"));
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Message, Does.Contain("progress consumer failed"));
+            Assert.That(File.Exists(destination), Is.False);
+            Assert.That(File.Exists(TransferPartialPathPolicy.Create(destination, jobId)), Is.False);
+        }
+
         private static PersonalCloudLibrarySourceSettingsV3 CreateSettings()
         {
             return new PersonalCloudLibrarySourceSettingsV3
@@ -147,6 +244,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
 
             public int RunCount { get; private set; }
             public RcloneTransferRequest LastRequest { get; private set; }
+            public bool ReportProgress { get; set; } = true;
 
             public RcloneProcessResult Run(
                 RcloneTransferRequest request,
@@ -155,7 +253,10 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             {
                 RunCount++;
                 LastRequest = request;
-                progress?.Invoke(512, 1024);
+                if (ReportProgress)
+                {
+                    progress?.Invoke(512, 1024);
+                }
                 return handler(request);
             }
         }

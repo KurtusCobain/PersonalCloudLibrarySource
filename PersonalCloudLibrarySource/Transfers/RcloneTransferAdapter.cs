@@ -22,13 +22,51 @@ namespace PersonalCloudLibrarySource
             CancellationToken cancellationToken,
             Action<long, long?> progress)
         {
+            var normalized = NormalizeDestination(destinationPath, isDirectory);
+            return CopyCore(
+                settings,
+                remoteSourcePath,
+                normalized,
+                isDirectory,
+                string.IsNullOrWhiteSpace(normalized) ? string.Empty : normalized + ".pcls-partial",
+                cancellationToken,
+                progress,
+                null);
+        }
+
+        public CloudTransferExecutionResult Copy(
+            PersonalCloudLibrarySourceSettings settings,
+            string remoteSourcePath,
+            string destinationPath,
+            bool isDirectory,
+            Guid jobId,
+            CancellationToken cancellationToken,
+            Action<long, long?> progress,
+            Action<CloudTransferState> phase = null)
+        {
+            var normalized = NormalizeDestination(destinationPath, isDirectory);
+            return CopyCore(
+                settings,
+                remoteSourcePath,
+                normalized,
+                isDirectory,
+                TransferPartialPathPolicy.Create(normalized, jobId),
+                cancellationToken,
+                progress,
+                phase);
+        }
+
+        private CloudTransferExecutionResult CopyCore(
+            PersonalCloudLibrarySourceSettings settings,
+            string remoteSourcePath,
+            string normalizedDestination,
+            bool isDirectory,
+            string partialPath,
+            CancellationToken cancellationToken,
+            Action<long, long?> progress,
+            Action<CloudTransferState> phase)
+        {
             settings = settings ?? new PersonalCloudLibrarySourceSettings();
-            var normalizedDestination = isDirectory
-                ? (destinationPath ?? string.Empty).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                : destinationPath ?? string.Empty;
-            var partialPath = string.IsNullOrWhiteSpace(normalizedDestination)
-                ? string.Empty
-                : normalizedDestination + ".pcls-partial";
 
             try
             {
@@ -44,7 +82,11 @@ namespace PersonalCloudLibrarySource
                         "Destination already exists: " + normalizedDestination);
                 }
 
-                DeletePartial(partialPath);
+                string cleanupError;
+                if (!TryDeletePartial(partialPath, out cleanupError))
+                {
+                    return CloudTransferExecutionResult.Failure("Transfer partial cleanup failed: " + cleanupError);
+                }
                 var parent = Path.GetDirectoryName(normalizedDestination);
                 if (!string.IsNullOrWhiteSpace(parent))
                 {
@@ -58,18 +100,30 @@ namespace PersonalCloudLibrarySource
                     RemoteSourcePath = remoteSourcePath,
                     DestinationPath = partialPath,
                     IsDirectory = isDirectory,
-                    TimeoutSeconds = settings.RcloneTimeoutSeconds
+                    TimeoutSeconds = settings.RcloneTimeoutSeconds,
+                    ConnectTimeoutSeconds = Math.Min(30, Math.Max(5, settings.RcloneTimeoutSeconds)),
+                    InactivityTimeoutSeconds = settings.RcloneTimeoutSeconds
                 };
+                phase?.Invoke(CloudTransferState.Transferring);
                 var processResult = processRunner.Run(request, cancellationToken, progress);
                 if (processResult.WasCancelled || cancellationToken.IsCancellationRequested)
                 {
-                    DeletePartial(partialPath);
+                    if (!TryDeletePartial(partialPath, out cleanupError))
+                    {
+                        return CloudTransferExecutionResult.Failure("Transfer cancellation cleanup failed: " + cleanupError);
+                    }
+
                     return CloudTransferExecutionResult.CancelledResult(processResult.Message);
                 }
 
                 if (!processResult.Succeeded)
                 {
-                    DeletePartial(partialPath);
+                    if (!TryDeletePartial(partialPath, out cleanupError))
+                    {
+                        return CloudTransferExecutionResult.Failure(
+                            "Transfer failed and partial cleanup failed: " + cleanupError,
+                            processResult.Exception);
+                    }
                     var detail = string.IsNullOrWhiteSpace(processResult.Error)
                         ? processResult.Message
                         : processResult.Message + " " + RcloneManifestReader.TrimForLog(processResult.Error);
@@ -77,13 +131,21 @@ namespace PersonalCloudLibrarySource
                 }
 
                 long copiedBytes;
+                phase?.Invoke(CloudTransferState.Verifying);
                 if (!VerifyPartial(partialPath, isDirectory, out copiedBytes))
                 {
-                    DeletePartial(partialPath);
+                    if (!TryDeletePartial(partialPath, out cleanupError))
+                    {
+                        return CloudTransferExecutionResult.Failure(
+                            "Transfer verification failed and partial cleanup failed: " + cleanupError);
+                    }
                     return CloudTransferExecutionResult.Failure(
                         "rclone completed, but the partial destination did not pass verification.");
                 }
 
+                progress?.Invoke(copiedBytes, copiedBytes);
+                cancellationToken.ThrowIfCancellationRequested();
+                phase?.Invoke(CloudTransferState.Finalizing);
                 cancellationToken.ThrowIfCancellationRequested();
                 if (isDirectory)
                 {
@@ -94,18 +156,24 @@ namespace PersonalCloudLibrarySource
                     File.Move(partialPath, normalizedDestination);
                 }
 
-                progress?.Invoke(copiedBytes, copiedBytes);
                 return CloudTransferExecutionResult.Success(copiedBytes, copiedBytes);
             }
             catch (OperationCanceledException)
             {
-                DeletePartial(partialPath);
+                string cleanupError;
+                if (!TryDeletePartial(partialPath, out cleanupError))
+                {
+                    return CloudTransferExecutionResult.Failure("Transfer cancellation cleanup failed: " + cleanupError);
+                }
+
                 return CloudTransferExecutionResult.CancelledResult();
             }
             catch (Exception ex)
             {
-                DeletePartial(partialPath);
-                return CloudTransferExecutionResult.Failure(ex.Message, ex);
+                string cleanupError;
+                return TryDeletePartial(partialPath, out cleanupError)
+                    ? CloudTransferExecutionResult.Failure(ex.Message, ex)
+                    : CloudTransferExecutionResult.Failure(ex.Message + " Partial cleanup failed: " + cleanupError, ex);
             }
         }
 
@@ -161,21 +229,39 @@ namespace PersonalCloudLibrarySource
             return copiedBytes > 0;
         }
 
-        private static void DeletePartial(string path)
+        private static string NormalizeDestination(string destinationPath, bool isDirectory)
         {
+            return isDirectory
+                ? (destinationPath ?? string.Empty).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                : destinationPath ?? string.Empty;
+        }
+
+        private static bool TryDeletePartial(string path, out string error)
+        {
+            error = string.Empty;
             if (string.IsNullOrWhiteSpace(path))
             {
-                return;
+                return true;
             }
 
-            if (File.Exists(path))
+            try
             {
-                File.Delete(path);
-            }
+                if (File.Exists(path))
+                {
+                    File.Delete(path);
+                }
 
-            if (Directory.Exists(path))
+                if (Directory.Exists(path))
+                {
+                    Directory.Delete(path, true);
+                }
+
+                return true;
+            }
+            catch (Exception ex)
             {
-                Directory.Delete(path, true);
+                error = ex.Message;
+                return false;
             }
         }
     }
