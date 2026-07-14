@@ -49,7 +49,7 @@ namespace PersonalCloudLibrarySource
 
             try
             {
-                pluginSettings = settings.Settings;
+                pluginSettings = settings.GetRuntimeSettingsSnapshot();
 
                 if (pluginSettings == null || !pluginSettings.Enabled)
                 {
@@ -88,7 +88,7 @@ namespace PersonalCloudLibrarySource
 
             try
             {
-                var pluginSettings = settings.Settings;
+                var pluginSettings = settings.GetRuntimeSettingsSnapshot();
                 if (args?.Game == null)
                 {
                     logger.Info("Personal Cloud Library Source install action not returned: no game context.");
@@ -176,7 +176,7 @@ namespace PersonalCloudLibrarySource
 
             try
             {
-                var pluginSettings = settings.Settings;
+                var pluginSettings = settings.GetRuntimeSettingsSnapshot();
                 if (args?.Game == null)
                 {
                     logger.Info("Personal Cloud Library Source uninstall action not returned: no game context.");

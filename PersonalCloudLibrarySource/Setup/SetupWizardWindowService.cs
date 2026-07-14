@@ -9,19 +9,24 @@ namespace PersonalCloudLibrarySource
         private readonly IPlayniteAPI playniteApi;
         private readonly PersonalCloudLibrarySourceSettingsV3ViewModel settingsViewModel;
         private readonly Func<string> defaultCachePathProvider;
-        private readonly Action setupCompleted;
+        private readonly Action prepareSetupCompletion;
+        private readonly Action setupSaved;
+        private readonly SetupCompletionCoordinator completionCoordinator = new SetupCompletionCoordinator();
         private Window wizardWindow;
+        private bool editCompleted;
 
         public SetupWizardWindowService(
             IPlayniteAPI playniteApi,
             PersonalCloudLibrarySourceSettingsV3ViewModel settingsViewModel,
             Func<string> defaultCachePathProvider,
-            Action setupCompleted)
+            Action prepareSetupCompletion,
+            Action setupSaved)
         {
             this.playniteApi = playniteApi ?? throw new ArgumentNullException(nameof(playniteApi));
             this.settingsViewModel = settingsViewModel ?? throw new ArgumentNullException(nameof(settingsViewModel));
             this.defaultCachePathProvider = defaultCachePathProvider ?? throw new ArgumentNullException(nameof(defaultCachePathProvider));
-            this.setupCompleted = setupCompleted ?? throw new ArgumentNullException(nameof(setupCompleted));
+            this.prepareSetupCompletion = prepareSetupCompletion ?? throw new ArgumentNullException(nameof(prepareSetupCompletion));
+            this.setupSaved = setupSaved ?? throw new ArgumentNullException(nameof(setupSaved));
         }
 
         public void OpenWizard()
@@ -47,6 +52,7 @@ namespace PersonalCloudLibrarySource
                 return;
             }
 
+            editCompleted = false;
             var viewModel = new SetupWizardViewModel(settingsViewModel.Settings, new SetupValidationService());
             if (string.IsNullOrWhiteSpace(viewModel.Draft.CachePath))
             {
@@ -67,18 +73,57 @@ namespace PersonalCloudLibrarySource
             wizardWindow.MinWidth = 600;
             wizardWindow.MinHeight = 520;
             wizardWindow.Closed += WizardWindow_Closed;
-            wizardWindow.Show();
+            try
+            {
+                settingsViewModel.BeginEdit();
+                wizardWindow.Show();
+            }
+            catch (Exception)
+            {
+                settingsViewModel.CancelEdit();
+                wizardWindow.Closed -= WizardWindow_Closed;
+                wizardWindow = null;
+                throw;
+            }
         }
 
-        private void HandleCompleted()
+        private bool HandleCompleted()
         {
-            settingsViewModel.EndEdit();
-            setupCompleted();
-            CloseWindow();
+            try
+            {
+                var completed = completionCoordinator.Complete(
+                    prepareSetupCompletion,
+                    () =>
+                    {
+                        settingsViewModel.EndEdit();
+                        return settingsViewModel.LastEditSavedSuccessfully;
+                    },
+                    setupSaved);
+                if (!completed)
+                {
+                    playniteApi.Dialogs.ShowMessage(
+                        "Setup could not be saved. Review the current values and try again.",
+                        "Personal Cloud Library Setup");
+                    return false;
+                }
+
+                editCompleted = true;
+                CloseWindow();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                playniteApi.Dialogs.ShowMessage(
+                    "Setup could not be saved: " + ex.Message,
+                    "Personal Cloud Library Setup");
+                return false;
+            }
         }
 
         private void HandleCancelled()
         {
+            settingsViewModel.CancelEdit();
+            editCompleted = true;
             CloseWindow();
         }
 
@@ -92,6 +137,11 @@ namespace PersonalCloudLibrarySource
 
         private void WizardWindow_Closed(object sender, EventArgs e)
         {
+            if (!editCompleted)
+            {
+                settingsViewModel.CancelEdit();
+            }
+
             if (wizardWindow != null)
             {
                 wizardWindow.Closed -= WizardWindow_Closed;

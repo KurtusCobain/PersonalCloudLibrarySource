@@ -1,10 +1,125 @@
 using NUnit.Framework;
+using System;
+using System.IO;
+using System.Reflection;
 
 namespace PersonalCloudLibrarySource.Tests
 {
     [TestFixture]
     public class SettingsMigrationServiceTests
     {
+        [Test]
+        public void LoadAndMigrate_Deserialized011Fixture_PreservesPathsProviderAndSafetyChoices()
+        {
+            var result = SettingsMigrationService.LoadAndMigrate(
+                () => DeserializeFlatSettingsFixture(ReadFixture("settings-v0.1.1.yaml")),
+                null);
+
+            Assert.That(result.WasRecoveredFromCorruptSettings, Is.False);
+            Assert.That(result.AppliedVersions, Is.EqualTo(new[] { 1, 2, 3, 4 }));
+            Assert.That(result.Settings.SourceProviderType, Is.EqualTo(PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType));
+            Assert.That(result.Settings.LocalManifestPath, Is.EqualTo(@"D:\Legacy\catalog.json"));
+            Assert.That(result.Settings.LocalLibraryRoot, Is.EqualTo(@"D:\Legacy\Games"));
+            Assert.That(result.Settings.LocalCacheFolder, Is.EqualTo(@"E:\LegacyCache"));
+            Assert.That(result.Settings.RcloneExecutablePath, Is.EqualTo(@"C:\Tools\rclone.exe"));
+            Assert.That(result.Settings.RcloneRemoteName, Is.EqualTo("archive"));
+            Assert.That(result.Settings.RcloneManifestPath, Is.EqualTo("manifests/library.json"));
+            Assert.That(result.Settings.RcloneContentRoot, Is.EqualTo("library"));
+            Assert.That(result.Settings.RcloneTimeoutSeconds, Is.EqualTo(75));
+            Assert.That(result.Settings.AllowDownloads, Is.False);
+            Assert.That(result.Settings.TreatMissingFilesAsUninstalled, Is.False);
+            Assert.That(result.Settings.UninstallBehavior, Is.EqualTo(PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior));
+            Assert.That(result.Settings.AllowUninstallOutsideCacheFolder, Is.True);
+        }
+
+        [Test]
+        public void LoadAndMigrate_Deserialized020Fixture_PreservesGenerationStateAndUpgradesOldTimeoutDefault()
+        {
+            var result = SettingsMigrationService.LoadAndMigrate(
+                () => DeserializeFlatSettingsFixture(ReadFixture("settings-v0.2.0.yaml")),
+                null);
+
+            Assert.That(result.WasRecoveredFromCorruptSettings, Is.False);
+            Assert.That(result.Settings.SourceProviderType, Is.EqualTo(PersonalCloudLibrarySourceSettings.LocalFolderProviderType));
+            Assert.That(result.Settings.LocalManifestPath, Is.EqualTo(@"\\NAS\Catalog\library.json"));
+            Assert.That(result.Settings.LocalLibraryRoot, Is.EqualTo(@"\\NAS\Games"));
+            Assert.That(result.Settings.AutoRefreshOnApplicationStart, Is.True);
+            Assert.That(result.Settings.AutoGenerateManifestOnApplicationStart, Is.True);
+            Assert.That(result.Settings.LastManifestGeneratedAt, Is.EqualTo("2026-06-15T12:34:56Z"));
+            Assert.That(result.Settings.LastGeneratedManifestPath, Is.EqualTo(@"D:\Generated\library.json"));
+            Assert.That(result.Settings.LastGeneratedReportPath, Is.EqualTo(@"D:\Generated\report.txt"));
+            Assert.That(result.Settings.LastManifestItemCount, Is.EqualTo(27));
+            Assert.That(result.Settings.RcloneTimeoutSeconds, Is.EqualTo(90));
+            Assert.That(result.Settings.UninstallBehavior, Is.EqualTo(PersonalCloudLibrarySourceSettings.RemoveCachedFileOnlyUninstallBehavior));
+        }
+
+        [Test]
+        public void LoadAndMigrate_DeserializerThrows_RecoversCurrentSafeDefaults()
+        {
+            var result = SettingsMigrationService.LoadAndMigrate(
+                () => DeserializeFlatSettingsFixture("SettingsVersion: [ definitely-not-valid"),
+                null);
+
+            Assert.That(result.WasRecoveredFromCorruptSettings, Is.True);
+            Assert.That(result.Settings.SettingsVersion, Is.EqualTo(PersonalCloudLibrarySourceSettingsV3.CurrentSettingsVersion));
+            Assert.That(result.Settings.TransferConcurrency, Is.EqualTo(1));
+            Assert.That(result.Settings.RcloneTimeoutSeconds, Is.EqualTo(90));
+            Assert.That(result.Settings.VerifyAfterTransfer, Is.True);
+            Assert.That(result.Settings.RemoveIncompleteTransferFiles, Is.True);
+        }
+
+        [Test]
+        public void LoadAndMigrate_DeserializedPartialSettings_PreservesProvidedChoiceAndNormalizesUnsafeValue()
+        {
+            const string partial = "SettingsVersion: 3\nRcloneTimeoutSeconds: 75\nTransferConcurrency: 99\nAllowDownloads: false\n";
+
+            var result = SettingsMigrationService.LoadAndMigrate(
+                () => DeserializeFlatSettingsFixture(partial),
+                null);
+
+            Assert.That(result.WasRecoveredFromCorruptSettings, Is.False);
+            Assert.That(result.Settings.RcloneTimeoutSeconds, Is.EqualTo(75));
+            Assert.That(result.Settings.TransferConcurrency, Is.EqualTo(1));
+            Assert.That(result.Settings.AllowDownloads, Is.False);
+            Assert.That(result.Settings.VerifyAfterTransfer, Is.True);
+        }
+
+        [TestCase(0, new[] { 1, 2, 3, 4 })]
+        [TestCase(1, new[] { 2, 3, 4 })]
+        [TestCase(2, new[] { 3, 4 })]
+        [TestCase(3, new[] { 4 })]
+        [TestCase(4, new int[0])]
+        public void Migrate_AppliesEverySchemaStepInOrderAndIsIdempotent(int startingVersion, int[] expectedVersions)
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                SettingsVersion = startingVersion,
+                RcloneTimeoutSeconds = 75,
+                TransferConcurrency = 4
+            };
+
+            var first = SettingsMigrationService.Migrate(settings);
+            var second = SettingsMigrationService.Migrate(settings);
+
+            Assert.That(first.AppliedVersions, Is.EqualTo(expectedVersions));
+            Assert.That(second.AppliedVersions, Is.Empty);
+            Assert.That(second.WasMigrated, Is.False);
+            Assert.That(settings.RcloneTimeoutSeconds, Is.EqualTo(75));
+            Assert.That(settings.TransferConcurrency, Is.EqualTo(4));
+        }
+
+        [Test]
+        public void LoadLegacyOrDefault_LoaderThrows_ReturnsSafeLegacyDefaults()
+        {
+            var settings = SettingsMigrationService.LoadLegacyOrDefault(
+                () => throw new InvalidDataException("corrupt settings"));
+
+            Assert.That(settings, Is.Not.Null);
+            Assert.That(settings.SourceProviderType, Is.EqualTo(PersonalCloudLibrarySourceSettings.LocalFileProviderType));
+            Assert.That(settings.RcloneTimeoutSeconds, Is.EqualTo(30));
+            Assert.That(settings.AllowDownloads, Is.True);
+        }
+
         [Test]
         public void Migrate_LegacySettings_PreservesExistingConfigurationAndAddsSafeDefaults()
         {
@@ -174,6 +289,73 @@ namespace PersonalCloudLibrarySource.Tests
             SettingsMigrationService.Migrate(settings);
 
             Assert.That(settings.TransferConcurrency, Is.EqualTo(1));
+        }
+
+        private static string ReadFixture(string fileName)
+        {
+            var path = Path.Combine(TestContext.CurrentContext.TestDirectory, "Fixtures", fileName);
+            return File.ReadAllText(path);
+        }
+
+        private static PersonalCloudLibrarySourceSettingsV3 DeserializeFlatSettingsFixture(string yaml)
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3();
+            var lines = yaml.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+            foreach (var line in lines)
+            {
+                if (string.IsNullOrWhiteSpace(line) || line.TrimStart().StartsWith("#", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var separator = line.IndexOf(':');
+                if (separator <= 0)
+                {
+                    throw new FormatException("Expected a flat YAML key/value entry.");
+                }
+
+                var name = line.Substring(0, separator).Trim();
+                var value = line.Substring(separator + 1).Trim();
+                if (value.StartsWith("[", StringComparison.Ordinal))
+                {
+                    throw new FormatException("Collections are not part of the historical settings shape.");
+                }
+
+                if (value.Length >= 2 && value[0] == '\'' && value[value.Length - 1] == '\'')
+                {
+                    value = value.Substring(1, value.Length - 2).Replace("''", "'");
+                }
+
+                var property = typeof(PersonalCloudLibrarySourceSettingsV3).GetProperty(
+                    name,
+                    BindingFlags.Instance | BindingFlags.Public);
+                if (property == null || !property.CanWrite)
+                {
+                    throw new FormatException("Unknown historical settings property: " + name);
+                }
+
+                object converted;
+                if (property.PropertyType == typeof(bool))
+                {
+                    converted = bool.Parse(value);
+                }
+                else if (property.PropertyType == typeof(int))
+                {
+                    converted = int.Parse(value);
+                }
+                else if (property.PropertyType == typeof(string))
+                {
+                    converted = value;
+                }
+                else
+                {
+                    throw new FormatException("Unsupported fixture property type: " + property.PropertyType.Name);
+                }
+
+                property.SetValue(settings, converted);
+            }
+
+            return settings;
         }
     }
 }

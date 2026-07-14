@@ -115,5 +115,32 @@ namespace PersonalCloudLibrarySource.Tests.Setup
             Assert.That(viewModel.IsCancelled, Is.True);
             Assert.That(active.LocalManifestPath, Is.EqualTo(@"C:\old.json"));
         }
+
+        [Test]
+        public void ReactivateReviewAfterSaveFailure_AllowsSameDraftToBeCompletedAgain()
+        {
+            var active = new PersonalCloudLibrarySourceSettingsV3();
+            var viewModel = new SetupWizardViewModel(active, new SetupValidationService());
+            viewModel.SelectSource(SetupSourceKind.RcloneRemote);
+            viewModel.Draft.RcloneExecutablePath = "rclone";
+            viewModel.Draft.RcloneRemoteName = "archive";
+            viewModel.Draft.RcloneManifestPath = "catalog/library.json";
+            viewModel.Draft.CachePath = @"D:\Cache";
+
+            while (viewModel.CurrentStep < SetupWizardStep.Review)
+            {
+                Assert.That(viewModel.Next(), Is.True);
+            }
+
+            Assert.That(viewModel.Complete(), Is.True);
+
+            viewModel.ReactivateReviewAfterSaveFailure("Persistence failed.");
+
+            Assert.That(viewModel.IsCompleted, Is.False);
+            Assert.That(viewModel.CurrentStep, Is.EqualTo(SetupWizardStep.Review));
+            Assert.That(viewModel.CanComplete, Is.True);
+            Assert.That(viewModel.ValidationErrors, Does.Contain("Persistence failed."));
+            Assert.That(viewModel.Complete(), Is.True);
+        }
     }
 }

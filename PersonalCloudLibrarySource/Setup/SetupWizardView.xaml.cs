@@ -10,12 +10,12 @@ namespace PersonalCloudLibrarySource
     public partial class SetupWizardView : UserControl
     {
         private readonly SetupWizardViewModel viewModel;
-        private readonly Action completed;
+        private readonly Func<bool> completed;
         private readonly Action cancelled;
 
         public SetupWizardView(
             SetupWizardViewModel viewModel,
-            Action completed,
+            Func<bool> completed,
             Action cancelled)
         {
             InitializeComponent();
@@ -66,8 +66,12 @@ namespace PersonalCloudLibrarySource
         {
             if (viewModel.Complete())
             {
-                completed();
-                return;
+                if (completed())
+                {
+                    return;
+                }
+
+                viewModel.ReactivateReviewAfterSaveFailure("Setup was not saved. Review the values and try again.");
             }
 
             RefreshView();

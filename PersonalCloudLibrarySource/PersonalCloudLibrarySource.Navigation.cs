@@ -31,7 +31,8 @@ namespace PersonalCloudLibrarySource
                 playniteApi,
                 settings,
                 GetDefaultLocalCacheFolder,
-                SetupWizardCompleted);
+                PrepareSetupWizardCompletion,
+                SetupWizardSaved);
             navigationService = new PluginNavigationService(
                 dashboardWindowService.OpenDashboard,
                 () => playniteApi.MainView.OpenPluginSettings(Id),
@@ -44,6 +45,7 @@ namespace PersonalCloudLibrarySource
                 setupWizardWindowService.OpenWizard);
 
             settings.Settings.PropertyChanged += DashboardSettings_PropertyChanged;
+            settings.SettingsCommitted += Settings_SettingsCommitted;
             RefreshDashboardState();
         }
 
@@ -168,6 +170,7 @@ namespace PersonalCloudLibrarySource
             if (settings?.Settings != null)
             {
                 settings.Settings.PropertyChanged -= DashboardSettings_PropertyChanged;
+                settings.SettingsCommitted -= Settings_SettingsCommitted;
             }
 
             DisposeTransferManager();
@@ -180,6 +183,13 @@ namespace PersonalCloudLibrarySource
         }
 
         private void DashboardSettings_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            SynchronizeTransferManagerSettings();
+            RefreshDashboardState();
+            UpdateNavigationItemState();
+        }
+
+        private void Settings_SettingsCommitted(object sender, EventArgs e)
         {
             SynchronizeTransferManagerSettings();
             RefreshDashboardState();
@@ -222,43 +232,33 @@ namespace PersonalCloudLibrarySource
             UpdateNavigationItemState();
         }
 
-        private void SetupWizardCompleted()
+        private void PrepareSetupWizardCompletion()
         {
-            try
+            var pluginSettings = settings.Settings;
+            if (string.Equals(
+                    GetProviderType(pluginSettings),
+                    PersonalCloudLibrarySourceSettings.LocalFolderProviderType,
+                    StringComparison.OrdinalIgnoreCase) &&
+                string.IsNullOrWhiteSpace(pluginSettings.LocalManifestPath))
             {
-                var pluginSettings = settings.Settings;
-                if (string.Equals(
-                        GetProviderType(pluginSettings),
-                        PersonalCloudLibrarySourceSettings.LocalFolderProviderType,
-                        StringComparison.OrdinalIgnoreCase) &&
-                    string.IsNullOrWhiteSpace(pluginSettings.LocalManifestPath))
-                {
-                    var report = GenerateManifestFromFolder(pluginSettings.LocalLibraryRoot);
-                    pluginSettings.LocalManifestPath = report.OutputPath;
-                    pluginSettings.ManifestRelativePath = string.Empty;
-                    pluginSettings.LastGeneratedManifestPath = report.OutputPath;
-                    pluginSettings.LastGeneratedReportPath = report.ReportPath;
-                    pluginSettings.LastManifestGeneratedAt = report.Manifest.GeneratedAt;
-                    pluginSettings.LastManifestItemCount = report.ItemCount;
-                    settings.EndEdit();
-                }
+                var report = GenerateManifestFromFolder(pluginSettings.LocalLibraryRoot);
+                pluginSettings.LocalManifestPath = report.OutputPath;
+                pluginSettings.ManifestRelativePath = string.Empty;
+                pluginSettings.LastGeneratedManifestPath = report.OutputPath;
+                pluginSettings.LastGeneratedReportPath = report.ReportPath;
+                pluginSettings.LastManifestGeneratedAt = report.Manifest.GeneratedAt;
+                pluginSettings.LastManifestItemCount = report.ItemCount;
+            }
+        }
 
-                RefreshDashboardState();
-                UpdateNavigationItemState();
-                dashboardWindowService.OpenDashboard();
-                playniteApi.Dialogs.ShowMessage(
-                    "Setup was saved successfully. Run Update Game Library in Playnite to import or refresh the catalog.",
-                    GetDashboardResource("LOCPLSSetupWizardTitle", "Personal Cloud Library Setup"));
-            }
-            catch (Exception ex)
-            {
-                logger.Error(ex, "Personal Cloud Library Source could not complete guided setup.");
-                RefreshDashboardState();
-                UpdateNavigationItemState();
-                playniteApi.Dialogs.ShowErrorMessage(
-                    "Setup was saved, but manifest generation did not finish: " + ex.Message,
-                    GetDashboardResource("LOCPLSSetupWizardTitle", "Personal Cloud Library Setup"));
-            }
+        private void SetupWizardSaved()
+        {
+            RefreshDashboardState();
+            UpdateNavigationItemState();
+            dashboardWindowService.OpenDashboard();
+            playniteApi.Dialogs.ShowMessage(
+                "Setup was saved successfully. Run Update Game Library in Playnite to import or refresh the catalog.",
+                GetDashboardResource("LOCPLSSetupWizardTitle", "Personal Cloud Library Setup"));
         }
 
         private void OpenSourceLocationFromDashboard()

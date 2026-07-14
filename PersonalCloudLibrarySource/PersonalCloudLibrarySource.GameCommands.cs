@@ -25,7 +25,7 @@ namespace PersonalCloudLibrarySource
 
             try
             {
-                var pluginSettings = settings.Settings;
+                var pluginSettings = settings.GetRuntimeSettingsSnapshot();
                 var manifest = ParseManifest(LoadManifestJson(pluginSettings));
                 var targets = gameCommandService.ResolveTargets(games, manifest.Items, pluginSettings, Id).ToList();
                 var manager = GetTransferManager();
@@ -251,7 +251,8 @@ namespace PersonalCloudLibrarySource
                 PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
                 StringComparison.OrdinalIgnoreCase))
             {
-                Task.Run(() => GetTransferExecutor().ExecuteRclone(retry.Id, settings.Settings));
+                var settingsSnapshot = settings.GetRuntimeSettingsSnapshot();
+                Task.Run(() => GetTransferExecutor().ExecuteRclone(retry.Id, settingsSnapshot));
                 return;
             }
 

@@ -11,7 +11,7 @@ namespace PersonalCloudLibrarySource
         {
             if (transferManager == null)
             {
-                var concurrency = settings?.Settings?.TransferConcurrency ?? 1;
+                var concurrency = settings?.GetRuntimeSettingsSnapshot()?.TransferConcurrency ?? 1;
                 transferManager = new CloudTransferManager(concurrency);
                 transferManager.Changed += TransferManager_Changed;
             }
@@ -45,7 +45,7 @@ namespace PersonalCloudLibrarySource
         {
             if (transferManager != null)
             {
-                transferManager.SetMaxConcurrentTransfers(settings?.Settings?.TransferConcurrency ?? 1);
+                transferManager.SetMaxConcurrentTransfers(settings?.GetRuntimeSettingsSnapshot()?.TransferConcurrency ?? 1);
             }
         }
 

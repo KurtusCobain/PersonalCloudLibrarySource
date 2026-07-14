@@ -202,8 +202,9 @@ namespace PersonalCloudLibrarySource
     {
         private readonly PersonalCloudLibrarySource plugin;
         private readonly SafeFileWriteService safeFileWriteService = new SafeFileWriteService();
-        private PersonalCloudLibrarySourceSettings editingClone;
+        private readonly SettingsEditSession editSession;
         private PersonalCloudLibrarySourceSettings settings;
+        private PersonalCloudLibrarySourceSettings runtimeSettingsSnapshot;
         private string setupStatusHeadline;
         private string setupStatusDetails;
 
@@ -254,31 +255,61 @@ namespace PersonalCloudLibrarySource
             set => SetValue(ref setupStatusDetails, value);
         }
 
+        public bool LastEditSavedSuccessfully { get; private set; }
+
+        public event EventHandler SettingsCommitted;
+
         public PersonalCloudLibrarySourceSettingsViewModel(PersonalCloudLibrarySource plugin)
         {
             this.plugin = plugin;
-            var savedSettings = plugin.LoadPluginSettings<PersonalCloudLibrarySourceSettings>();
-            Settings = savedSettings ?? new PersonalCloudLibrarySourceSettings();
+            Settings = SettingsMigrationService.LoadLegacyOrDefault(
+                () => plugin.LoadPluginSettings<PersonalCloudLibrarySourceSettings>());
+            editSession = new SettingsEditSession(
+                () =>
+                {
+                    List<string> errors;
+                    return VerifySettings(out errors);
+                },
+                snapshot => plugin.SavePluginSettings(snapshot));
+            UpdateRuntimeSettingsSnapshot();
         }
 
-        public void BeginEdit()
+        public virtual void BeginEdit()
         {
-            editingClone = Serialization.GetClone(Settings);
+            editSession.BeginEdit(Settings);
+            LastEditSavedSuccessfully = false;
             RefreshBasicSetupStatus();
         }
 
-        public void CancelEdit()
+        public virtual void CancelEdit()
         {
-            Settings = editingClone ?? new PersonalCloudLibrarySourceSettings();
+            editSession.CancelEdit(Settings);
+            LastEditSavedSuccessfully = false;
         }
 
-        public void EndEdit()
+        public virtual void EndEdit()
         {
-            plugin.SavePluginSettings(Settings);
+            LastEditSavedSuccessfully = editSession.EndEdit(Settings);
+            if (LastEditSavedSuccessfully)
+            {
+                runtimeSettingsSnapshot = editSession.GetCommittedSnapshot();
+                SettingsCommitted?.Invoke(this, EventArgs.Empty);
+            }
+
             RefreshBasicSetupStatus();
         }
 
-        public bool VerifySettings(out List<string> errors)
+        public PersonalCloudLibrarySourceSettings GetRuntimeSettingsSnapshot()
+        {
+            return SettingsMigrationService.CloneForEditing(runtimeSettingsSnapshot);
+        }
+
+        protected void UpdateRuntimeSettingsSnapshot()
+        {
+            runtimeSettingsSnapshot = SettingsMigrationService.CloneForEditing(Settings);
+        }
+
+        public virtual bool VerifySettings(out List<string> errors)
         {
             errors = new List<string>();
             var sourceProviderType = string.IsNullOrWhiteSpace(Settings.SourceProviderType)

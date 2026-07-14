@@ -120,6 +120,15 @@ namespace PersonalCloudLibrarySource
             return true;
         }
 
+        public void ReactivateReviewAfterSaveFailure(string message)
+        {
+            IsCompleted = false;
+            CurrentStep = SetupWizardStep.Review;
+            ValidationErrors = string.IsNullOrWhiteSpace(message)
+                ? new List<string>()
+                : new List<string> { message };
+        }
+
         public void Cancel()
         {
             if (IsCompleted)

@@ -49,12 +49,16 @@
     <Compile Include="Dashboard\VerificationDashboardStateServiceTests.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Repository\ProjectSourceInclusionTests.cs" />
+    <Compile Include="Repository\RuntimeSettingsSnapshotUsageTests.cs" />
+    <Compile Include="Repository\SetupWizardEditLifecycleContractTests.cs" />
     <Compile Include="RcloneTimeoutDefaultsTests.cs" />
     <Compile Include="Services\GameCommandPolicyServiceTests.cs" />
     <Compile Include="Services\GameCommandServiceTests.cs" />
     <Compile Include="Services\PluginNavigationServiceTests.cs" />
+    <Compile Include="SettingsEditSessionTests.cs" />
     <Compile Include="SettingsMigrationServiceTests.cs" />
     <Compile Include="Setup\SetupLaunchPolicyServiceTests.cs" />
+    <Compile Include="Setup\SetupCompletionCoordinatorTests.cs" />
     <Compile Include="Setup\SetupWizardViewModelTests.cs" />
     <Compile Include="Transfers\CloudTransferExecutorTests.cs" />
     <Compile Include="Transfers\CloudTransferManagerTests.cs" />
@@ -68,6 +72,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="Fixtures\settings-v0.1.1.yaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Fixtures\settings-v0.2.0.yaml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\PersonalCloudLibrarySource\PersonalCloudLibrarySource.csproj">

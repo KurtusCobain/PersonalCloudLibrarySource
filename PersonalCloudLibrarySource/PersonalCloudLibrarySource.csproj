@@ -90,7 +90,9 @@
     <Compile Include="Services\GameCommandService.cs" />
     <Compile Include="Services\PluginNavigationService.cs" />
     <Compile Include="Services\SetupLaunchPolicyService.cs" />
+    <Compile Include="SettingsEditSession.cs" />
     <Compile Include="SettingsMigrationService.cs" />
+    <Compile Include="Setup\SetupCompletionCoordinator.cs" />
     <Compile Include="Setup\SetupDraft.cs" />
     <Compile Include="Setup\SetupModels.cs" />
     <Compile Include="Setup\SetupValidationService.cs" />

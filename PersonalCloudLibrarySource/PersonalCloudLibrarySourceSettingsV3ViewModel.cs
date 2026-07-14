@@ -8,19 +8,17 @@ namespace PersonalCloudLibrarySource
     public sealed class PersonalCloudLibrarySourceSettingsV3ViewModel : PersonalCloudLibrarySourceSettingsViewModel, ISettings
     {
         private readonly PersonalCloudLibrarySource plugin;
-        private PersonalCloudLibrarySourceSettingsV3 editingClone;
 
         public PersonalCloudLibrarySourceSettingsV3ViewModel(PersonalCloudLibrarySource plugin)
             : base(plugin)
         {
             this.plugin = plugin;
 
-            var loadedSettings = plugin.LoadPluginSettings<PersonalCloudLibrarySourceSettingsV3>();
-            var sourceSettings = loadedSettings != null
-                ? (PersonalCloudLibrarySourceSettings)loadedSettings
-                : base.Settings;
-            var migration = SettingsMigrationService.Migrate(sourceSettings);
+            var migration = SettingsMigrationService.LoadAndMigrate(
+                () => plugin.LoadPluginSettings<PersonalCloudLibrarySourceSettingsV3>(),
+                base.Settings);
             base.Settings = migration.Settings;
+            UpdateRuntimeSettingsSnapshot();
 
             if (migration.WasMigrated)
             {
@@ -49,25 +47,12 @@ namespace PersonalCloudLibrarySource
             };
         }
 
-        public new void BeginEdit()
+        public new PersonalCloudLibrarySourceSettingsV3 GetRuntimeSettingsSnapshot()
         {
-            editingClone = (PersonalCloudLibrarySourceSettingsV3)SettingsMigrationService.CloneForEditing(Settings);
+            return (PersonalCloudLibrarySourceSettingsV3)base.GetRuntimeSettingsSnapshot();
         }
 
-        public new void CancelEdit()
-        {
-            Settings = editingClone ?? SettingsMigrationService.Migrate(base.Settings).Settings;
-            editingClone = null;
-        }
-
-        public new void EndEdit()
-        {
-            base.Settings = Settings;
-            base.EndEdit();
-            editingClone = null;
-        }
-
-        public new bool VerifySettings(out List<string> errors)
+        public override bool VerifySettings(out List<string> errors)
         {
             base.Settings = Settings;
             return base.VerifySettings(out errors);
