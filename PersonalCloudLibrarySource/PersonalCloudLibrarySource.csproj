@@ -50,7 +50,6 @@
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Dashboard\CacheStatusService.cs" />
     <Compile Include="Dashboard\DashboardActivityService.cs" />
     <Compile Include="Dashboard\DashboardTransferPresentation.cs" />
     <Compile Include="Dashboard\DashboardViewModelLifetime.cs" />
@@ -71,7 +70,6 @@
     <Compile Include="LibraryVerificationReport.cs" />
     <Compile Include="Localization\PclsResources.cs" />
     <Compile Include="LibraryVerificationService.cs" />
-    <Compile Include="LocalFileCopier.cs" />
     <Compile Include="ManifestGenerationOptions.cs" />
     <Compile Include="ManifestGenerationReport.cs" />
     <Compile Include="ManifestGenerationService.cs" />
@@ -88,7 +86,6 @@
     </Compile>
     <Compile Include="PersonalCloudLibraryUninstallController.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="RcloneFileCopier.cs" />
     <Compile Include="RcloneInstallController.cs" />
     <Compile Include="RcloneManifestReader.cs" />
     <Compile Include="SafeFileWriteService.cs" />

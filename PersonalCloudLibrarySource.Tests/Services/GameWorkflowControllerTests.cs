@@ -100,16 +100,19 @@ namespace PersonalCloudLibrarySource.Tests.Services
             settings.SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType;
             var sink = new RecordingSink();
             var notifications = new GameWorkflowNotificationService(sink);
-            var controller = new RcloneInstallController(
-                null,
-                game,
-                item,
-                settings,
-                new RcloneFileCopier(),
-                new LocalFileCopier(),
-                workflowNotifications: notifications);
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager, new CloudTransferExecutor(manager, new LocalTransferAdapter())))
+            {
+                var controller = new RcloneInstallController(
+                    null,
+                    game,
+                    item,
+                    settings,
+                    queue,
+                    workflowNotifications: notifications);
 
-            controller.Install(new InstallActionArgs());
+                controller.Install(new InstallActionArgs());
+            }
 
             Assert.That(game.IsInstalled, Is.False);
             Assert.That(sink.Messages, Has.Count.EqualTo(1));

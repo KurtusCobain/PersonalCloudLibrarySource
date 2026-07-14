@@ -15,8 +15,6 @@ namespace PersonalCloudLibrarySource
     {
         private static readonly ILogger logger = LogManager.GetLogger();
         private readonly RcloneManifestReader rcloneManifestReader = new RcloneManifestReader();
-        private readonly RcloneFileCopier rcloneFileCopier = new RcloneFileCopier();
-        private readonly LocalFileCopier localFileCopier = new LocalFileCopier();
         private readonly ManifestGenerationService manifestGenerationService = new ManifestGenerationService();
         private readonly LibraryVerificationService libraryVerificationService = new LibraryVerificationService();
         private readonly SafeFileWriteService safeFileWriteService = new SafeFileWriteService();
@@ -186,10 +184,6 @@ namespace PersonalCloudLibrarySource
                         args.Game,
                         item,
                         pluginSettings,
-                        rcloneFileCopier,
-                        localFileCopier,
-                        GetTransferManager(),
-                        GetTransferExecutor(),
                         GetTransferQueue()));
                     logger.Info($"Personal Cloud Library Source install action returned for {item.Id}.");
                     return installActions;

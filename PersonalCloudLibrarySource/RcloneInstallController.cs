@@ -1,7 +1,7 @@
 ﻿using Playnite.SDK;
 using Playnite.SDK.Models;
 using Playnite.SDK.Plugins;
-using System.IO;
+using System;
 
 namespace PersonalCloudLibrarySource
 {
@@ -11,10 +11,6 @@ namespace PersonalCloudLibrarySource
 
         private readonly PersonalCloudLibraryItem item;
         private readonly PersonalCloudLibrarySourceSettings settings;
-        private readonly RcloneFileCopier rcloneFileCopier;
-        private readonly LocalFileCopier localFileCopier;
-        private readonly CloudTransferManager transferManager;
-        private readonly CloudTransferExecutor transferExecutor;
         private readonly TransferQueueService transferQueue;
         private readonly GameWorkflowNotificationService workflowNotifications;
 
@@ -23,20 +19,12 @@ namespace PersonalCloudLibrarySource
             Game game,
             PersonalCloudLibraryItem item,
             PersonalCloudLibrarySourceSettings settings,
-            RcloneFileCopier rcloneFileCopier,
-            LocalFileCopier localFileCopier,
-            CloudTransferManager transferManager = null,
-            CloudTransferExecutor transferExecutor = null,
-            TransferQueueService transferQueue = null,
+            TransferQueueService transferQueue,
             GameWorkflowNotificationService workflowNotifications = null) : base(game)
         {
             this.item = item;
             this.settings = settings;
-            this.rcloneFileCopier = rcloneFileCopier;
-            this.localFileCopier = localFileCopier;
-            this.transferManager = transferManager;
-            this.transferExecutor = transferExecutor;
-            this.transferQueue = transferQueue;
+            this.transferQueue = transferQueue ?? throw new ArgumentNullException(nameof(transferQueue));
             this.workflowNotifications = workflowNotifications ?? CreateNotifications(playniteApi);
             Name = PclsResources.Get("LOCPLSInstallControllerName", "Download to local cache");
         }
@@ -60,101 +48,41 @@ namespace PersonalCloudLibrarySource
             if (string.Equals(providerType, PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType, System.StringComparison.OrdinalIgnoreCase))
             {
                 var rcloneSourcePath = PersonalCloudLibrarySource.ResolveRcloneSourcePath(settings, sourcePath);
-                if (transferQueue != null)
-                {
-                    var destinationPath = sourceType == "directory"
-                        ? destinationFolderPath
-                        : destinationFilePath;
-                    var job = transferQueue.EnqueueRclone(
-                        Game.Id,
-                        string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
-                        rcloneSourcePath,
-                        destinationPath,
-                        providerType,
-                        sourceType == "directory",
-                        settings);
-                    var result = transferQueue.GetCompletion(job.Id).GetAwaiter().GetResult();
-                    succeeded = result.Succeeded;
-                    cancelled = result.Cancelled;
-                    message = result.Message;
-                    exception = result.Exception;
-                }
-                else if (transferManager != null && transferExecutor != null)
-                {
-                    var destinationPath = sourceType == "directory"
-                        ? destinationFolderPath
-                        : destinationFilePath;
-                    var job = transferManager.Enqueue(
-                        Game.Id,
-                        string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
-                        rcloneSourcePath,
-                        destinationPath,
-                        providerType,
-                        sourceType == "directory");
-                    var result = transferExecutor.ExecuteRclone(job.Id, settings);
-                    succeeded = result.Succeeded;
-                    cancelled = result.Cancelled;
-                    message = result.Message;
-                    exception = result.Exception;
-                }
-                else
-                {
-                    var result = sourceType == "directory"
-                        ? rcloneFileCopier.CopyRemoteDirectoryToLocalPath(settings, rcloneSourcePath, destinationFolderPath)
-                        : rcloneFileCopier.CopyRemoteFileToLocalPath(settings, rcloneSourcePath, destinationFilePath);
-                    succeeded = result.Succeeded;
-                    message = result.Message;
-                    exception = result.Exception;
-                }
+                var destinationPath = sourceType == "directory"
+                    ? destinationFolderPath
+                    : destinationFilePath;
+                var job = transferQueue.EnqueueRclone(
+                    Game.Id,
+                    string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
+                    rcloneSourcePath,
+                    destinationPath,
+                    providerType,
+                    sourceType == "directory",
+                    settings);
+                var result = transferQueue.GetCompletion(job.Id).GetAwaiter().GetResult();
+                succeeded = result.Succeeded;
+                cancelled = result.Cancelled;
+                message = result.Message;
+                exception = result.Exception;
             }
             else
             {
                 var localSourcePath = PersonalCloudLibrarySource.ResolveLocalFolderSourcePath(settings, sourcePath);
-                if (transferQueue != null)
-                {
-                    var destinationPath = sourceType == "directory"
-                        ? destinationFolderPath
-                        : destinationFilePath;
-                    var job = transferQueue.EnqueueLocal(
-                        Game.Id,
-                        string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
-                        localSourcePath,
-                        destinationPath,
-                        providerType,
-                        sourceType == "directory");
-                    var result = transferQueue.GetCompletion(job.Id).GetAwaiter().GetResult();
-                    succeeded = result.Succeeded;
-                    cancelled = result.Cancelled;
-                    message = result.Message;
-                    exception = result.Exception;
-                }
-                else if (transferManager != null && transferExecutor != null)
-                {
-                    var destinationPath = sourceType == "directory"
-                        ? destinationFolderPath
-                        : destinationFilePath;
-                    var job = transferManager.Enqueue(
-                        Game.Id,
-                        string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
-                        localSourcePath,
-                        destinationPath,
-                        providerType,
-                        sourceType == "directory");
-                    var result = transferExecutor.ExecuteLocal(job.Id, sourceType == "directory");
-                    succeeded = result.Succeeded;
-                    cancelled = result.Cancelled;
-                    message = result.Message;
-                    exception = result.Exception;
-                }
-                else
-                {
-                    var result = sourceType == "directory"
-                        ? localFileCopier.CopyDirectoryToLocalPath(localSourcePath, destinationFolderPath)
-                        : localFileCopier.CopyFileToLocalPath(localSourcePath, destinationFilePath);
-                    succeeded = result.Succeeded;
-                    message = result.Message;
-                    exception = result.Exception;
-                }
+                var destinationPath = sourceType == "directory"
+                    ? destinationFolderPath
+                    : destinationFilePath;
+                var job = transferQueue.EnqueueLocal(
+                    Game.Id,
+                    string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
+                    localSourcePath,
+                    destinationPath,
+                    providerType,
+                    sourceType == "directory");
+                var result = transferQueue.GetCompletion(job.Id).GetAwaiter().GetResult();
+                succeeded = result.Succeeded;
+                cancelled = result.Cancelled;
+                message = result.Message;
+                exception = result.Exception;
             }
 
             if (!succeeded)

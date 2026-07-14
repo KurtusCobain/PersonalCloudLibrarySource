@@ -129,6 +129,9 @@ namespace PersonalCloudLibrarySource.Tests.Repository
                 Assert.That(process.ExitCode, Is.EqualTo(0), "git ls-files failed: " + error);
                 return output.Split(new[] { '\0' }, StringSplitOptions.RemoveEmptyEntries)
                     .Select(NormalizeProjectRelativePath)
+                    .Where(path => File.Exists(Path.Combine(
+                        repositoryRoot,
+                        path.Replace('/', Path.DirectorySeparatorChar))))
                     .ToArray();
             }
         }

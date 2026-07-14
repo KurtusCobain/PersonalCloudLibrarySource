@@ -79,6 +79,22 @@ if ($PackagePath) {
             }
         }
 
+        $forbiddenSegmentPattern = '^(?:\.superpowers|bin|obj|packages|dist|tests?|scratch|temp|tmp|TestResults)$'
+        $forbiddenLeafPattern = '(?i)(?:\.cs|\.csproj|\.sln|\.ps1|\.tmp|\.bak|\.pdb|\.g\.cs|\.g\.i\.cs|\.generated\.cs)$'
+        $forbiddenFiles = Get-ChildItem -LiteralPath $expandedPath -File -Recurse |
+            ForEach-Object { $_.FullName.Substring($expandedPath.Length).TrimStart([char]0x5c, [char]0x2f).Replace([char]0x5c, [char]0x2f) } |
+            Where-Object {
+                $segments = $_.Split('/')
+                $leaf = $segments[-1]
+                ($segments | Where-Object { $_ -match $forbiddenSegmentPattern } | Select-Object -First 1) -or
+                    $leaf -match $forbiddenLeafPattern -or
+                    $leaf -match '^TemporaryGeneratedFile_'
+            }
+
+        if ($forbiddenFiles) {
+            throw "Packaged extension contains forbidden file(s): $($forbiddenFiles -join ', ')"
+        }
+
         $packagedVersion = Get-ManifestVersion -Path (Join-Path $expandedPath 'extension.yaml')
         if ($packagedVersion -ne $version) {
             throw "Packaged extension version '$packagedVersion' does not match extension.yaml version '$version'."
