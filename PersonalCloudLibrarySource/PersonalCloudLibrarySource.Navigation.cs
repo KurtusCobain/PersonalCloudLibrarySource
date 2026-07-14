@@ -7,6 +7,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -20,6 +21,10 @@ namespace PersonalCloudLibrarySource
         private CloudLibraryDashboardWindowService dashboardWindowService;
         private SetupWizardWindowService setupWizardWindowService;
         private PluginNavigationService navigationService;
+        private readonly SetupStateService setupStateService = new SetupStateService(new SetupLaunchPolicyService());
+        private IStartupUiDispatcher startupUiDispatcher;
+        private StartupNotificationService startupNotificationService;
+        private StartupActionService startupActionService;
         private TopPanelItem dashboardTopPanelItem;
         private CloudLibrarySidebarItem dashboardSidebarItem;
 
@@ -32,7 +37,8 @@ namespace PersonalCloudLibrarySource
                 settings,
                 GetDefaultLocalCacheFolder,
                 PrepareSetupWizardCompletion,
-                SetupWizardSaved);
+                SetupWizardSaved,
+                settings.PersistSetupDismissed);
             navigationService = new PluginNavigationService(
                 dashboardWindowService.OpenDashboard,
                 () => playniteApi.MainView.OpenPluginSettings(Id),
@@ -43,6 +49,27 @@ namespace PersonalCloudLibrarySource
                 settings.ShowUpdateLibraryInstructions,
                 OpenSourceLocationFromDashboard,
                 setupWizardWindowService.OpenWizard);
+
+            var notificationDispatcher = new PlayniteImportUiDispatcher(playniteApi);
+            startupUiDispatcher = new StartupUiDispatcher(
+                new PlayniteStartupUiPostTarget(playniteApi),
+                ObserveStartupUiException);
+            startupNotificationService = new StartupNotificationService(
+                new PlayniteImportNotificationSink(playniteApi.Notifications),
+                notificationDispatcher,
+                ResourceProvider.GetString,
+                setupWizardWindowService.OpenWizard,
+                () => playniteApi.ApplicationInfo.Mode == ApplicationMode.Desktop);
+            startupActionService = new StartupActionService(
+                new DelegatingStartupActionSink(
+                    setupWizardWindowService.OpenWizard,
+                    startupNotificationService.ShowSetupReminder,
+                    GenerateStartupManifest,
+                    RefreshStartupStatus,
+                    dashboardWindowService.OpenDashboard,
+                    ReportStartupFailure,
+                    startupUiDispatcher),
+                ObserveStartupBackgroundException);
 
             settings.Settings.PropertyChanged += DashboardSettings_PropertyChanged;
             settings.SettingsCommitted += Settings_SettingsCommitted;
@@ -170,15 +197,42 @@ namespace PersonalCloudLibrarySource
 
         public override void OnApplicationStarted(OnApplicationStartedEventArgs args)
         {
-            RefreshDashboardState();
-            if (settings?.Settings?.OpenDashboardAtStartup == true)
+            var snapshot = settings?.GetRuntimeSettingsSnapshot();
+            if (snapshot == null)
             {
-                navigationService.OpenDashboard();
+                return;
             }
+
+            var setupValid = setupStateService.IsValid(snapshot);
+            var setupAction = setupStateService.Evaluate(snapshot, setupValid);
+            if (setupAction == SetupLaunchAction.OpenWizard &&
+                playniteApi.ApplicationInfo.Mode != ApplicationMode.Desktop)
+            {
+                setupAction = snapshot.ShowSetupReminders
+                    ? SetupLaunchAction.ShowReminder
+                    : SetupLaunchAction.None;
+            }
+
+            startupActionService.Start(new StartupActionContext
+            {
+                PluginEnabled = snapshot.Enabled,
+                SetupValid = setupValid,
+                SetupAction = setupAction,
+                GenerateManifest = snapshot.AutoGenerateManifestOnApplicationStart,
+                ManifestGenerationEligible = IsStartupManifestGenerationEligible(snapshot),
+                RefreshStatus = snapshot.AutoRefreshOnApplicationStart,
+                OpenDashboard = snapshot.OpenDashboardAtStartup &&
+                    playniteApi.ApplicationInfo.Mode == ApplicationMode.Desktop
+            });
         }
 
         public override void OnApplicationStopped(OnApplicationStoppedEventArgs args)
         {
+            if (!startupActionService.Stop(TimeSpan.FromSeconds(10)))
+            {
+                logger.Warn("Personal Cloud Library Source startup work did not stop within the shutdown timeout.");
+            }
+
             if (settings?.Settings != null)
             {
                 settings.Settings.PropertyChanged -= DashboardSettings_PropertyChanged;
@@ -261,6 +315,65 @@ namespace PersonalCloudLibrarySource
                 pluginSettings.LastManifestGeneratedAt = report.Manifest.GeneratedAt;
                 pluginSettings.LastManifestItemCount = report.ItemCount;
             }
+
+            settings.MarkSetupCompleted();
+        }
+
+        private static bool IsStartupManifestGenerationEligible(PersonalCloudLibrarySourceSettingsV3 snapshot)
+        {
+            return snapshot != null &&
+                   string.Equals(
+                       GetProviderType(snapshot),
+                       PersonalCloudLibrarySourceSettings.LocalFolderProviderType,
+                       StringComparison.OrdinalIgnoreCase) &&
+                   !string.IsNullOrWhiteSpace(snapshot.LocalLibraryRoot) &&
+                   Directory.Exists(snapshot.LocalLibraryRoot);
+        }
+
+        private void GenerateStartupManifest(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var snapshot = settings.GetRuntimeSettingsSnapshot();
+            if (!IsStartupManifestGenerationEligible(snapshot))
+            {
+                return;
+            }
+
+            var report = GenerateManifestFromFolder(snapshot.LocalLibraryRoot, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            startupUiDispatcher.Post(
+                () => settings.PersistGeneratedManifestState(report),
+                cancellationToken);
+        }
+
+        private void RefreshStartupStatus()
+        {
+            RefreshDashboardState();
+            UpdateNavigationItemState();
+        }
+
+        private void ReportStartupFailure(Exception exception)
+        {
+            logger.Error(exception, "Personal Cloud Library Source startup action failed.");
+            try
+            {
+                startupNotificationService.ShowFailure(exception);
+            }
+            catch (Exception notificationException)
+            {
+                logger.Warn(notificationException, "Personal Cloud Library Source could not publish its startup failure notification.");
+            }
+        }
+
+        private void ObserveStartupUiException(Exception exception)
+        {
+            logger.Error(exception, "Personal Cloud Library Source startup UI callback failed.");
+            ReportStartupFailure(exception);
+        }
+
+        private void ObserveStartupBackgroundException(Exception exception)
+        {
+            logger.Error(exception, "Personal Cloud Library Source startup task fault was observed.");
         }
 
         private void SetupWizardSaved()

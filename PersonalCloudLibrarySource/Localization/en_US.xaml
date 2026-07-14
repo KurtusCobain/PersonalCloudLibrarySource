@@ -92,4 +92,8 @@
     <sys:String x:Key="LOCPLSImportFailureSourceUnavailable">The configured source is missing, unavailable, or timed out.</sys:String>
     <sys:String x:Key="LOCPLSImportFailureInvalidManifest">The manifest is not valid JSON or is missing required data.</sys:String>
     <sys:String x:Key="LOCPLSImportFailureUnsupportedSchema">The manifest uses an unsupported schema version.</sys:String>
+    <sys:String x:Key="LOCPLSSetupReminderNotification">Personal Cloud Library setup needs attention. Select this notification to review setup.</sys:String>
+    <sys:String x:Key="LOCPLSStartupFailureNotification">A Personal Cloud Library startup action failed: {0} Select this notification to review setup.</sys:String>
+    <sys:String x:Key="LOCPLSSetupReminderFullscreenNotification">Personal Cloud Library setup needs attention. Open Playnite in Desktop mode to review setup.</sys:String>
+    <sys:String x:Key="LOCPLSStartupFailureFullscreenNotification">A Personal Cloud Library startup action failed: {0} Open Playnite in Desktop mode to review setup.</sys:String>
 </ResourceDictionary>

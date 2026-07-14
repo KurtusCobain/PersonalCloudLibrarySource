@@ -3,12 +3,40 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 
 namespace PersonalCloudLibrarySource
 {
+    public interface IManifestGenerationFileSystem
+    {
+        bool DirectoryExists(string path);
+        IEnumerable<string> EnumerateDirectories(string path);
+        IEnumerable<string> EnumerateFiles(string path);
+    }
+
+    public sealed class ManifestGenerationFileSystem : IManifestGenerationFileSystem
+    {
+        public bool DirectoryExists(string path) => Directory.Exists(path);
+        public IEnumerable<string> EnumerateDirectories(string path) =>
+            Directory.EnumerateDirectories(path, "*", SearchOption.TopDirectoryOnly);
+        public IEnumerable<string> EnumerateFiles(string path) =>
+            Directory.EnumerateFiles(path, "*", SearchOption.TopDirectoryOnly);
+    }
+
     public class ManifestGenerationService
     {
         private readonly SafeFileWriteService safeFileWriteService = new SafeFileWriteService();
+        private readonly IManifestGenerationFileSystem fileSystem;
+
+        public ManifestGenerationService()
+            : this(new ManifestGenerationFileSystem())
+        {
+        }
+
+        public ManifestGenerationService(IManifestGenerationFileSystem fileSystem)
+        {
+            this.fileSystem = fileSystem ?? throw new ArgumentNullException(nameof(fileSystem));
+        }
 
         private static readonly string[] DefaultSingleFileExtensions =
         {
@@ -87,6 +115,12 @@ namespace PersonalCloudLibrarySource
 
         public ManifestGenerationReport Generate(ManifestGenerationOptions options)
         {
+            return Generate(options, CancellationToken.None);
+        }
+
+        public ManifestGenerationReport Generate(ManifestGenerationOptions options, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             if (options == null)
             {
                 throw new ArgumentNullException(nameof(options));
@@ -97,7 +131,7 @@ namespace PersonalCloudLibrarySource
                 throw new InvalidOperationException("A source root folder is required.");
             }
 
-            if (!Directory.Exists(options.SourceRoot))
+            if (!fileSystem.DirectoryExists(options.SourceRoot))
             {
                 throw new DirectoryNotFoundException("The source root folder was not found: " + options.SourceRoot);
             }
@@ -121,22 +155,9 @@ namespace PersonalCloudLibrarySource
                 StringComparer.OrdinalIgnoreCase);
 
             var rootFullPath = Path.GetFullPath(options.SourceRoot);
-            var directories = Directory.GetDirectories(rootFullPath, "*", SearchOption.AllDirectories)
-                .Select(path => new ScanEntry
-                {
-                    Path = NormalizeSourcePath(path.Substring(rootFullPath.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
-                    IsDirectory = true
-                })
-                .Where(entry => !string.IsNullOrWhiteSpace(entry.Path))
-                .ToList();
-            var files = Directory.GetFiles(rootFullPath, "*", SearchOption.AllDirectories)
-                .Select(path => new ScanEntry
-                {
-                    Path = NormalizeSourcePath(path.Substring(rootFullPath.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)),
-                    IsDirectory = false
-                })
-                .Where(entry => !string.IsNullOrWhiteSpace(entry.Path))
-                .ToList();
+            var directories = new List<ScanEntry>();
+            var files = new List<ScanEntry>();
+            EnumerateTree(rootFullPath, directories, files, cancellationToken);
 
             var report = new ManifestGenerationReport
             {
@@ -158,6 +179,7 @@ namespace PersonalCloudLibrarySource
 
             foreach (var directory in directories)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (IsUnderExcludedFolder(directory.Path, excludedFolders))
                 {
                     report.SkippedEntries.Add("Skipped excluded folder candidate: " + directory.Path);
@@ -235,6 +257,7 @@ namespace PersonalCloudLibrarySource
 
             foreach (var file in files)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (IsUnderExcludedFolder(file.Path, excludedFolders))
                 {
                     report.SkippedEntries.Add("Skipped file under excluded folder: " + file.Path);
@@ -295,6 +318,7 @@ namespace PersonalCloudLibrarySource
 
             foreach (var group in duplicateGroups)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 report.Warnings.Add("Duplicate-looking title group: " + group.Key + " has " + group.Count() + " entries");
             }
 
@@ -312,6 +336,7 @@ namespace PersonalCloudLibrarySource
             };
 
             var outputDirectory = Path.GetDirectoryName(options.OutputPath);
+            cancellationToken.ThrowIfCancellationRequested();
             if (!string.IsNullOrWhiteSpace(outputDirectory))
             {
                 Directory.CreateDirectory(outputDirectory);
@@ -325,6 +350,7 @@ namespace PersonalCloudLibrarySource
 
             if (!options.NoReport && !string.IsNullOrWhiteSpace(options.ReportPath))
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var reportDirectory = Path.GetDirectoryName(options.ReportPath);
                 if (!string.IsNullOrWhiteSpace(reportDirectory))
                 {
@@ -339,6 +365,52 @@ namespace PersonalCloudLibrarySource
             }
 
             return report;
+        }
+
+        private void EnumerateTree(
+            string rootFullPath,
+            ICollection<ScanEntry> directories,
+            ICollection<ScanEntry> files,
+            CancellationToken cancellationToken)
+        {
+            var pending = new Stack<string>();
+            pending.Push(rootFullPath);
+            while (pending.Count > 0)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var current = pending.Pop();
+                foreach (var directory in fileSystem.EnumerateDirectories(current))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var entry = NewScanEntry(rootFullPath, directory, true);
+                    if (!string.IsNullOrWhiteSpace(entry.Path))
+                    {
+                        directories.Add(entry);
+                    }
+                    pending.Push(directory);
+                }
+
+                foreach (var file in fileSystem.EnumerateFiles(current))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var entry = NewScanEntry(rootFullPath, file, false);
+                    if (!string.IsNullOrWhiteSpace(entry.Path))
+                    {
+                        files.Add(entry);
+                    }
+                }
+            }
+        }
+
+        private static ScanEntry NewScanEntry(string rootFullPath, string path, bool isDirectory)
+        {
+            return new ScanEntry
+            {
+                Path = NormalizeSourcePath(path.Substring(rootFullPath.Length).TrimStart(
+                    Path.DirectorySeparatorChar,
+                    Path.AltDirectorySeparatorChar)),
+                IsDirectory = isDirectory
+            };
         }
 
         private static IEnumerable<string> BuildReportLines(ManifestGenerationReport report)

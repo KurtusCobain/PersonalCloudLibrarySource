@@ -16,7 +16,7 @@ namespace PersonalCloudLibrarySource.Tests
                 null);
 
             Assert.That(result.WasRecoveredFromCorruptSettings, Is.False);
-            Assert.That(result.AppliedVersions, Is.EqualTo(new[] { 1, 2, 3, 4 }));
+            Assert.That(result.AppliedVersions, Is.EqualTo(new[] { 1, 2, 3, 4, 5 }));
             Assert.That(result.Settings.SourceProviderType, Is.EqualTo(PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType));
             Assert.That(result.Settings.LocalManifestPath, Is.EqualTo(@"D:\Legacy\catalog.json"));
             Assert.That(result.Settings.LocalLibraryRoot, Is.EqualTo(@"D:\Legacy\Games"));
@@ -84,11 +84,12 @@ namespace PersonalCloudLibrarySource.Tests
             Assert.That(result.Settings.VerifyAfterTransfer, Is.True);
         }
 
-        [TestCase(0, new[] { 1, 2, 3, 4 })]
-        [TestCase(1, new[] { 2, 3, 4 })]
-        [TestCase(2, new[] { 3, 4 })]
-        [TestCase(3, new[] { 4 })]
-        [TestCase(4, new int[0])]
+        [TestCase(0, new[] { 1, 2, 3, 4, 5 })]
+        [TestCase(1, new[] { 2, 3, 4, 5 })]
+        [TestCase(2, new[] { 3, 4, 5 })]
+        [TestCase(3, new[] { 4, 5 })]
+        [TestCase(4, new[] { 5 })]
+        [TestCase(5, new int[0])]
         public void Migrate_AppliesEverySchemaStepInOrderAndIsIdempotent(int startingVersion, int[] expectedVersions)
         {
             var settings = new PersonalCloudLibrarySourceSettingsV3
@@ -106,6 +107,38 @@ namespace PersonalCloudLibrarySource.Tests
             Assert.That(second.WasMigrated, Is.False);
             Assert.That(settings.RcloneTimeoutSeconds, Is.EqualTo(75));
             Assert.That(settings.TransferConcurrency, Is.EqualTo(4));
+        }
+
+        [Test]
+        public void Migrate_Version4ConfiguredSetup_IsRememberedAsPreviouslyCompleted()
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                SettingsVersion = 4,
+                SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType,
+                LocalManifestPath = @"Z:\currently-unavailable\library.json"
+            };
+
+            SettingsMigrationService.Migrate(settings);
+
+            Assert.That(settings.SetupCompleted, Is.True);
+            Assert.That(settings.SetupDismissed, Is.False);
+        }
+
+        [Test]
+        public void Migrate_Version4UnconfiguredDefaults_RemainNewSetup()
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                SettingsVersion = 4,
+                SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType,
+                LocalManifestPath = string.Empty
+            };
+
+            SettingsMigrationService.Migrate(settings);
+
+            Assert.That(settings.SetupCompleted, Is.False);
+            Assert.That(settings.SetupDismissed, Is.False);
         }
 
         [Test]

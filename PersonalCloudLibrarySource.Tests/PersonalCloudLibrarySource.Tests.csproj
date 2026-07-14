@@ -59,6 +59,7 @@
     <Compile Include="Services\GameCommandPolicyServiceTests.cs" />
     <Compile Include="Services\GameCommandServiceTests.cs" />
     <Compile Include="Services\ManifestParserValidatorTests.cs" />
+    <Compile Include="Services\ManifestGenerationCancellationTests.cs" />
     <Compile Include="Services\ImportNotificationServiceTests.cs" />
     <Compile Include="Services\ImportOutcomeServiceTests.cs" />
     <Compile Include="Services\ManifestLoaderTests.cs" />
@@ -71,6 +72,12 @@
     <Compile Include="SettingsEditSessionTests.cs" />
     <Compile Include="SettingsMigrationServiceTests.cs" />
     <Compile Include="Setup\SetupLaunchPolicyServiceTests.cs" />
+    <Compile Include="Setup\SetupStateServiceTests.cs" />
+    <Compile Include="Setup\SetupStatePersistenceServiceTests.cs" />
+    <Compile Include="Startup\StartupActionServiceTests.cs" />
+    <Compile Include="Startup\StartupNotificationServiceTests.cs" />
+    <Compile Include="Startup\StartupUiDispatcherTests.cs" />
+    <Compile Include="Repository\StartupWiringContractTests.cs" />
     <Compile Include="Setup\SetupCompletionCoordinatorTests.cs" />
     <Compile Include="Setup\SetupWizardViewModelTests.cs" />
     <Compile Include="Transfers\CloudTransferExecutorTests.cs" />

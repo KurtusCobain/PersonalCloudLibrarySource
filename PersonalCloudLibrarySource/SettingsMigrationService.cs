@@ -103,6 +103,9 @@ namespace PersonalCloudLibrarySource
                     case 3:
                         ApplyVersion4(settings);
                         break;
+                    case 4:
+                        ApplyVersion5(settings);
+                        break;
                     default:
                         settings.SettingsVersion = 0;
                         continue;
@@ -186,6 +189,44 @@ namespace PersonalCloudLibrarySource
             settings.SettingsVersion = 4;
         }
 
+        private static void ApplyVersion5(PersonalCloudLibrarySourceSettingsV3 settings)
+        {
+            // Schema version 5 persists setup completion/dismissal state.
+            // Treat an already configured pre-v5 installation as previously
+            // completed so a temporarily unavailable source produces a reminder
+            // instead of reopening the first-run wizard.
+            if (!settings.SetupCompleted && !settings.SetupDismissed)
+            {
+                settings.SetupCompleted = HasPriorSetupConfiguration(settings);
+            }
+            settings.SettingsVersion = 5;
+        }
+
+        private static bool HasPriorSetupConfiguration(PersonalCloudLibrarySourceSettings settings)
+        {
+            var provider = PersonalCloudLibrarySource.GetProviderType(settings);
+            if (string.Equals(provider, PersonalCloudLibrarySourceSettings.LocalFileProviderType, StringComparison.OrdinalIgnoreCase))
+            {
+                return !string.IsNullOrWhiteSpace(settings.LocalManifestPath);
+            }
+
+            if (string.Equals(provider, PersonalCloudLibrarySourceSettings.LocalFolderProviderType, StringComparison.OrdinalIgnoreCase))
+            {
+                return !string.IsNullOrWhiteSpace(settings.LocalLibraryRoot) &&
+                       (!string.IsNullOrWhiteSpace(settings.LocalManifestPath) ||
+                        !string.IsNullOrWhiteSpace(settings.ManifestRelativePath));
+            }
+
+            if (string.Equals(provider, PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType, StringComparison.OrdinalIgnoreCase))
+            {
+                return !string.IsNullOrWhiteSpace(settings.RcloneExecutablePath) &&
+                       !string.IsNullOrWhiteSpace(settings.RcloneRemoteName) &&
+                       !string.IsNullOrWhiteSpace(settings.RcloneManifestPath);
+            }
+
+            return false;
+        }
+
         private static PersonalCloudLibrarySourceSettings CopyLegacySettings(PersonalCloudLibrarySourceSettings settings)
         {
             var clone = new PersonalCloudLibrarySourceSettings();
@@ -202,6 +243,8 @@ namespace PersonalCloudLibrarySource
             destination.ShowSidebarDashboard = source.ShowSidebarDashboard;
             destination.ShowSetupReminders = source.ShowSetupReminders;
             destination.OpenDashboardAtStartup = source.OpenDashboardAtStartup;
+            destination.SetupCompleted = source.SetupCompleted;
+            destination.SetupDismissed = source.SetupDismissed;
             destination.TransferConcurrency = source.TransferConcurrency;
             destination.VerifyAfterTransfer = source.VerifyAfterTransfer;
             destination.RemoveIncompleteTransferFiles = source.RemoveIncompleteTransferFiles;

@@ -11,6 +11,7 @@ namespace PersonalCloudLibrarySource
         private readonly Func<string> defaultCachePathProvider;
         private readonly Action prepareSetupCompletion;
         private readonly Action setupSaved;
+        private readonly Action setupDismissed;
         private readonly SetupCompletionCoordinator completionCoordinator = new SetupCompletionCoordinator();
         private Window wizardWindow;
         private bool editCompleted;
@@ -20,13 +21,15 @@ namespace PersonalCloudLibrarySource
             PersonalCloudLibrarySourceSettingsV3ViewModel settingsViewModel,
             Func<string> defaultCachePathProvider,
             Action prepareSetupCompletion,
-            Action setupSaved)
+            Action setupSaved,
+            Action setupDismissed)
         {
             this.playniteApi = playniteApi ?? throw new ArgumentNullException(nameof(playniteApi));
             this.settingsViewModel = settingsViewModel ?? throw new ArgumentNullException(nameof(settingsViewModel));
             this.defaultCachePathProvider = defaultCachePathProvider ?? throw new ArgumentNullException(nameof(defaultCachePathProvider));
             this.prepareSetupCompletion = prepareSetupCompletion ?? throw new ArgumentNullException(nameof(prepareSetupCompletion));
             this.setupSaved = setupSaved ?? throw new ArgumentNullException(nameof(setupSaved));
+            this.setupDismissed = setupDismissed ?? throw new ArgumentNullException(nameof(setupDismissed));
         }
 
         public void OpenWizard()
@@ -123,6 +126,16 @@ namespace PersonalCloudLibrarySource
         private void HandleCancelled()
         {
             settingsViewModel.CancelEdit();
+            try
+            {
+                setupDismissed();
+            }
+            catch (Exception ex)
+            {
+                playniteApi.Dialogs.ShowMessage(
+                    "The setup reminder state could not be saved: " + ex.Message,
+                    "Personal Cloud Library Setup");
+            }
             editCompleted = true;
             CloseWindow();
         }
@@ -140,6 +153,16 @@ namespace PersonalCloudLibrarySource
             if (!editCompleted)
             {
                 settingsViewModel.CancelEdit();
+                try
+                {
+                    setupDismissed();
+                }
+                catch (Exception ex)
+                {
+                    playniteApi.Dialogs.ShowMessage(
+                        "The setup reminder state could not be saved: " + ex.Message,
+                        "Personal Cloud Library Setup");
+                }
             }
 
             if (wizardWindow != null)

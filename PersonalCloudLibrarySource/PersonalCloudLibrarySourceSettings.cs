@@ -293,7 +293,7 @@ namespace PersonalCloudLibrarySource
             if (LastEditSavedSuccessfully)
             {
                 runtimeSettingsSnapshot = editSession.GetCommittedSnapshot();
-                SettingsCommitted?.Invoke(this, EventArgs.Empty);
+                NotifySettingsCommitted();
             }
 
             RefreshBasicSetupStatus();
@@ -307,6 +307,11 @@ namespace PersonalCloudLibrarySource
         protected void UpdateRuntimeSettingsSnapshot()
         {
             runtimeSettingsSnapshot = SettingsMigrationService.CloneForEditing(Settings);
+        }
+
+        protected void NotifySettingsCommitted()
+        {
+            SettingsCommitted?.Invoke(this, EventArgs.Empty);
         }
 
         public virtual bool VerifySettings(out List<string> errors)

@@ -52,6 +52,38 @@ namespace PersonalCloudLibrarySource
             return (PersonalCloudLibrarySourceSettingsV3)base.GetRuntimeSettingsSnapshot();
         }
 
+        public void MarkSetupCompleted()
+        {
+            new SetupStatePersistenceService().MarkCompleted(Settings);
+        }
+
+        public void PersistSetupDismissed()
+        {
+            new SetupStatePersistenceService().MarkDismissed(
+                Settings,
+                snapshot => plugin.SavePluginSettings(snapshot));
+            UpdateRuntimeSettingsSnapshot();
+            NotifySettingsCommitted();
+        }
+
+        public void PersistGeneratedManifestState(ManifestGenerationReport report)
+        {
+            if (report == null)
+            {
+                throw new ArgumentNullException(nameof(report));
+            }
+
+            Settings.LocalManifestPath = report.OutputPath;
+            Settings.ManifestRelativePath = string.Empty;
+            Settings.LastGeneratedManifestPath = report.OutputPath;
+            Settings.LastGeneratedReportPath = report.ReportPath;
+            Settings.LastManifestGeneratedAt = report.Manifest.GeneratedAt;
+            Settings.LastManifestItemCount = report.ItemCount;
+            plugin.SavePluginSettings(SettingsMigrationService.CloneForEditing(Settings));
+            UpdateRuntimeSettingsSnapshot();
+            NotifySettingsCommitted();
+        }
+
         public override bool VerifySettings(out List<string> errors)
         {
             base.Settings = Settings;

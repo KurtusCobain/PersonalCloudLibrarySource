@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Windows.Controls;
 
 namespace PersonalCloudLibrarySource
@@ -702,6 +703,13 @@ namespace PersonalCloudLibrarySource
 
         public ManifestGenerationReport GenerateManifestFromFolder(string sourceRoot)
         {
+            return GenerateManifestFromFolder(sourceRoot, CancellationToken.None);
+        }
+
+        private ManifestGenerationReport GenerateManifestFromFolder(
+            string sourceRoot,
+            CancellationToken cancellationToken)
+        {
             var outputPath = GetDefaultGeneratedManifestPath();
             var reportPath = GetDefaultGeneratedReportPath();
 
@@ -711,7 +719,7 @@ namespace PersonalCloudLibrarySource
                 OutputPath = outputPath,
                 ReportPath = reportPath,
                 BackupDirectory = GetBackupsDirectory()
-            });
+            }, cancellationToken);
         }
 
         public LibraryVerificationReport GenerateVerificationReport(

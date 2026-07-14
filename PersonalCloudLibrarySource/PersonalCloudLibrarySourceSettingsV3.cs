@@ -4,13 +4,15 @@ namespace PersonalCloudLibrarySource
 {
     public class PersonalCloudLibrarySourceSettingsV3 : PersonalCloudLibrarySourceSettings
     {
-        public const int CurrentSettingsVersion = 4;
+        public const int CurrentSettingsVersion = 5;
 
         private int settingsVersion;
         private bool showTopPanelButton = true;
         private bool showSidebarDashboard = true;
         private bool showSetupReminders = true;
         private bool openDashboardAtStartup;
+        private bool setupCompleted;
+        private bool setupDismissed;
         private int transferConcurrency = 1;
         private bool verifyAfterTransfer = true;
         private bool removeIncompleteTransferFiles = true;
@@ -55,6 +57,18 @@ namespace PersonalCloudLibrarySource
         {
             get => openDashboardAtStartup;
             set => SetValue(ref openDashboardAtStartup, value);
+        }
+
+        public bool SetupCompleted
+        {
+            get => setupCompleted;
+            set => SetValue(ref setupCompleted, value);
+        }
+
+        public bool SetupDismissed
+        {
+            get => setupDismissed;
+            set => SetValue(ref setupDismissed, value);
         }
 
         public int TransferConcurrency
