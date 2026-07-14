@@ -26,7 +26,7 @@ namespace PersonalCloudLibrarySource
             try
             {
                 var pluginSettings = settings.GetRuntimeSettingsSnapshot();
-                var manifest = ParseManifest(LoadManifestJson(pluginSettings));
+                var manifest = LoadValidatedManifest(pluginSettings);
                 var targets = gameCommandService.ResolveTargets(games, manifest.Items, pluginSettings, Id).ToList();
                 var manager = GetTransferManager();
                 foreach (var target in targets)

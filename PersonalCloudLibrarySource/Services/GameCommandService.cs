@@ -66,12 +66,14 @@ namespace PersonalCloudLibrarySource
             var installDirectory = item == null
                 ? string.Empty
                 : PersonalCloudLibrarySource.ResolveInstallDirectory(item, settings, launchPath);
-            var cachedFileExists = !string.IsNullOrWhiteSpace(launchPath) && File.Exists(launchPath);
-            var cachedDirectoryExists = item != null &&
-                PersonalCloudLibrarySource.IsDirectoryItem(item) &&
-                !string.IsNullOrWhiteSpace(installDirectory) &&
-                Directory.Exists(installDirectory);
-            var hasCachedPath = cachedFileExists || cachedDirectoryExists;
+            var itemState = new LibraryItemStateResolver().Resolve(
+                item,
+                launchPath,
+                installDirectory,
+                settings.TreatMissingFilesAsUninstalled);
+            var cachedFileExists = itemState.HasPlayAction;
+            var cachedDirectoryExists = itemState.IsCached && !cachedFileExists;
+            var hasCachedPath = itemState.IsCached;
             var cacheDisplayPath = cachedFileExists
                 ? launchPath
                 : cachedDirectoryExists
@@ -145,7 +147,7 @@ namespace PersonalCloudLibrarySource
                 {
                     BelongsToPlugin = belongsToPlugin,
                     HasManifestItem = item != null,
-                    IsInstalled = hasCachedPath || game.IsInstalled,
+                    IsInstalled = itemState.IsInstalled,
                     CanInstall = canInstall,
                     HasCachedPath = hasCachedPath,
                     CanRemoveCachedCopy = canRemoveCachedCopy,

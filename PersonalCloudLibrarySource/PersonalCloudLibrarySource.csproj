@@ -45,6 +45,7 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Xml" />
     <Reference Include="WindowsBase" />
   </ItemGroup>
@@ -88,6 +89,12 @@
     <Compile Include="SafeFileWriteService.cs" />
     <Compile Include="Services\GameCommandPolicyService.cs" />
     <Compile Include="Services\GameCommandService.cs" />
+    <Compile Include="Services\ManifestLoader.cs" />
+    <Compile Include="Services\ManifestItemMapper.cs" />
+    <Compile Include="Services\ManifestParserValidator.cs" />
+    <Compile Include="Services\PathResolvers.cs" />
+    <Compile Include="Services\LibraryItemStateResolver.cs" />
+    <Compile Include="Services\SafeCacheDeletionPolicy.cs" />
     <Compile Include="Services\PluginNavigationService.cs" />
     <Compile Include="Services\SetupLaunchPolicyService.cs" />
     <Compile Include="SettingsEditSession.cs" />

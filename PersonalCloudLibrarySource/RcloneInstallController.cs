@@ -147,10 +147,14 @@ namespace PersonalCloudLibrarySource
                 return;
             }
 
-            var expectedLaunchFileExists = !string.IsNullOrWhiteSpace(launchPath) && File.Exists(launchPath);
-            logger.Info($"Personal Cloud Library Source download result for {item.Id}: expected launch file exists={expectedLaunchFileExists}.");
+            var itemState = new LibraryItemStateResolver().Resolve(
+                item,
+                launchPath,
+                installDirectory,
+                settings.TreatMissingFilesAsUninstalled);
+            logger.Info($"Personal Cloud Library Source download result for {item.Id}: cached={itemState.IsCached}; play action available={itemState.HasPlayAction}.");
 
-            if (!expectedLaunchFileExists)
+            if (!itemState.IsCached)
             {
                 logger.Warn($"Personal Cloud Library Source downloaded item {item.Id}, but the expected launch file was not found.");
                 ShowSummary(
@@ -163,8 +167,7 @@ namespace PersonalCloudLibrarySource
                 return;
             }
 
-            Game.IsInstalled = true;
-            Game.InstallDirectory = installDirectory;
+            new LibraryItemStateApplicator().Apply(Game, itemState);
 
             InvokeOnInstalled(new GameInstalledEventArgs(new GameInstallationData
             {
@@ -176,7 +179,7 @@ namespace PersonalCloudLibrarySource
                 "Download to local cache completed." + System.Environment.NewLine + System.Environment.NewLine +
                 "Item: " + item.Title + System.Environment.NewLine +
                 "Source type: " + sourceType + System.Environment.NewLine +
-                "Installed state: cached locally and launch-ready." + System.Environment.NewLine +
+                "Installed state: cached locally" + (itemState.HasPlayAction ? " and launch-ready." : ".") + System.Environment.NewLine +
                 System.Environment.NewLine +
                 "Next: launch the item from Playnite or run Update Game Library if you want Playnite to refresh its view.");
         }

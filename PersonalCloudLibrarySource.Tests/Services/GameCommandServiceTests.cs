@@ -141,5 +141,40 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(target.PolicyContext.CanRemoveCachedCopy, Is.False);
             Assert.That(target.UninstallRefusalReason, Does.Contain("outside LocalCacheFolder"));
         }
+
+        [TestCase(false, true)]
+        [TestCase(true, false)]
+        public void ResolveTargets_MissingContent_UsesConfiguredInstalledSemantics(
+            bool treatMissingAsUninstalled,
+            bool expectedInstalled)
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                SourceProviderType = PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
+                RcloneRemoteName = "games",
+                LocalCacheFolder = Path.Combine(testRoot, "cache"),
+                AllowDownloads = true,
+                TreatMissingFilesAsUninstalled = treatMissingAsUninstalled
+            };
+            var game = new Game("Remote")
+            {
+                GameId = "remote",
+                PluginId = pluginId
+            };
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "remote",
+                Title = "Remote",
+                SourcePath = "remote.exe",
+                CachePath = "remote.exe",
+                SourceType = "file"
+            };
+
+            var target = new GameCommandService().ResolveTargets(new[] { game }, new[] { item }, settings, pluginId)[0];
+
+            Assert.That(target.PolicyContext.IsInstalled, Is.EqualTo(expectedInstalled));
+            Assert.That(target.PolicyContext.HasCachedPath, Is.False);
+            Assert.That(target.PolicyContext.CanInstall, Is.True);
+        }
     }
 }

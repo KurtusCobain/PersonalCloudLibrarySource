@@ -71,7 +71,19 @@ namespace PersonalCloudLibrarySource
                 .ToList() ?? new List<Playnite.SDK.Models.Game>();
 
             var importedCount = pluginGames.Count;
-            var cachedCount = pluginGames.Count(game => game.IsInstalled);
+            var stateResolver = new LibraryItemStateResolver();
+            var manifestItems = GetValidatedManifestItemsSnapshot();
+            var treatMissingAsUninstalled = pluginSettings?.TreatMissingFilesAsUninstalled ?? true;
+            var cachedCount = pluginGames.Count(game =>
+            {
+                PersonalCloudLibraryItem item;
+                if (!string.IsNullOrWhiteSpace(game.GameId) && manifestItems.TryGetValue(game.GameId, out item))
+                {
+                    var paths = new CachePathResolver().Resolve(item, pluginSettings);
+                    return stateResolver.Resolve(item, paths.LaunchPath, paths.InstallDirectory, treatMissingAsUninstalled).IsCached;
+                }
+                return stateResolver.ResolveGame(game, treatMissingAsUninstalled).IsCached;
+            });
             var manifestCount = pluginSettings == null
                 ? importedCount
                 : Math.Max(pluginSettings.LastManifestItemCount, importedCount);
@@ -311,10 +323,10 @@ namespace PersonalCloudLibrarySource
 
             if (string.Equals(providerType, PersonalCloudLibrarySourceSettings.LocalFolderProviderType, StringComparison.OrdinalIgnoreCase))
             {
-                var manifestPath = ResolveLocalFolderManifestPath(pluginSettings);
+                var manifestResolution = manifestLoader.ResolveLocalManifestPath(pluginSettings);
                 return Directory.Exists(pluginSettings.LocalLibraryRoot) &&
-                       !string.IsNullOrWhiteSpace(manifestPath) &&
-                       File.Exists(manifestPath);
+                       manifestResolution.Succeeded &&
+                       File.Exists(manifestResolution.Path);
             }
 
             return true;

@@ -232,10 +232,13 @@ namespace PersonalCloudLibrarySource
                     AddWarning(report, "Missing cache destination for item: " + itemLabel);
                 }
 
-                var launchExists = !string.IsNullOrWhiteSpace(launchPath) && File.Exists(launchPath);
-                var installDirectoryExists = !string.IsNullOrWhiteSpace(installDirectory) && Directory.Exists(installDirectory);
-                var directoryItem = PersonalCloudLibrarySource.IsDirectoryItem(item);
-                var cachedOrInstalled = launchExists || (directoryItem && installDirectoryExists);
+                var itemState = new LibraryItemStateResolver().Resolve(
+                    item,
+                    launchPath,
+                    installDirectory,
+                    settings.TreatMissingFilesAsUninstalled);
+                var launchExists = itemState.HasPlayAction;
+                var cachedOrInstalled = itemState.IsCached;
                 if (cachedOrInstalled)
                 {
                     report.CachedInstalledCount++;

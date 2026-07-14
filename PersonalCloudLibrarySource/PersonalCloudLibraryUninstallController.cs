@@ -14,6 +14,7 @@ namespace PersonalCloudLibrarySource
         private readonly IPlayniteAPI playniteApi;
         private readonly PersonalCloudLibraryItem item;
         private readonly PersonalCloudLibrarySourceSettings settings;
+        private readonly SafeCacheDeletionExecutor deletionExecutor = new SafeCacheDeletionExecutor();
 
         public PersonalCloudLibraryUninstallController(
             IPlayniteAPI playniteApi,
@@ -60,31 +61,37 @@ namespace PersonalCloudLibrarySource
 
             try
             {
-                if (File.Exists(targetPath))
+                var deletion = deletionExecutor.Delete(
+                    settings.LocalCacheFolder,
+                    targetPath,
+                    settings.AllowUninstallOutsideCacheFolder);
+                if (!deletion.Allowed)
                 {
-                    File.Delete(targetPath);
-                }
-                else if (Directory.Exists(targetPath))
-                {
-                    Directory.Delete(targetPath, recursive: true);
-                }
-                else
-                {
-                    logger.Info($"Personal Cloud Library Source uninstall skipped for {Game.GameId}: cached target does not exist.");
+                    logger.Info($"Personal Cloud Library Source uninstall skipped for {Game.GameId}: {deletion.Reason}.");
                     playniteApi?.Dialogs?.ShowMessage(
-                        "Remove cached copy was skipped because the cached target was not found." + Environment.NewLine + Environment.NewLine +
-                        "Item: " + item.Title,
+                        "Remove cached copy was skipped." + Environment.NewLine + Environment.NewLine +
+                        "Item: " + item.Title + Environment.NewLine +
+                        "Reason: " + deletion.Reason,
                         "Personal Cloud Library Source");
                     return;
                 }
 
-                Game.IsInstalled = false;
-                InvokeOnUninstalled();
+                var postDeletionState = new LibraryItemStateApplicator().Reconcile(
+                    Game,
+                    item,
+                    launchPath,
+                    installDirectory,
+                    settings.TreatMissingFilesAsUninstalled);
+                if (!postDeletionState.IsInstalled)
+                {
+                    InvokeOnUninstalled();
+                }
                 logger.Info($"Personal Cloud Library Source uninstall succeeded for {Game.GameId}: deleted {targetPath}.");
                 playniteApi?.Dialogs?.ShowMessage(
                     "Remove cached copy completed." + Environment.NewLine + Environment.NewLine +
                     "Item: " + item.Title + Environment.NewLine +
-                    "Result: cached local content was removed safely." + Environment.NewLine + Environment.NewLine +
+                    "Result: the requested cached target was removed safely." + Environment.NewLine +
+                    "Cached state: " + (postDeletionState.IsCached ? "other cached content remains." : "no cached content remains.") + Environment.NewLine + Environment.NewLine +
                     "Next: run Update Game Library if you want Playnite to refresh the installed state immediately.",
                     "Personal Cloud Library Source");
             }
