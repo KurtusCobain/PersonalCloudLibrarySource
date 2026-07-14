@@ -52,6 +52,9 @@
   <ItemGroup>
     <Compile Include="Dashboard\CacheStatusService.cs" />
     <Compile Include="Dashboard\DashboardActivityService.cs" />
+    <Compile Include="Dashboard\DashboardTransferPresentation.cs" />
+    <Compile Include="Dashboard\DashboardViewModelLifetime.cs" />
+    <Compile Include="Dashboard\DashboardRefreshPostGate.cs" />
     <Compile Include="Dashboard\CloudLibraryDashboardState.cs" />
     <Compile Include="Dashboard\CloudLibraryDashboardView.xaml.cs">
       <DependentUpon>CloudLibraryDashboardView.xaml</DependentUpon>

@@ -1,10 +1,14 @@
 using System;
+using System.Threading;
 using System.Windows.Input;
 
 namespace PersonalCloudLibrarySource
 {
     public sealed class CloudTransferQueueItemViewModel
     {
+        private readonly Action retry;
+        private int retryAvailable;
+
         public CloudTransferQueueItemViewModel(
             CloudTransferJob job,
             Action cancel,
@@ -14,10 +18,15 @@ namespace PersonalCloudLibrarySource
             DisplayName = string.IsNullOrWhiteSpace(job.DisplayName) ? "Unnamed transfer" : job.DisplayName;
             StateText = GetStateText(job.State);
             ProgressText = GetProgressText(job);
-            CanCancel = !job.IsTerminal;
-            CanRetry = job.State == CloudTransferState.Failed || job.State == CloudTransferState.Cancelled;
+            CanCancel = !job.IsTerminal &&
+                job.State != CloudTransferState.Finalizing &&
+                !job.CancellationToken.IsCancellationRequested;
+            retryAvailable = job.State == CloudTransferState.Failed || job.State == CloudTransferState.Cancelled
+                ? 1
+                : 0;
+            this.retry = retry ?? (() => { });
             CancelCommand = new DelegateCommand(cancel ?? (() => { }), () => CanCancel);
-            RetryCommand = new DelegateCommand(retry ?? (() => { }), () => CanRetry);
+            RetryCommand = new DelegateCommand(ExecuteRetry, () => CanRetry);
         }
 
         public CloudTransferJob Job { get; }
@@ -25,9 +34,20 @@ namespace PersonalCloudLibrarySource
         public string StateText { get; }
         public string ProgressText { get; }
         public bool CanCancel { get; }
-        public bool CanRetry { get; }
+        public bool CanRetry => Volatile.Read(ref retryAvailable) == 1;
         public ICommand CancelCommand { get; }
         public ICommand RetryCommand { get; }
+
+        private void ExecuteRetry()
+        {
+            if (Interlocked.Exchange(ref retryAvailable, 0) != 1)
+            {
+                return;
+            }
+
+            ((DelegateCommand)RetryCommand).RaiseCanExecuteChanged();
+            retry();
+        }
 
         private static string GetStateText(CloudTransferState state)
         {

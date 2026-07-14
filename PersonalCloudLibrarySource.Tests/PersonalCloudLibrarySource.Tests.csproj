@@ -45,6 +45,11 @@
   <ItemGroup>
     <Compile Include="Dashboard\FriendlySourceNameProviderTests.cs" />
     <Compile Include="Dashboard\DashboardActivityServiceTests.cs" />
+    <Compile Include="Dashboard\DashboardTransferActivityBridgeTests.cs" />
+    <Compile Include="Dashboard\DashboardTransferActionsTests.cs" />
+    <Compile Include="Dashboard\CloudLibraryDashboardViewModelTests.cs" />
+    <Compile Include="Dashboard\DashboardViewModelLifetimeTests.cs" />
+    <Compile Include="Dashboard\DashboardRefreshPostGateTests.cs" />
     <Compile Include="Dashboard\LibraryStatusServiceTests.cs" />
     <Compile Include="Dashboard\VerificationDashboardStateServiceTests.cs" />
     <Compile Include="Dashboard\ImportDashboardStateServiceTests.cs" />

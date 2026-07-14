@@ -16,7 +16,7 @@ namespace PersonalCloudLibrarySource
         public CloudTransferJob Job { get; }
     }
 
-    public sealed class TransferQueueService : IDisposable
+    public sealed class TransferQueueService : ITransferTerminalSource, IDisposable
     {
         private sealed class QueueRequest
         {

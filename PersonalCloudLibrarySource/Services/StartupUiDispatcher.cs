@@ -10,12 +10,17 @@ namespace PersonalCloudLibrarySource
         void Post(Action action, CancellationToken cancellationToken);
     }
 
+    public interface IAcknowledgingStartupUiDispatcher : IStartupUiDispatcher
+    {
+        bool TryPost(Action action, CancellationToken cancellationToken);
+    }
+
     public interface IStartupUiPostTarget
     {
         void BeginInvoke(Action action);
     }
 
-    public sealed class StartupUiDispatcher : IStartupUiDispatcher
+    public sealed class StartupUiDispatcher : IAcknowledgingStartupUiDispatcher
     {
         private readonly IStartupUiPostTarget target;
         private readonly Action<Exception> observeException;
@@ -29,6 +34,11 @@ namespace PersonalCloudLibrarySource
         }
 
         public void Post(Action action, CancellationToken cancellationToken)
+        {
+            TryPost(action, cancellationToken);
+        }
+
+        public bool TryPost(Action action, CancellationToken cancellationToken)
         {
             if (action == null)
             {
@@ -53,10 +63,12 @@ namespace PersonalCloudLibrarySource
                         Observe(ex);
                     }
                 });
+                return true;
             }
             catch (Exception ex)
             {
                 Observe(ex);
+                return false;
             }
         }
 

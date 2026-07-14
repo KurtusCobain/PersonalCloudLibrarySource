@@ -17,6 +17,7 @@ namespace PersonalCloudLibrarySource
     public partial class PersonalCloudLibrarySource
     {
         private readonly LibraryStatusService dashboardLibraryStatusService = new LibraryStatusService();
+        private readonly DashboardActivityService dashboardActivityService = new DashboardActivityService();
         private DashboardStateStore dashboardStateStore;
         private CloudLibraryDashboardWindowService dashboardWindowService;
         private SetupWizardWindowService setupWizardWindowService;
@@ -79,10 +80,21 @@ namespace PersonalCloudLibrarySource
         private CloudLibraryDashboardView CreateDashboardView()
         {
             RefreshDashboardState();
-            return new CloudLibraryDashboardView
-            {
-                DataContext = new CloudLibraryDashboardViewModel(dashboardStateStore, navigationService)
-            };
+            var view = new CloudLibraryDashboardView();
+            view.SetViewModelFactory(CreateDashboardViewModel);
+            return view;
+        }
+
+        private CloudLibraryDashboardViewModel CreateDashboardViewModel()
+        {
+            var queue = GetTransferQueue();
+            return new CloudLibraryDashboardViewModel(
+                dashboardStateStore,
+                navigationService,
+                GetTransferManager(),
+                dashboardActivityService,
+                new DashboardTransferActions(queue, settings.GetRuntimeSettingsSnapshot),
+                startupUiDispatcher);
         }
 
         private void RefreshDashboardState()

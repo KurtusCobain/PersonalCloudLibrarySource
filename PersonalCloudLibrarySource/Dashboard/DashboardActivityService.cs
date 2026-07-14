@@ -59,13 +59,23 @@ namespace PersonalCloudLibrarySource
 
             lock (syncRoot)
             {
-                records.Insert(0, new DashboardActivityRecord
+                var record = new DashboardActivityRecord
                 {
                     Kind = kind,
                     Message = normalized,
                     TimestampUtc = timestampUtc?.ToUniversalTime() ?? DateTime.UtcNow,
                     GameId = gameId
-                });
+                };
+                var insertIndex = records.FindIndex(existing =>
+                    existing.TimestampUtc <= record.TimestampUtc);
+                if (insertIndex < 0)
+                {
+                    records.Add(record);
+                }
+                else
+                {
+                    records.Insert(insertIndex, record);
+                }
 
                 if (records.Count > MaximumRecordCount)
                 {

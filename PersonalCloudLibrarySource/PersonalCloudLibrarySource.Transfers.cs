@@ -7,6 +7,9 @@ namespace PersonalCloudLibrarySource
         private CloudTransferManager transferManager;
         private CloudTransferExecutor transferExecutor;
         private TransferQueueService transferQueue;
+        private DashboardTransferActivityBridge transferActivityBridge;
+        private readonly DashboardRefreshPostGate dashboardTransferRefreshGate = new DashboardRefreshPostGate();
+        private bool transferPresentationDisposed;
 
         internal CloudTransferManager GetTransferManager()
         {
@@ -14,6 +17,7 @@ namespace PersonalCloudLibrarySource
             {
                 var concurrency = settings?.GetRuntimeSettingsSnapshot()?.TransferConcurrency ?? 1;
                 transferManager = new CloudTransferManager(concurrency);
+                transferPresentationDisposed = false;
                 transferManager.Changed += TransferManager_Changed;
             }
 
@@ -37,6 +41,9 @@ namespace PersonalCloudLibrarySource
             if (transferQueue == null)
             {
                 transferQueue = new TransferQueueService(GetTransferManager(), GetTransferExecutor());
+                transferActivityBridge = new DashboardTransferActivityBridge(
+                    transferQueue,
+                    dashboardActivityService);
             }
 
             return transferQueue;
@@ -94,15 +101,26 @@ namespace PersonalCloudLibrarySource
                 return;
             }
 
-            playniteApi.MainView.UIDispatcher.BeginInvoke(new Action(() =>
-            {
-                RefreshDashboardState();
-                UpdateNavigationItemState();
-            }));
+            dashboardTransferRefreshGate.Request(
+                action => playniteApi.MainView.UIDispatcher.BeginInvoke(action),
+                () =>
+                {
+                    if (transferPresentationDisposed)
+                    {
+                        return;
+                    }
+
+                    RefreshDashboardState();
+                    UpdateNavigationItemState();
+                });
         }
 
         private void DisposeTransferManager()
         {
+            transferPresentationDisposed = true;
+            transferActivityBridge?.Dispose();
+            transferActivityBridge = null;
+
             if (transferQueue != null)
             {
                 transferQueue.Shutdown(TimeSpan.FromSeconds(10));

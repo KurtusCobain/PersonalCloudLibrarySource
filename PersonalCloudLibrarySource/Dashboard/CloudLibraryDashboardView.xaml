@@ -17,6 +17,8 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <StackPanel Grid.Row="0" Margin="0,0,0,16">
@@ -95,6 +97,57 @@
             </GroupBox>
 
             <GroupBox Grid.Row="4"
+                      Header="{DynamicResource LOCPLSTransferQueue}"
+                      Margin="0,0,0,12">
+                <ItemsControl ItemsSource="{Binding TransferQueueItems}" Margin="12,8">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,4">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                    <TextBlock Text="{Binding StateText}" />
+                                    <TextBlock Text="{Binding ProgressText}" TextWrapping="Wrap" />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="12,0,0,0">
+                                    <Button Content="{DynamicResource LOCPLSTransferCancel}"
+                                            Command="{Binding CancelCommand}"
+                                            Margin="0,0,6,0"
+                                            Padding="8,3" />
+                                    <Button Content="{DynamicResource LOCPLSTransferRetry}"
+                                            Command="{Binding RetryCommand}"
+                                            Padding="8,3" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </GroupBox>
+
+            <GroupBox Grid.Row="5"
+                      Header="{DynamicResource LOCPLSRecentActivity}"
+                      Margin="0,0,0,12">
+                <ItemsControl ItemsSource="{Binding RecentActivity}" Margin="12,8">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="12" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="{Binding DisplayTime}" />
+                                <TextBlock Grid.Column="2" Text="{Binding Message}" TextWrapping="Wrap" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </GroupBox>
+
+            <GroupBox Grid.Row="6"
                       Header="{DynamicResource LOCPLSCacheHeading}"
                       Margin="0,0,0,12">
                 <Grid Margin="12">
@@ -108,7 +161,7 @@
                 </Grid>
             </GroupBox>
 
-            <GroupBox Grid.Row="5" Header="{DynamicResource LOCPLSQuickActions}">
+            <GroupBox Grid.Row="7" Header="{DynamicResource LOCPLSQuickActions}">
                 <WrapPanel Margin="12">
                     <Button Content="{DynamicResource LOCPLSRunSetupWizard}"
                             Command="{Binding RunSetupWizardCommand}"

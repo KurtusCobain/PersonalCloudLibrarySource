@@ -1,6 +1,8 @@
 using NUnit.Framework;
 using System;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace PersonalCloudLibrarySource.Tests.Dashboard
 {
@@ -58,6 +60,37 @@ namespace PersonalCloudLibrarySource.Tests.Dashboard
             service.Add(DashboardActivityKind.TransferFailed, "Example Game failed.");
 
             Assert.That(changedCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ConcurrentWorkerAdds_RemainCappedAndRaiseOneChangePerAcceptedRecord()
+        {
+            var service = new DashboardActivityService();
+            var changedCount = 0;
+            service.Changed += (sender, args) => Interlocked.Increment(ref changedCount);
+
+            Parallel.For(0, 100, index =>
+                service.Add(DashboardActivityKind.TransferCompleted, "Event " + index));
+
+            Assert.That(service.Records, Has.Count.EqualTo(50));
+            Assert.That(changedCount, Is.EqualTo(100));
+        }
+
+        [Test]
+        public void OutOfOrderOldRecord_IsEvictedAfterTimestampOrderingNotArrivalOrdering()
+        {
+            var service = new DashboardActivityService();
+            var baseline = new DateTime(2026, 7, 13, 2, 0, 0, DateTimeKind.Utc);
+            for (var index = 0; index < 50; index++)
+            {
+                service.Add(DashboardActivityKind.Library, "Recent " + index, baseline.AddMinutes(index));
+            }
+
+            service.Add(DashboardActivityKind.Library, "Ancient late arrival", baseline.AddDays(-1));
+
+            Assert.That(service.Records, Has.Count.EqualTo(50));
+            Assert.That(service.Records.Select(record => record.Message), Does.Not.Contain("Ancient late arrival"));
+            Assert.That(service.Records.First().Message, Is.EqualTo("Recent 49"));
         }
     }
 }

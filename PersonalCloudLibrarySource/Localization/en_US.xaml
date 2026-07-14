@@ -28,6 +28,8 @@
     <sys:String x:Key="LOCPLSFailedTransfers">Failed transfers</sys:String>
     <sys:String x:Key="LOCPLSTransferCancel">Cancel</sys:String>
     <sys:String x:Key="LOCPLSTransferRetry">Retry</sys:String>
+    <sys:String x:Key="LOCPLSTransferQueue">Transfer queue</sys:String>
+    <sys:String x:Key="LOCPLSRecentActivity">Recent activity</sys:String>
     <sys:String x:Key="LOCPLSCacheHeading">Cache</sys:String>
     <sys:String x:Key="LOCPLSCacheLocation">Cache location</sys:String>
     <sys:String x:Key="LOCPLSQuickActions">Quick actions</sys:String>

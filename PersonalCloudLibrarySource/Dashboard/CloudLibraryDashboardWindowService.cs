@@ -67,6 +67,8 @@ namespace PersonalCloudLibrarySource
         {
             if (dashboardWindow != null)
             {
+                (dashboardWindow.Content as CloudLibraryDashboardView)?.ReleaseViewModel();
+                dashboardWindow.Content = null;
                 dashboardWindow.Closed -= DashboardWindow_Closed;
                 dashboardWindow = null;
             }

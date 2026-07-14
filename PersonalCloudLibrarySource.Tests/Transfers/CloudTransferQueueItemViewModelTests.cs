@@ -55,5 +55,41 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
 
             Assert.That(retryCalls, Is.EqualTo(1));
         }
+
+        [Test]
+        public void CancellationRequestedOrFinalizingJob_DisablesCancelCommand()
+        {
+            var manager = new CloudTransferManager(2);
+            var cancelling = manager.Enqueue(Guid.NewGuid(), "Cancelling", "source", "destination", "LocalFolder");
+            var finalizing = manager.Enqueue(Guid.NewGuid(), "Finalizing", "source", "destination", "LocalFolder");
+            manager.Cancel(cancelling.Id);
+            manager.Transition(finalizing.Id, CloudTransferState.Transferring);
+            manager.Transition(finalizing.Id, CloudTransferState.Finalizing);
+
+            var cancellingItem = new CloudTransferQueueItemViewModel(cancelling, () => { }, () => { });
+            var finalizingItem = new CloudTransferQueueItemViewModel(finalizing, () => { }, () => { });
+
+            Assert.That(cancellingItem.CanCancel, Is.False);
+            Assert.That(cancellingItem.CancelCommand.CanExecute(null), Is.False);
+            Assert.That(finalizingItem.CanCancel, Is.False);
+            Assert.That(finalizingItem.CancelCommand.CanExecute(null), Is.False);
+        }
+
+        [Test]
+        public void RetryCommand_ExecutedTwiceBeforeRefresh_ClaimsRetryOnlyOnceAndDoesNotThrow()
+        {
+            var manager = new CloudTransferManager(1);
+            var job = manager.Enqueue(Guid.NewGuid(), "Failed", "source", "destination", "LocalFolder");
+            manager.Transition(job.Id, CloudTransferState.Failed, "failed");
+            var retryCalls = 0;
+            var item = new CloudTransferQueueItemViewModel(job, () => { }, () => retryCalls++);
+
+            Assert.DoesNotThrow(() => item.RetryCommand.Execute(null));
+            Assert.DoesNotThrow(() => item.RetryCommand.Execute(null));
+
+            Assert.That(retryCalls, Is.EqualTo(1));
+            Assert.That(item.CanRetry, Is.False);
+            Assert.That(item.RetryCommand.CanExecute(null), Is.False);
+        }
     }
 }
