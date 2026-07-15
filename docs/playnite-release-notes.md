@@ -1,28 +1,22 @@
-# Playnite Release Notes
+# Personal Cloud Library Source 1.0
 
-Manifest generation update completed 6/2/2026
+**Release-candidate draft.** The installed extension still identifies as 0.3.2 while the final 1.0 qualification matrix is completed. These notes describe the intended 1.0 scope and are not a publication announcement.
 
-## 0.2.0
+## What is included
 
-Personal Cloud Library Source imports a user-supplied JSON manifest into Playnite as a normal library source.
+- Guided Desktop setup and provider-specific validation for `LocalFile`, `LocalFolder`, and `RcloneRemote`.
+- Catalog-first import so remote entries can receive Playnite metadata before they are cached.
+- Queue-owned local and rclone transfers with cancellation, retry, progress, partial-file cleanup, and verification.
+- A Desktop dashboard for source health, catalog/cache counts, transfer state, recent activity, reports, and diagnostics.
+- Standard Playnite play/install/uninstall controls for imported games in Desktop and Fullscreen.
+- Safe uninstall behavior that removes only authorized cached files or install folders and never source or remote content.
+- Sequential settings migration that preserves configured values while applying safer defaults.
+- Public-safe verification reports and capped diagnostics stored beneath plugin user data.
 
-This release packages the guided setup, universal manifest generation, verification reports, and settings theme polish updates for the Playnite add-on browser.
+## Release boundary
 
-Highlights:
+PCLS catalogs a user-supplied personal library and copies selected content into a guarded local cache. It does not stream gameplay, provide content or cloud accounts, scrape storefronts, or download an entire library automatically.
 
-- LocalFile, LocalFolder, and RcloneRemote provider modes.
-- Universal manifest generation with `tools/generate-manifest.ps1`.
-- Generic rclone support for cloud providers.
-- Local folder, external drive, mounted drive, and NAS support.
-- Cloud-only entries appear as uninstalled.
-- Cached entries launch through Playnite.
-- Manual `Download to local cache` action for supported missing entries.
-- Optional import diagnostics.
-- Verification report output for setup and troubleshooting.
-- Dark-theme readability fixes for the settings status card.
+Before final release notes are published, the release checklist must record installed Desktop, Fullscreen, provider, upgrade, and package qualification. No row should be described as passing before that evidence exists.
 
-Limitations:
-
-- No automatic download before launch.
-- No native cloud provider APIs.
-- No bundled content.
+Historical release details remain in [the changelog](../CHANGELOG.md).
