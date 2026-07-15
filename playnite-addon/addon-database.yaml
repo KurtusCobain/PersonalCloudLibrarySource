@@ -12,7 +12,7 @@ Description: |
 
   Supports LocalFile, LocalFolder, and RcloneRemote providers. Local folders can point at fixed disks, external drives, mapped drives, synced cloud folders, or UNC/NAS paths. Google Drive, OneDrive, Dropbox, and similar services can be accessed through a user-configured rclone remote.
 
-  Desktop provides guided setup, verification, reports, diagnostics, manifest generation, and a transfer dashboard. Imported games use standard Playnite metadata and play/install/uninstall controllers; there is no dedicated Fullscreen setup wizard or dashboard.
+  Desktop provides guided setup, verification, reports, diagnostics, manifest generation, and a transfer dashboard. Imported games use standard Playnite metadata and play/install/uninstall controllers in Desktop and Fullscreen; there is no dedicated Fullscreen setup wizard or dashboard.
 
   Selected files or directories can be queued into a guarded local cache. Cache uninstall refuses unsafe targets and does not delete source or remote content. PCLS does not stream gameplay or automatically download a whole library.
 
@@ -32,9 +32,9 @@ Links:
   Changelog: https://github.com/KurtusCobain/PersonalCloudLibrarySource/blob/main/CHANGELOG.md
 
 Screenshots:
-  - Thumbnail: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-workflow.png
-    Image: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-workflow.png
   - Thumbnail: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-settings-provider.png
     Image: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-settings-provider.png
-  - Thumbnail: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-settings-cache-uninstall.png
-    Image: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-settings-cache-uninstall.png
+  - Thumbnail: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-dashboard-overview.png
+    Image: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-dashboard-overview.png
+  - Thumbnail: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-library-example-games.png
+    Image: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-library-example-games.png

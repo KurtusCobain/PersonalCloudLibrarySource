@@ -1,6 +1,6 @@
 # Playnite add-on listing reference
 
-![Personal Cloud Library Source workflow](images/pcls-workflow.png)
+![Personal Cloud Library Source dashboard](images/pcls-dashboard-overview.png)
 
 ## Short description
 
@@ -25,8 +25,8 @@ Desktop provides guided setup, verification, manifest generation, reports, diagn
 
 Cache uninstall refuses unsafe paths and never deletes source or remote content. PCLS does not stream games, auto-download an entire library, provide content, or provide cloud accounts. Users are responsible for only indexing content they own or have rights to use.
 
-The live development version is 0.3.2 during 1.0 preparation. Installed provider, Fullscreen, and upgrade qualification must not be inferred from this listing.
+The live development version is 0.3.2 during 1.0 release-candidate qualification. Installed provider, Fullscreen, upgrade, and final package qualification must not be inferred from this listing.
 
 ![Provider settings](images/pcls-settings-provider.png)
 
-![Cache and uninstall settings](images/pcls-settings-cache-uninstall.png)
+![Example games in Playnite Desktop](images/pcls-library-example-games.png)

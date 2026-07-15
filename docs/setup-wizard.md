@@ -2,6 +2,8 @@
 
 The setup wizard is a Playnite Desktop management surface. Fullscreen users should complete setup in Desktop before using imported games.
 
+![Setup wizard source selection](images/pcls-setup-source.png)
+
 ## Goal
 
 A normal Playnite user should be able to:

@@ -1,5 +1,7 @@
 # Known limits
 
+These limits apply to the 1.0 release candidate while the installed package remains version 0.3.2.
+
 - PCLS catalogs and caches content; it does not stream gameplay.
 - It does not provide content, storefront access, scraping, credentials, or cloud accounts.
 - Setup, settings, manifest generation, verification reports, dashboard, and custom details are Desktop-only management surfaces. There is no dedicated Fullscreen setup wizard or dashboard.

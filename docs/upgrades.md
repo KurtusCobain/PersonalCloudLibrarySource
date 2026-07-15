@@ -1,6 +1,6 @@
 # Upgrades
 
-The live development version is 0.3.2. A final 1.0 package has not been published from this branch.
+The live development version is 0.3.2. The 1.0 release candidate includes the migration behavior below, but a final 1.0 package has not been published from this branch.
 
 ## Before upgrading
 

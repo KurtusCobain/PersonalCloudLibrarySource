@@ -1,13 +1,15 @@
 # Changelog
 
-## Unreleased - 1.0 preparation
+## 1.0.0 - Unreleased
 
-- Consolidated setup, path resolution, cache-deletion policy, transfer queue ownership, and workflow notifications behind tested services.
-- Added sequential settings migration and safe edit/cancel/save behavior.
-- Added Desktop dashboard queue/activity presentation with bounded in-memory activity history.
-- Localized current user-facing settings and workflow feedback.
-- Rewrote live documentation around verified behavior and recorded distribution-link checks.
-- Installed provider, Fullscreen, upgrade, and package qualification remain pending; this section is not a 1.0 release declaration.
+- Added guided Desktop setup for `LocalFile`, `LocalFolder`, and `RcloneRemote` providers, with provider-specific validation and verification reports.
+- Centralized manifest loading, parsing, path resolution, import outcomes, and sequential settings migration.
+- Added queue-owned local and rclone transfers with cancellation, retry, progress, partial-file cleanup, and destination verification.
+- Added the Desktop dashboard with source health, library/cache counts, transfer queue status, bounded recent activity, diagnostics, and report shortcuts.
+- Kept imported games compatible with standard Playnite metadata plus play/install/uninstall controls in Desktop and Fullscreen.
+- Added guarded cache removal and safe uninstall rules that reject roots, the cache root, outside-cache targets by default, and unsafe reparse-point paths.
+- Added clearer notifications, public-safe diagnostics, upgrade guidance, and a seven-image release-candidate documentation set.
+- Installed provider, Fullscreen, upgrade, and package qualification remain pending; this section is a release-candidate record, not a 1.0 release declaration.
 
 ## 0.3.2
 

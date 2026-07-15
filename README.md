@@ -4,7 +4,45 @@ Personal Cloud Library Source (PCLS) is a Playnite `GameLibrary` plugin that imp
 
 ## Current status
 
-The live development version is `0.3.2`. The branch is being prepared for 1.0 qualification, but it is not a 1.0 release. Installed-provider, Fullscreen, and upgrade qualification remain release gates; see [Known limits](docs/known-limits.md).
+The live development version is `0.3.2`. This branch is the 1.0 release candidate, but it is not a published 1.0 release. Installed-provider, Fullscreen, upgrade, and final package qualification remain release gates; see [Known limits](docs/known-limits.md).
+
+## Release-candidate tour
+
+The screenshots below use a disposable demonstration library. They show the real current plugin UI without private library data.
+
+### Guided setup
+
+Choose an existing manifest or a library root in the Desktop setup wizard.
+
+![PCLS setup wizard source selection](docs/images/pcls-setup-source.png)
+
+### Provider and manifest settings
+
+Provider-specific fields keep local-file, local-folder, and rclone configuration focused.
+
+![PCLS provider and manifest settings](docs/images/pcls-settings-provider.png)
+
+### Guarded cache behavior
+
+The cache page groups install, verification, cleanup, concurrency, and safe uninstall controls.
+
+![PCLS cache safety settings](docs/images/pcls-settings-cache-safety.png)
+
+### Dashboard and transfers
+
+The Desktop dashboard summarizes the source, catalog, cache, warnings, queue, and recent activity.
+
+![PCLS dashboard overview](docs/images/pcls-dashboard-overview.png)
+
+![PCLS completed transfer activity](docs/images/pcls-dashboard-transfer-activity.png)
+
+### Normal Playnite controls
+
+Catalog-only and cached games appear in the normal Desktop library. Standard Playnite controls also remain available in Fullscreen after setup is completed in Desktop.
+
+![PCLS example games in Playnite Desktop](docs/images/pcls-library-example-games.png)
+
+![PCLS cached example game in Playnite Fullscreen](docs/images/pcls-fullscreen-example-games.png)
 
 ## Supported providers
 
