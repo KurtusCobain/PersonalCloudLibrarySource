@@ -201,6 +201,67 @@ namespace PersonalCloudLibrarySource.Tests.Repository
         }
 
         [Test]
+        public void ReleaseCandidateScreenshots_AreCompleteConsistentReferencedAndPrivate()
+        {
+            var names = new[]
+            {
+                "pcls-setup-source.png",
+                "pcls-settings-provider.png",
+                "pcls-settings-cache-safety.png",
+                "pcls-dashboard-overview.png",
+                "pcls-dashboard-transfer-activity.png",
+                "pcls-library-example-games.png",
+                "pcls-fullscreen-example-games.png"
+            };
+            var liveText = string.Join("\n", LiveFiles().Select(File.ReadAllText));
+            var expectedSize = Size.Empty;
+            foreach (var name in names)
+            {
+                var path = Path.Combine(Root(), "docs", "images", name);
+                Assert.That(File.Exists(path), Is.True, "Missing release screenshot: " + name);
+                using (var image = Image.FromFile(path))
+                {
+                    Assert.That(image.Width * 9, Is.EqualTo(image.Height * 16), name + " must be 16:9");
+                    if (expectedSize == Size.Empty)
+                    {
+                        expectedSize = image.Size;
+                    }
+                    Assert.That(image.Size, Is.EqualTo(expectedSize), name + " must match the master dimensions");
+                }
+                StringAssert.Contains(name, liveText, name + " must be referenced by live documentation or metadata");
+            }
+
+            var listing = File.ReadAllText(Path.Combine(Root(), "playnite-addon", "addon-database.yaml"));
+            foreach (var name in new[] { "pcls-settings-provider.png", "pcls-dashboard-overview.png", "pcls-library-example-games.png" })
+            {
+                StringAssert.Contains("docs/images/" + name, listing);
+            }
+
+            foreach (var forbidden in new[] { "ROMcade_Master", "katie\\", "019f5d68-bcfb" })
+            {
+                Assert.That(liveText.IndexOf(forbidden, StringComparison.OrdinalIgnoreCase), Is.LessThan(0),
+                    "Private screenshot/demo text leaked: " + forbidden);
+            }
+        }
+
+        [Test]
+        public void ReleaseCandidateCopy_KeepsPreReleaseIdentityAndCompleteOnePointZeroDraft()
+        {
+            var readme = File.ReadAllText(Path.Combine(Root(), "README.md"));
+            var changelog = File.ReadAllText(Path.Combine(Root(), "CHANGELOG.md"));
+            var notes = File.ReadAllText(Path.Combine(Root(), "docs", "playnite-release-notes.md"));
+            StringAssert.Contains("1.0 release candidate", readme);
+            StringAssert.Contains("## 1.0.0 - Unreleased", changelog);
+            StringAssert.Contains("Release-candidate draft", notes);
+            foreach (var term in new[] { "LocalFile", "LocalFolder", "RcloneRemote", "dashboard", "Fullscreen", "safe uninstall", "migration", "diagnostics" })
+            {
+                Assert.That((changelog + notes).IndexOf(term, StringComparison.OrdinalIgnoreCase), Is.GreaterThanOrEqualTo(0),
+                    "Missing 1.0 release topic: " + term);
+            }
+            DistributionYaml_KeepsIdentityAndPreReleaseVersionContract();
+        }
+
+        [Test]
         public void ExternalUrls_HaveRecordedCheckResults()
         {
             var recordPath = Path.Combine(Root(), "docs", "external-link-checks.md");
