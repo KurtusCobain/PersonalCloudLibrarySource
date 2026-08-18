@@ -6,7 +6,6 @@ ShortDescription: 'Import your own cloud, NAS, external drive, or local manifest
 InstallerManifestUrl: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/playnite-addon/installer.yaml
 SourceUrl: https://github.com/KurtusCobain/PersonalCloudLibrarySource
 IconUrl: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/PersonalCloudLibrarySource/icon.png
-
 Description: |
   Personal Cloud Library Source imports a user-supplied personal library catalog into Playnite. Entries can appear before they are downloaded, be enriched with Playnite metadata, copied or downloaded to a local cache when needed, launched locally, and later uninstalled from the cache while keeping the catalog entry.
 
@@ -17,20 +16,12 @@ Description: |
   Supports LocalFile, LocalFolder, and RcloneRemote providers. Local folders, external drives, mapped drives, synced cloud folders, and NAS paths are supported directly. Google Drive, OneDrive, Dropbox, and similar cloud services are supported through rclone when users choose the RcloneRemote provider.
 
   This does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content, scraping, storefront access, or download sources.
-Tags:
-  - library
-  - cloud
-  - rclone
-  - local
-  - nas
-  - manifest
-
+Tags: ['library', 'cloud', 'rclone', 'local', 'nas', 'manifest', 'external drive', 'metadata']
 Links:
   GitHub: https://github.com/KurtusCobain/PersonalCloudLibrarySource
   Documentation: https://github.com/KurtusCobain/PersonalCloudLibrarySource/tree/main/docs
   Issues: https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues
   Changelog: https://github.com/KurtusCobain/PersonalCloudLibrarySource/blob/main/CHANGELOG.md
-
 Screenshots:
   - Thumbnail: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-workflow.png
     Image: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-workflow.png

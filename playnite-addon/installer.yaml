@@ -1,5 +1,4 @@
 AddonId: 'PersonalCloudLibrarySource_61993828-67a8-4468-93a2-293442e36328'
-# Manifest generation update completed 6/2/2026
 Packages:
   - Version: '0.2.0'
     RequiredApiVersion: '6.16.0'
