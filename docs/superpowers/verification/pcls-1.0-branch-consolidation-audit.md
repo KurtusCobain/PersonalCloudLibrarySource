@@ -1,5 +1,8 @@
 # PCLS 1.0 Branch Consolidation Audit
 
+> **Superseded current-state note (2026-09-21):** This document is a historical branch-consolidation audit from 2026-07-13. Its recommendation to keep PR #9 draft and retain the feature branch was later superseded by explicit owner approval. PR #9 merged the qualified RC source into `main` at `12705ed2b672ae745580071a61cdf1b6cd2ecd92`; post-merge build run #92 passed. Public package publication remains separately gated and `playnite-addon/installer.yaml` still advertises only v0.2.0.
+
+
 **Repository:** `KurtusCobain/PersonalCloudLibrarySource`  
 **Primary branch:** `feature/user-friendly-dashboard-cleanup`  
 **Audit date:** 2026-07-13  
