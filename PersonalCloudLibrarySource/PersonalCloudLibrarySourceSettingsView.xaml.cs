@@ -10,7 +10,7 @@ namespace PersonalCloudLibrarySource
             InitializeComponent();
         }
 
-        private PersonalCloudLibrarySourceSettingsViewModel ViewModel => DataContext as PersonalCloudLibrarySourceSettingsViewModel;
+        private PersonalCloudLibrarySourceSettingsV3ViewModel ViewModel => DataContext as PersonalCloudLibrarySourceSettingsV3ViewModel;
 
         private void BrowseLocalManifestPath_Click(object sender, RoutedEventArgs e)
         {

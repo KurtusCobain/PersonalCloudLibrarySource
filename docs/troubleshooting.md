@@ -10,9 +10,13 @@ The fastest first step is now **Verify setup / generate report**, then open the 
 
 Provider settings control where the manifest is read from.
 
-![Cache and uninstall settings](images/pcls-settings-cache-uninstall.png)
+![Cache and safe uninstall settings](images/pcls-settings-cache-safety.png)
 
 Cache and uninstall settings control where files are copied/downloaded and what cached files may be removed.
+
+The dashboard shows current source health and recent transfer results without requiring the settings window.
+
+![Dashboard transfer activity](images/pcls-dashboard-transfer-activity.png)
 
 ## I Expected Streaming
 

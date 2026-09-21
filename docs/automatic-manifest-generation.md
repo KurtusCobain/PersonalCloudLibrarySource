@@ -1,6 +1,6 @@
 # Automatic Manifest Generation
 
-The v0.2 pass adds local manifest generation directly inside Playnite settings.
+Local manifest generation is available directly inside Playnite Desktop settings and the setup wizard.
 
 ## What It Scans
 

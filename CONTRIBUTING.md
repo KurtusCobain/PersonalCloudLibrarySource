@@ -21,9 +21,11 @@ Keep changes aligned with:
 ## Before Opening a PR
 
 1. Build the solution.
-2. Check that `extension.yaml`, `playnite-addon/addon-database.yaml`, and `playnite-addon/installer.yaml` are not contradictory.
-3. Do not commit generated manifests, reports, `bin/`, `obj/`, `dist/`, test libraries, ROMs, BIOS files, keys, cracks, or personal library content.
-4. Keep examples generic.
+2. Run the full NUnitLite suite, including repository documentation and distribution contracts.
+3. Check that `extension.yaml`, `playnite-addon/addon-database.yaml`, and `playnite-addon/installer.yaml` preserve the stable ID and are not contradictory.
+4. Do not commit generated manifests, reports, `bin/`, `obj/`, `dist/`, restored packages, ROMs, BIOS files, keys, cracks, or personal library content.
+5. Keep examples generic and reports free of private provider paths or manifest inventories.
+6. Do not report installed Desktop, Fullscreen, provider, or upgrade rows as passing unless they were actually run in Playnite.
 
 ## Packaging Notes
 

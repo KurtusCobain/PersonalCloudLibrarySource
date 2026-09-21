@@ -5,11 +5,21 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$msbuildCommand = Get-Command "MSBuild.exe" -ErrorAction SilentlyContinue
 $msbuildCandidates = @(
+    "C:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
     "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe",
+    "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\MSBuild.exe",
+    "C:\Program Files\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin\MSBuild.exe",
+    "C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe",
     "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\MSBuild.exe"
 )
-$msbuild = $msbuildCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+$msbuild = if ($msbuildCommand) {
+    $msbuildCommand.Source
+}
+else {
+    $msbuildCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+}
 $solution = Join-Path $repoRoot "PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln"
 $configuration = "Release"
 $projectOutput = Join-Path $repoRoot "PersonalCloudLibrarySource\bin\$configuration"
@@ -33,10 +43,10 @@ $packagePath = Join-Path $distRoot "PersonalCloudLibrarySource-$extensionVersion
 $debugPackagePath = Join-Path $distRoot "PersonalCloudLibrarySource-$extensionVersion-debug-symbols.zip"
 
 if ([string]::IsNullOrWhiteSpace($msbuild)) {
-    throw "MSBuild was not found in the expected Visual Studio or Build Tools locations."
+    throw "MSBuild was not found on PATH or in a supported Visual Studio installation."
 }
 
-& $msbuild $solution /p:Configuration=$configuration /p:Platform="Any CPU"
+& $msbuild $solution /t:Build /p:Configuration=$configuration /p:Platform="Any CPU"
 if ($LASTEXITCODE -ne 0) {
     throw "Release build failed with exit code $LASTEXITCODE"
 }
@@ -66,6 +76,13 @@ $localizationPath = Join-Path $projectOutput "Localization"
 if (Test-Path -LiteralPath $localizationPath) {
     Copy-Item -LiteralPath $localizationPath -Destination $packageFolder -Recurse -Force
 }
+
+$assetsPath = Join-Path $repoRoot "PersonalCloudLibrarySource\Assets"
+if (-not (Test-Path -LiteralPath $assetsPath)) {
+    throw "Branding assets are missing: $assetsPath"
+}
+
+Copy-Item -LiteralPath $assetsPath -Destination $packageFolder -Recurse -Force
 
 if (Test-Path -LiteralPath $packagePath) {
     Remove-Item -LiteralPath $packagePath -Force

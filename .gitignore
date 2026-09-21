@@ -47,3 +47,6 @@ cloud-scan-output/
 *.tmd
 *.cert
 *.bin
+PersonalCloudLibrarySource/packages/
+*.log
+TestResult.xml

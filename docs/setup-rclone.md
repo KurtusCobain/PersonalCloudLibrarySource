@@ -66,7 +66,7 @@ RcloneExecutablePath = rclone
 RcloneRemoteName = remote
 RcloneManifestPath = PersonalLibrary/manifest.json
 RcloneContentRoot = PersonalLibrary/files
-RcloneTimeoutSeconds = 30
+RcloneTimeoutSeconds = 90
 LocalCacheFolder = D:\PersonalCloudLibraryCache
 AllowDownloads = true
 ```
@@ -74,6 +74,11 @@ AllowDownloads = true
 For Google Drive or OneDrive, use the remote name you created in `rclone config`.
 
 The provider settings screen maps directly to these rclone values: executable path, remote name, manifest path, optional content root, and timeout.
+
+`RcloneTimeoutSeconds` defaults to 90 seconds and accepts values from 5 to 300 seconds. Its meaning depends on the operation:
+
+- `rclone cat` manifest reads and `rclone listremotes` connection tests use the configured value as a total `WaitForExit` deadline. They do not extend the deadline when output arrives.
+- Queued transfers must produce first output or error activity within at most 30 seconds (`min(30, configured timeout)`). After first activity, the configured value is the inactivity deadline between output or error lines. The default is therefore a 90-second inactivity deadline, not a total queued-transfer deadline, and an active transfer may run longer.
 
 `RcloneRemote` reads manifests with `rclone cat`.
 

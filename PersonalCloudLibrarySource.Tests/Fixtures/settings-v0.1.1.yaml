@@ -1,0 +1,19 @@
+Enabled: false
+LibraryDisplayName: 0.1.1 Archive
+SourceProviderType: RcloneRemote
+ManifestSourceMode: RcloneRemote
+LocalManifestPath: 'D:\Legacy\catalog.json'
+LocalLibraryRoot: 'D:\Legacy\Games'
+ManifestRelativePath: catalog/library.json
+LocalCacheFolder: 'E:\LegacyCache'
+TreatMissingFilesAsUninstalled: false
+RcloneExecutablePath: 'C:\Tools\rclone.exe'
+RcloneRemoteName: archive
+RcloneManifestPath: manifests/library.json
+RcloneContentRoot: library
+RcloneTimeoutSeconds: 75
+AllowDownloads: false
+AllowRcloneDownloads: false
+EnableDiagnostics: false
+UninstallBehavior: AskEachTime
+AllowUninstallOutsideCacheFolder: true

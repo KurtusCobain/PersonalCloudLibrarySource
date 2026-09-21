@@ -1,6 +1,6 @@
 # Auto Cache Before Launch
 
-This is a v0.3 planning note, not current behavior.
+This is a 1.0 release-candidate boundary note, not a promise of automatic caching.
 
 ## Current Behavior
 
@@ -8,7 +8,7 @@ The plugin does not auto-download before launch.
 
 Users manually trigger cache/download actions through install actions when the provider can resolve the source path.
 
-## v0.3 Direction
+## Possible future direction
 
 Potential future work:
 

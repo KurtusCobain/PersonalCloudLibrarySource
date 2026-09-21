@@ -1,0 +1,25 @@
+Enabled: true
+LibraryDisplayName: 0.2.0 NAS Library
+SourceProviderType: LocalFolder
+ManifestSourceMode: LocalFolder
+LocalManifestPath: '\\NAS\Catalog\library.json'
+LocalLibraryRoot: '\\NAS\Games'
+ManifestRelativePath: catalog/library.json
+LocalCacheFolder: 'D:\PlayniteCache'
+TreatMissingFilesAsUninstalled: true
+RcloneExecutablePath: rclone
+RcloneRemoteName: backup
+RcloneManifestPath: catalog/library.json
+RcloneContentRoot: games
+RcloneTimeoutSeconds: 30
+AllowDownloads: true
+AllowRcloneDownloads: true
+EnableDiagnostics: true
+UninstallBehavior: RemoveCachedFileOnly
+AllowUninstallOutsideCacheFolder: false
+AutoRefreshOnApplicationStart: true
+AutoGenerateManifestOnApplicationStart: true
+LastManifestGeneratedAt: '2026-06-15T12:34:56Z'
+LastGeneratedManifestPath: 'D:\Generated\library.json'
+LastGeneratedReportPath: 'D:\Generated\report.txt'
+LastManifestItemCount: 27

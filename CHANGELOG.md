@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.0.0 - Unreleased
+
+- Added guided Desktop setup for `LocalFile`, `LocalFolder`, and `RcloneRemote` providers, with provider-specific validation and verification reports.
+- Centralized manifest loading, parsing, path resolution, import outcomes, and sequential settings migration.
+- Added queue-owned local and rclone transfers with cancellation, retry, progress, partial-file cleanup, and destination verification.
+- Added the Desktop dashboard with source health, library/cache counts, transfer queue status, bounded recent activity, diagnostics, and report shortcuts.
+- Kept imported games compatible with standard Playnite metadata plus play/install/uninstall controls in Desktop and Fullscreen.
+- Added guarded cache removal and safe uninstall rules that reject roots, the cache root, outside-cache targets by default, and unsafe reparse-point paths.
+- Added clearer notifications, public-safe diagnostics, upgrade guidance, and a seven-image release-candidate documentation set.
+- Installed provider, Fullscreen, upgrade, and package qualification remain pending; this section is a release-candidate record, not a 1.0 release declaration.
+
+## 0.3.2
+
+Feature-branch test pass prepared 7/12/2026
+
+This remains the current development version while 1.0 qualification is in progress.
+
+- Added the approved PCLS cloud-controller icon, wide wordmark, and full dark logo artwork.
+- Generate true-alpha PNG branding during builds instead of using checkerboard-backed source images.
+- Improved setup-wizard and settings readability with Playnite theme foreground resources.
+- Show only the settings fields required by the selected source provider.
+- Synchronize the latest verification result with dashboard status and counts.
+- Include actionable manifest and rclone timeout details in verification messages.
+- Increased the default rclone timeout to 90 seconds and safely migrated the previous 30-second default while preserving custom values.
+- Include generated branding assets in extension packages.
+
 ## 0.2.0
 
 Manifest generation update completed 6/2/2026

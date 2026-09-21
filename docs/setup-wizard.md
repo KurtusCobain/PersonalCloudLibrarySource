@@ -1,6 +1,8 @@
 # Setup Wizard Flow
 
-This document describes the intended v0.2 guided setup flow inside Playnite.
+The setup wizard is a Playnite Desktop management surface. Fullscreen users should complete setup in Desktop before using imported games.
+
+![Setup wizard source selection](images/pcls-setup-source.png)
 
 ## Goal
 
@@ -58,11 +60,13 @@ The guided setup flow writes reports to the plugin user data path:
 
 The plugin can also create lightweight backups of generated outputs under `backups`.
 
-## Current Limitation
+## Current boundary
 
-The v0.2 pass focuses on in-Playnite manifest generation for local and NAS-style sources first.
+In-Playnite manifest generation is available for local and NAS-style filesystem sources.
 
 Advanced rclone-based manifest generation can still use:
 
 - `tools/generate-manifest.ps1`
 - `tools/generate-rclone-manifest.ps1`
+
+The dedicated wizard and dashboard are not available in Fullscreen. Standard imported-game play, install, and uninstall controllers do not depend on those windows, but installed Fullscreen qualification is still pending.

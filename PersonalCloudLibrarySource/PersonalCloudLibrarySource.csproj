@@ -45,28 +45,100 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Xml" />
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Dashboard\DashboardActivityService.cs" />
+    <Compile Include="Dashboard\DashboardTransferPresentation.cs" />
+    <Compile Include="Dashboard\DashboardViewModelLifetime.cs" />
+    <Compile Include="Dashboard\DashboardRefreshPostGate.cs" />
+    <Compile Include="Dashboard\CloudLibraryDashboardState.cs" />
+    <Compile Include="Dashboard\CloudLibraryDashboardView.xaml.cs">
+      <DependentUpon>CloudLibraryDashboardView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Dashboard\CloudLibraryDashboardViewModel.cs" />
+    <Compile Include="Dashboard\CloudTransferQueueItemViewModel.cs" />
+    <Compile Include="Dashboard\CloudLibraryDashboardWindowService.cs" />
+    <Compile Include="Dashboard\CloudLibrarySidebarItem.cs" />
+    <Compile Include="Dashboard\DashboardStateStore.cs" />
+    <Compile Include="Dashboard\FriendlySourceNameProvider.cs" />
+    <Compile Include="Dashboard\ImportDashboardStateService.cs" />
+    <Compile Include="Dashboard\LibraryStatusService.cs" />
+    <Compile Include="Dashboard\VerificationDashboardStateService.cs" />
     <Compile Include="LibraryVerificationReport.cs" />
+    <Compile Include="Localization\PclsResources.cs" />
     <Compile Include="LibraryVerificationService.cs" />
-    <Compile Include="LocalFileCopier.cs" />
     <Compile Include="ManifestGenerationOptions.cs" />
     <Compile Include="ManifestGenerationReport.cs" />
     <Compile Include="ManifestGenerationService.cs" />
+    <Compile Include="PersonalCloudLibrarySource.GameCommands.cs" />
+    <Compile Include="PersonalCloudLibrarySource.Navigation.cs" />
+    <Compile Include="PersonalCloudLibrarySource.Transfers.cs" />
     <Compile Include="PersonalCloudLibrarySourceClient.cs" />
     <Compile Include="PersonalCloudLibrarySource.cs" />
     <Compile Include="PersonalCloudLibrarySourceSettings.cs" />
+    <Compile Include="PersonalCloudLibrarySourceSettingsV3.cs" />
+    <Compile Include="PersonalCloudLibrarySourceSettingsV3ViewModel.cs" />
     <Compile Include="PersonalCloudLibrarySourceSettingsView.xaml.cs">
       <DependentUpon>PersonalCloudLibrarySourceSettingsView.xaml</DependentUpon>
     </Compile>
     <Compile Include="PersonalCloudLibraryUninstallController.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="RcloneFileCopier.cs" />
     <Compile Include="RcloneInstallController.cs" />
     <Compile Include="RcloneManifestReader.cs" />
     <Compile Include="SafeFileWriteService.cs" />
+    <Compile Include="Services\GameCommandPolicyService.cs" />
+    <Compile Include="Services\GameCommandService.cs" />
+    <Compile Include="Services\GameWorkflowPolicyService.cs" />
+    <Compile Include="Services\GameWorkflowNotificationService.cs" />
+    <Compile Include="Services\ImportNotificationService.cs" />
+    <Compile Include="Services\ImportOutcomeService.cs" />
+    <Compile Include="Services\ManifestLoader.cs" />
+    <Compile Include="Services\ManifestItemMapper.cs" />
+    <Compile Include="Services\ManifestParserValidator.cs" />
+    <Compile Include="Services\PathResolvers.cs" />
+    <Compile Include="Services\LibraryItemStateResolver.cs" />
+    <Compile Include="Services\SafeCacheDeletionPolicy.cs" />
+    <Compile Include="Services\PluginNavigationService.cs" />
+    <Compile Include="Services\SetupLaunchPolicyService.cs" />
+    <Compile Include="Services\SetupStateService.cs" />
+    <Compile Include="Services\SetupStatePersistenceService.cs" />
+    <Compile Include="Services\StartupActionService.cs" />
+    <Compile Include="Services\StartupNotificationService.cs" />
+    <Compile Include="Services\StartupUiDispatcher.cs" />
+    <Compile Include="SettingsEditSession.cs" />
+    <Compile Include="SettingsMigrationService.cs" />
+    <Compile Include="Setup\SetupCompletionCoordinator.cs" />
+    <Compile Include="Setup\SetupDraft.cs" />
+    <Compile Include="Setup\SetupModels.cs" />
+    <Compile Include="Setup\SetupValidationService.cs" />
+    <Compile Include="Setup\SetupWizardView.xaml.cs">
+      <DependentUpon>SetupWizardView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Setup\SetupWizardViewModel.cs" />
+    <Compile Include="Setup\SetupWizardWindowService.cs" />
+    <Compile Include="Transfers\CloudTransferExecutionResult.cs" />
+    <Compile Include="Transfers\CloudTransferExecutor.cs" />
+    <Compile Include="Transfers\CloudTransferJob.cs" />
+    <Compile Include="Transfers\CloudTransferManager.cs" />
+    <Compile Include="Transfers\LocalTransferAdapter.cs" />
+    <Compile Include="Transfers\RcloneCommandBuilder.cs" />
+    <Compile Include="Transfers\RcloneActivityTimeout.cs" />
+    <Compile Include="Transfers\RcloneProcessRunner.cs" />
+    <Compile Include="Transfers\RcloneProcessHandle.cs" />
+    <Compile Include="Transfers\RcloneProgressParser.cs" />
+    <Compile Include="Transfers\RcloneTransferAdapter.cs" />
+    <Compile Include="Transfers\RcloneTransferModels.cs" />
+    <Compile Include="Transfers\TransferActivityTracker.cs" />
+    <Compile Include="Transfers\TransferQueueService.cs" />
+    <Compile Include="Transfers\TransferPartialPathPolicy.cs" />
+    <Compile Include="Views\CloudGameDetailsView.xaml.cs">
+      <DependentUpon>CloudGameDetailsView.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="Views\CloudGameDetailsViewModel.cs" />
+    <Compile Include="Views\CloudGameDetailsWindowService.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="extension.yaml">
@@ -78,6 +150,7 @@
     <None Include="icon.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <Resource Include="Assets\pcls-logo-wide.png" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Localization\*.xaml">
@@ -86,6 +159,18 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <Page Include="App.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Dashboard\CloudLibraryDashboardView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Setup\SetupWizardView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="Views\CloudGameDetailsView.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

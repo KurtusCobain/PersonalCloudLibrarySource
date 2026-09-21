@@ -116,6 +116,6 @@ Dry run:
   -DryRun
 ```
 
-![Cache and uninstall settings](images/pcls-settings-cache-uninstall.png)
+![Cache and safe uninstall settings](images/pcls-settings-cache-safety.png)
 
 Use `LocalCacheFolder` for files copied from the local folder, external drive, mapped drive, NAS, or synced cloud folder before Playnite launches them.
