@@ -4,7 +4,9 @@ Personal Cloud Library Source (PCLS) is a Playnite `GameLibrary` plugin that imp
 
 ## Current status
 
-The live development version is `0.3.2`. This branch is the 1.0 release candidate, but it is not a published 1.0 release. Installed-provider, Fullscreen, upgrade, and final package qualification remain release gates; see [Known limits](docs/known-limits.md).
+The **published Playnite package remains v0.2.0**. The `main` branch now contains the consolidated `0.3.2` source / 1.0 release-candidate code, merged on 2026-09-21 after automated qualification. That source merge does **not** publish 0.3.2 or 1.0 to installed users: `playnite-addon/installer.yaml` remains pinned to the existing v0.2.0 release package.
+
+Installed-provider, Desktop/Fullscreen, upgrade, final package, and high-DPI acceptance remain public-release gates. See [Current release status](docs/release-status.md) and [Known limits](docs/known-limits.md).
 
 ## Release-candidate tour
 
