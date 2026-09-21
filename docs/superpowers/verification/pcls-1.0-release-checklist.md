@@ -1,12 +1,18 @@
 # PCLS 1.0 Release Checklist
 
-**Branch:** `feature/user-friendly-dashboard-cleanup`
+> **2026-09-21 source-consolidation update:** PR #9 was intentionally merged into `main` at `12705ed2b672ae745580071a61cdf1b6cd2ecd92` after exact-head qualification and successful post-merge build run #92. This checklist now gates **public package publication**, not source integration. The Playnite installer feed remains pinned to published v0.2.0 until the remaining installed/manual gates pass.
 
-**Pull request:** #9 (must remain draft until all release gates pass)
+**Branch:** `main`
 
-**Target:** 1.0.0
+**Source integration:** PR #9 merged 2026-09-21
 
-**Initial status:** Not release ready
+**Target:** 1.0.0 (version promotion/publication still requires explicit approval)
+
+**Current source version:** 0.3.2
+
+**Public package:** v0.2.0
+
+**Release status:** Not release ready
 
 ## Evidence rules
 
@@ -14,13 +20,13 @@
 - “Not applicable” requires a written product/design justification; it cannot replace a failed required gate.
 - A failed Blocker/High gate stops release preparation. Fix it with a regression test and rerun affected downstream gates.
 - Use a fresh checkout/worktree for final build/package evidence.
-- Do not merge PR #9 or publish/tag 1.0.0 from this checklist automatically.
+- Do not publish/tag 1.0.0, add a new installer-feed package entry, or replace the v0.2.0 release from this checklist automatically.
 
 ## 1. Scope and repository state
 
-- [ ] Active branch is exactly `feature/user-friendly-dashboard-cleanup`.
-- [ ] HEAD equals the reviewed PR #9 head commit.
-- [ ] PR #9 targets `main`, remains draft, and no competing release PR was created.
+- [x] Release-candidate source has been consolidated into `main`.
+- [x] `main` contains reviewed PR #9 head `1c59e0f4e344fc419c5fc7bb913ec09989d0632c` via merge commit `12705ed2b672ae745580071a61cdf1b6cd2ecd92`.
+- [x] PR #9 was merged for source consolidation; no public package release was created.
 - [ ] Worktree is clean before qualification.
 - [ ] No generated, temporary, self-mutating workflow, automation loop, or one-off mutation script is tracked.
 - [ ] Stable extension ID remains `61993828-67a8-4468-93a2-293442e36328`.
@@ -72,7 +78,7 @@ Evidence:
 - [ ] Debug build succeeds with no unexplained warnings.
 - [ ] Full NUnitLite test suite passes; executed test count is recorded.
 - [ ] Release build succeeds with no unexplained warnings.
-- [ ] GitHub Actions build check passes on PR #9.
+- [x] GitHub Actions run #91 passed on the reviewed RC head and post-merge run #92 passed on `main`.
 - [ ] CodeQL check passes or has an approved, documented disposition.
 - [ ] `git diff --check` passes.
 - [ ] Build/tests do not modify tracked source files.
@@ -313,9 +319,9 @@ Evidence:
 - [ ] Final package checksum was generated with SHA-256.
 - [ ] Published/downloaded package checksum matches the recorded value.
 - [ ] Final package was reinstalled and smoke-tested after checksum generation.
-- [ ] PR #9 title/body/checklist describe 1.0 hardening accurately.
-- [ ] PR #9 leaves draft only after explicit reviewer approval.
-- [ ] No automatic merge was enabled.
+- [x] PR #9 records the source-integration/public-release split and was merged on 2026-09-21.
+- [x] PR #9 left draft and merged after explicit owner approval to consolidate source without publishing a package.
+- [x] No automatic merge was enabled; the merge was explicit.
 
 Final artifact record:
 
