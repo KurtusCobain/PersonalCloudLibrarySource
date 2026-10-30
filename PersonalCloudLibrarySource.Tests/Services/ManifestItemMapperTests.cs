@@ -23,6 +23,52 @@ namespace PersonalCloudLibrarySource.Tests.Services
             if (Directory.Exists(testRoot)) Directory.Delete(testRoot, true);
         }
 
+        [TestCase(true)]
+        [TestCase(false)]
+        public void Map_NestedDirectoryDestination_RejectsRegardlessOfManifestOrder(bool parentFirst)
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                LocalCacheFolder = Path.Combine(testRoot, "cache")
+            };
+            var parent = new PersonalCloudLibraryItem
+            {
+                Id = "parent", Title = "Parent", SourceType = "directory",
+                InstallDirectory = "shared"
+            };
+            var child = new PersonalCloudLibraryItem
+            {
+                Id = "child", Title = "Child", SourceType = "file",
+                CachePath = Path.Combine("shared", "game.exe")
+            };
+            var items = parentFirst ? new[] { parent, child } : new[] { child, parent };
+            Assert.That(() => new ManifestItemMapper().Map(items, settings, new List<string>()),
+                Throws.InvalidOperationException.With.Message.Contains("overlapping cache destinations"));
+        }
+
+        [Test]
+        public void Map_SiblingDestinations_AreAllowed()
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                LocalCacheFolder = Path.Combine(testRoot, "cache")
+            };
+            var items = new[]
+            {
+                new PersonalCloudLibraryItem
+                {
+                    Id = "first", Title = "First", SourceType = "directory",
+                    InstallDirectory = "shared"
+                },
+                new PersonalCloudLibraryItem
+                {
+                    Id = "second", Title = "Second", SourceType = "file",
+                    CachePath = "shared-extra/game.exe"
+                }
+            };
+            Assert.That(new ManifestItemMapper().Map(items, settings, new List<string>()), Has.Count.EqualTo(2));
+        }
+
         [Test]
         public void Map_RemoteOnlyItem_IsUninstalledWithoutPlayAction()
         {
