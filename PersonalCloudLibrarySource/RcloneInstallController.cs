@@ -15,6 +15,7 @@ namespace PersonalCloudLibrarySource
         private readonly TransferQueueService transferQueue;
         private readonly GameWorkflowNotificationService workflowNotifications;
         private readonly IImportUiDispatcher uiDispatcher;
+        private readonly CacheOwnershipReceiptStore ownershipReceipts;
         private Guid activeJobId;
         private volatile bool disposed;
         private readonly bool hasPlayniteHost;
@@ -25,11 +26,13 @@ namespace PersonalCloudLibrarySource
             PersonalCloudLibraryItem item,
             PersonalCloudLibrarySourceSettings settings,
             TransferQueueService transferQueue,
-            GameWorkflowNotificationService workflowNotifications = null) : base(game)
+            GameWorkflowNotificationService workflowNotifications = null,
+            CacheOwnershipReceiptStore ownershipReceipts = null) : base(game)
         {
             this.item = item;
             this.settings = settings;
             this.transferQueue = transferQueue ?? throw new ArgumentNullException(nameof(transferQueue));
+            this.ownershipReceipts = ownershipReceipts;
             this.workflowNotifications = workflowNotifications ?? CreateNotifications(playniteApi);
             hasPlayniteHost = playniteApi != null;
             uiDispatcher = playniteApi == null
@@ -195,6 +198,27 @@ namespace PersonalCloudLibrarySource
                     PclsResources.CachePathIdentifier,
                     PclsResources.InstallDirectoryIdentifier));
                 return;
+            }
+
+            // A successful queue result follows the adapters' no-overwrite staging
+            // and final move. Receipts are issued only for that terminal success,
+            // never while merely scanning a pre-existing legacy cache.
+            if (ownershipReceipts != null)
+            {
+                try
+                {
+                    var destination = string.Equals(sourceType, "directory",
+                        StringComparison.OrdinalIgnoreCase)
+                        ? PersonalCloudLibrarySource.ResolveDownloadDestinationFolder(item, settings, launchPath)
+                        : PersonalCloudLibrarySource.ResolveDownloadDestinationFilePath(item, settings, launchPath);
+                    ownershipReceipts.RecordCompleted(settings.LocalCacheFolder, item.Id, destination);
+                }
+                catch (Exception ex)
+                {
+                    // Installation remains usable; failure to record provenance
+                    // must NEVER silently grant the right to recursively delete.
+                    logger.Warn(ex, "PCLS could not persist installation ownership receipt.");
+                }
             }
 
             new LibraryItemStateApplicator().Apply(Game, itemState);
