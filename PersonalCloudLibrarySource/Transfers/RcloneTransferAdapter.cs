@@ -211,8 +211,12 @@ namespace PersonalCloudLibrarySource
             if (isDirectory)
             {
                 if (!Directory.Exists(partialPath) ||
-                    !IsSafeStagedEntry(File.GetAttributes(partialPath)))
+                    !IsSafeStagedEntry(File.GetAttributes(partialPath)) ||
+                    !string.IsNullOrWhiteSpace(
+                        SafeCacheDeletionExecutor.GetUnsafeDescendantReason(partialPath)))
                 {
+                    // Never verify or finalize an rclone staging tree containing
+                    // junctions, symlinks, or an unbounded number of entries.
                     return false;
                 }
 
@@ -269,6 +273,12 @@ namespace PersonalCloudLibrarySource
 
                 if (Directory.Exists(path))
                 {
+                    // Recursive cleanup is destructive: refuse a staged tree with
+                    // linked descendants or an unbounded inventory. Leave it
+                    // intact for explicit inspection rather than following links.
+                    var unsafeReason = SafeCacheDeletionExecutor.GetUnsafeDescendantReason(path);
+                    if (!string.IsNullOrWhiteSpace(unsafeReason))
+                        throw new IOException("Refusing unsafe partial cleanup: " + unsafeReason);
                     Directory.Delete(path, true);
                 }
 
