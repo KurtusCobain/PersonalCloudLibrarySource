@@ -8,7 +8,9 @@
 - Correct rclone transfers for empty files/directories, Windows argument quoting, and bounded cloud manifest output.
 - Apply explicit local/remote manifest limits and prevent stale verification snapshots from replacing live dashboard cached counts.
 - Remove seven nonfunctional settings controls while keeping upgrade-compatible stored fields; explain mandatory transfer-safety behavior.
-- Clarify the wizard's review step and rclone prerequisites; restore compatibility with screenshot URLs in the live Playnite listing.
+- Add a bounded, cancellable read-only game preview to first-run setup, with the first ten detected titles, skipped counts, and clear remote prerequisites.
+- Observe queued install completion asynchronously and route Playnite completion/cancellation events through the host UI dispatcher; must still pass installed-host validation.
+- Restore compatibility with screenshot URLs in the live Playnite listing.
 - **Compatibility note:** manifests that previously attempted an install outside the cache folder now have to use an inside-cache destination. Existing files must never be relocated or deleted automatically.
 
 - Added guided Desktop setup for `LocalFile`, `LocalFolder`, and `RcloneRemote` providers, with provider-specific validation and verification reports.

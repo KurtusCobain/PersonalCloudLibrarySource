@@ -6,7 +6,9 @@ The setup wizard is a Playnite Desktop management surface. Fullscreen users shou
 
 ## Dedicated wizard versus advanced settings
 
-The five-step desktop wizard selects and reviews a source location; its **Review source** step is not an inventory scan. For a Local Folder or NAS choice without a supplied manifest, completing the wizard generates the catalog. Inspect detected/skipped counts with **Verify setup / generate report** in PCLS settings. Then run Playnite's **Update Game Library**. The review-and-verify workflow below is performed through the settings screen, not entirely within the wizard.
+The five-step Desktop wizard now has a **read-only game preview**. For LocalFolder, external-drive, and NAS sources, the preview uses the same detection logic as manifest generation, scans at most 10,000 entries, and displays detected titles, skipped entries, and warnings without writing any files. For LocalFile sources it previews validated JSON entries. The preview can be stopped or retried and runs off the UI thread. Cloud/rclone setups show explicit connection guidance rather than pretending to inspect a remote.
+
+The scan is **not** an import: completing the wizard generates a local-folder catalog when needed, saves settings, and opens the dashboard. Then run **Verify setup / generate report** in settings and **Update Game Library** using Playnite's own menu to import the games. Preview errors do not silently fabricate a catalog; the full generation still runs at Finish and can report errors.
 
 Cloud/rclone mode requires an installed, configured rclone remote first. A normal synced folder or NAS share does not require rclone.
 
@@ -24,8 +26,8 @@ A normal Playnite user should be able to:
 
 1. Choose `LocalFolder`.
 2. Browse to the local library root.
-3. Click **Generate manifest from folder**.
-4. Review the detected item count, skipped count, warnings, and generated manifest report.
+3. Review the bounded, read-only game preview (up to 10,000 scanned entries). Use **Scan again** or **Stop scan** as needed.
+4. Finish the wizard to generate the actual manifest, then review its item count, skipped count, and generated report.
 5. Run **Verify setup / generate report**.
 6. Review the verification report if anything looks wrong.
 7. Save settings.
@@ -37,8 +39,8 @@ The generated manifest is stored under the plugin user data path, not under the 
 
 1. Choose `LocalFile`.
 2. Browse to a manifest JSON file.
-3. Choose a local cache folder.
-4. Click **Verify setup / generate report**.
+3. Review the validated entries in the read-only preview, then choose a local cache folder.
+4. Click **Verify setup / generate report** after finishing the wizard.
 5. Review the verification report if setup needs attention.
 6. Save settings.
 7. Run **Update Game Library**.
