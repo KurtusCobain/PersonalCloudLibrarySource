@@ -53,7 +53,11 @@ namespace PersonalCloudLibrarySource
             try
             {
                 json = json.TrimStart('\uFEFF', '\u00EF', '\u00BB', '\u00BF');
-                result.Manifest = new JavaScriptSerializer().Deserialize<PersonalCloudLibraryManifest>(json);
+                var serializer = new JavaScriptSerializer
+                {
+                    MaxJsonLength = MaxManifestCharacters
+                };
+                result.Manifest = serializer.Deserialize<PersonalCloudLibraryManifest>(json);
             }
             catch (Exception ex)
             {
