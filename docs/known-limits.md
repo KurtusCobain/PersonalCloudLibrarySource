@@ -48,3 +48,8 @@ A bounded SHA-256 directory inventory scanner is available for testing provenanc
 ### Versioned directory inventory receipts (draft)
 
 After a successful directory transfer, PCLS now attempts a version 2 receipt containing the SHA-256 tree inventory. This scan runs off the Playnite UI thread; errors leave the copied game usable but do not establish inventory provenance. Existing version 1 receipts remain readable but cannot pass the new inventory comparison. A read-only comparison detects ordinary added, removed or changed files and returns no authorization to delete. Scans are currently bounded but may require substantial disk I/O, and TOCTOU, Windows links and identity/permission enforcement still require further review and installed-host testing. **All recursive directory deletion remains disabled.**
+
+
+### Cancelable inventory scanner foundation (draft)
+
+The SHA-256 scanner now accepts an optional cancellation token and checks it between entries and 1 MiB file read chunks. The existing two-argument scanner call remains compatible. This does not yet wire host shutdown/controller disposal to the inventory cancellation token, and synchronous filesystem reads can still take time to return. The operation remains read-only and never authorizes recursive deletion.
