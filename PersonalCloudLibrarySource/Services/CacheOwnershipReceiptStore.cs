@@ -48,6 +48,9 @@ namespace PersonalCloudLibrarySource
             receipt = null;
             try
             {
+                if (PathBoundary.IsContained(cacheRoot, storeRoot) ||
+                    PathBoundary.IsContained(storeRoot, cacheRoot))
+                    return false;
                 var path = ReceiptFile(cacheRoot, itemId);
                 if (!File.Exists(path)) return false;
                 using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
