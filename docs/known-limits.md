@@ -73,3 +73,16 @@ The draft Windows test fixtures now exercise a successful local directory transf
 ### Disposable rclone lifecycle and staging-tree hardening (draft)
 
 The test suite now exercises the rclone transfer queue and installation controller using an in-process fake `IRcloneProcessRunner`. The fixtures create disposable local staging files only: they check successful V2 directory receipt issuance, modified contents, simulated remote failure, cancellation, and refusal to adopt a pre-existing destination. **These are simulated rclone responses, not a real rclone binary or cloud provider.** A Windows junction fixture checks that a nested link under the partial directory is rejected and that unrelated linked-to data is left alone. The rclone adapter now refuses nested reparse points and overlarge staging trees before recursive verification or cleanup; the transfer executor also screens final destinations. These are best-effort checks, not an elimination of race windows between inspection and filesystem operations. More tests are required for a real disposable local rclone remote, subprocess timeouts, permissions and installed Playnite lifecycle. Recursive directory uninstall remains disabled.
+
+
+### Explicit opt-in real rclone local-backend check (draft)
+
+A separate `RcloneLocalBinaryIntegrationTests` case can exercise the production `RcloneProcessRunner` and `RcloneTransferAdapter` with a **real installed rclone executable**, using the configless `:local:` backend, a randomly generated temporary source/cache, V2 receipt creation and a post-transfer user-file mutation check. It requires `PCLS_TEST_RCLONE_EXE` to be set to the full path of the local `rclone.exe` before running the repository's Windows NUnitLite test suite. For example, in a Windows PowerShell test session:
+
+```powershell
+$env:PCLS_TEST_RCLONE_EXE = (Get-Command rclone.exe).Source
+# Run the repository's documented full Windows NUnitLite suite here.
+Remove-Item Env:PCLS_TEST_RCLONE_EXE
+```
+
+The test is skipped without this explicit opt-in. It uses no saved cloud remote or cloud credentials, but has **not yet been executed against a real rclone binary** in this development session. It does not replace installed Playnite Desktop/Fullscreen or actual-provider acceptance tests. Recursive directory deletion remains disabled.
