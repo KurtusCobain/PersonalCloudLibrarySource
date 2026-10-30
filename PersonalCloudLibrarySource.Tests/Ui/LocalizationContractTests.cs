@@ -63,6 +63,25 @@ namespace PersonalCloudLibrarySource.Tests.Ui
         }
 
         [Test]
+        public void SetupWizard_RescansWhenReturningAndShowsSkippedReasons()
+        {
+            var ui = File.ReadAllText(FindRepositoryFile(
+                "PersonalCloudLibrarySource", "Setup", "SetupWizardView.xaml.cs"));
+            var view = File.ReadAllText(FindRepositoryFile(
+                "PersonalCloudLibrarySource", "Setup", "SetupWizardView.xaml"));
+            var strings = ReadResources().ToDictionary(resource => resource.Key, resource => resource.Value);
+
+            Assert.That(ui, Does.Contain("if (viewModel.Back() && viewModel.CurrentStep == SetupWizardStep.ScanPreview)"));
+            Assert.That(ui, Does.Contain("if (previousStep == SetupWizardStep.ScanPreview)"));
+            Assert.That(ui, Does.Contain("ScanSkippedText.Text"));
+            Assert.That(ui, Does.Contain("report.SkippedEntries.Take(5)"));
+            Assert.That(view, Does.Contain("x:Name=\"ScanSkippedText\""));
+            Assert.That(strings.ContainsKey("LOCPLSSetupPreviewSkippedHeader"), Is.True);
+            Assert.That(strings["LOCPLSSetupSaved"], Does.Contain("Verify Setup"));
+            Assert.That(strings["LOCPLSSetupSaved"], Does.Contain("Update Game Library"));
+        }
+
+        [Test]
         public void LocalizationKeys_AreUnique()
         {
             var keys = ReadResources().Select(resource => resource.Key).ToList();

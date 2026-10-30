@@ -58,15 +58,22 @@ namespace PersonalCloudLibrarySource
 
         private void Next_Click(object sender, RoutedEventArgs e)
         {
-            if (viewModel.Next() && viewModel.CurrentStep == SetupWizardStep.ScanPreview)
-                BeginPreview();
+            var previousStep = viewModel.CurrentStep;
+            if (viewModel.Next())
+            {
+                if (previousStep == SetupWizardStep.ScanPreview)
+                    CancelPreview();
+                if (viewModel.CurrentStep == SetupWizardStep.ScanPreview)
+                    BeginPreview();
+            }
             RefreshView();
         }
 
         private void Back_Click(object sender, RoutedEventArgs e)
         {
             CancelPreview();
-            viewModel.Back();
+            if (viewModel.Back() && viewModel.CurrentStep == SetupWizardStep.ScanPreview)
+                BeginPreview();
             RefreshView();
         }
 
@@ -119,6 +126,7 @@ namespace PersonalCloudLibrarySource
             CancelPreview();
             ScanResultText.Text = string.Empty;
             ScanSampleText.Text = string.Empty;
+            ScanSkippedText.Text = string.Empty;
             var source = viewModel.Draft.SelectedSource;
             if (source == SetupSourceKind.RcloneRemote)
             {
@@ -178,8 +186,16 @@ namespace PersonalCloudLibrarySource
                     "LOCPLSSetupPreviewFound",
                     "Found {0} games. Scanned {1} entries; {2} skipped; {3} warnings.",
                     report.ItemCount, report.ScannedEntryCount, report.SkippedEntries.Count, report.Warnings.Count);
-                ScanSampleText.Text = string.Join(Environment.NewLine,
-                    report.Manifest.Items.Take(10).Select(item => item.Title));
+                ScanSampleText.Text = report.ItemCount == 0
+                    ? string.Empty
+                    : PclsResources.Get("LOCPLSSetupPreviewSampleHeader", "Detected games (first 10):") +
+                      Environment.NewLine +
+                      string.Join(Environment.NewLine, report.Manifest.Items.Take(10).Select(item => item.Title));
+                ScanSkippedText.Text = report.SkippedEntries.Count == 0
+                    ? string.Empty
+                    : PclsResources.Get("LOCPLSSetupPreviewSkippedHeader", "Skipped entries (first 5):") +
+                      Environment.NewLine +
+                      string.Join(Environment.NewLine, report.SkippedEntries.Take(5));
             }
             catch (OperationCanceledException)
             {

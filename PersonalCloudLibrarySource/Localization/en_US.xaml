@@ -59,6 +59,8 @@
     <sys:String x:Key="LOCPLSSetupPreviewCloud">Cloud preview is unavailable until rclone is configured. Finish setup, then use Test rclone connection and Verify setup.</sys:String>
     <sys:String x:Key="LOCPLSSetupPreviewScanning">Reading your library without changing any files...</sys:String>
     <sys:String x:Key="LOCPLSSetupPreviewFound">Found {0} games. Scanned {1} entries; {2} skipped; {3} warnings.</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewSampleHeader">Detected games (first 10):</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewSkippedHeader">Skipped entries (first 5):</sys:String>
     <sys:String x:Key="LOCPLSSetupPreviewFailed">Could not preview: {0}. You can still finish setup, or choose a smaller source.</sys:String>
     <sys:String x:Key="LOCPLSSetupCacheTitle">Choose cache and install behavior</sys:String>
     <sys:String x:Key="LOCPLSSetupAllowDownloads">Download or copy games when Install is selected</sys:String>
@@ -229,7 +231,7 @@
     <sys:String x:Key="LOCPLSUninstallOtherContentRemains">other cached content remains.</sys:String>
     <sys:String x:Key="LOCPLSUninstallNoContentRemains">no cached content remains.</sys:String>
     <sys:String x:Key="LOCPLSUninstallFailedNotification">Remove cached copy failed.{0}{0}Item: {1}{0}Reason: {2}</sys:String>
-    <sys:String x:Key="LOCPLSSetupSaved">Setup was saved successfully. Run Update Game Library in Playnite to import or refresh the catalog.</sys:String>
+    <sys:String x:Key="LOCPLSSetupSaved">Setup saved. Next: (1) In the PCLS Dashboard, run Verify Setup to check the catalog. (2) In Playnite Desktop, run Update Game Library to import your games. (3) Select an imported game and choose Install to cache it locally. Your original library stays in its source location.</sys:String>
     <sys:String x:Key="LOCPLSRcloneSourceInstructions">This cloud source is accessed through rclone. Open the dashboard or plugin settings to review the configured remote and content root.</sys:String>
     <sys:String x:Key="LOCPLSConfiguredSourceUnavailable">The configured source location is missing or unavailable.</sys:String>
     <sys:String x:Key="LOCPLSSourcePathCopied">Source path copied.</sys:String>

@@ -139,6 +139,7 @@
                             <TextBlock x:Name="ScanSourcePathText" TextWrapping="Wrap" Margin="0,3,0,0" />
                             <TextBlock x:Name="ScanResultText" TextWrapping="Wrap" Margin="0,14,0,6" />
                             <TextBlock x:Name="ScanSampleText" TextWrapping="Wrap" Margin="0,4,0,10" />
+                            <TextBlock x:Name="ScanSkippedText" TextWrapping="Wrap" Margin="0,4,0,10" />
                             <StackPanel Orientation="Horizontal">
                                 <Button x:Name="ScanRetryButton" Content="{DynamicResource LOCPLSSetupPreviewAgain}"
                                         Click="PreviewAgain_Click" Margin="0,0,8,0" />
