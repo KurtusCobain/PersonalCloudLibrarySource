@@ -109,6 +109,7 @@
     <Compile Include="Transfers\RcloneActivityTimeoutTests.cs" />
     <Compile Include="Transfers\RcloneTransferAdapterTests.cs" />
     <Compile Include="Transfers\RcloneReceiptIntegrationTests.cs" />
+    <Compile Include="Transfers\RcloneLocalBinaryIntegrationTests.cs" />
     <Compile Include="Transfers\TransferActivityTrackerTests.cs" />
     <Compile Include="Transfers\TransferQueueServiceTests.cs" />
     <Compile Include="Transfers\TransferPartialPathPolicyTests.cs" />
