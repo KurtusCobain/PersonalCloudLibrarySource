@@ -14,6 +14,7 @@ namespace PersonalCloudLibrarySource
         private readonly PersonalCloudLibrarySourceSettings settings;
         private readonly SafeCacheDeletionExecutor deletionExecutor;
         private readonly GameWorkflowNotificationService workflowNotifications;
+        private readonly bool hasPlayniteHost;
 
         public PersonalCloudLibraryUninstallController(
             IPlayniteAPI playniteApi,
@@ -23,6 +24,7 @@ namespace PersonalCloudLibrarySource
             GameWorkflowNotificationService workflowNotifications = null,
             SafeCacheDeletionExecutor deletionExecutor = null) : base(game)
         {
+            hasPlayniteHost = playniteApi != null;
             this.item = item;
             this.settings = settings;
             this.workflowNotifications = workflowNotifications ?? CreateNotifications(playniteApi);
@@ -35,21 +37,6 @@ namespace PersonalCloudLibrarySource
             var launchPath = PersonalCloudLibrarySource.ResolveLaunchPath(item, settings);
             var installDirectory = PersonalCloudLibrarySource.ResolveInstallDirectory(item, settings, launchPath);
             var behavior = NormalizeUninstallBehavior(settings.UninstallBehavior);
-
-            if (string.Equals(behavior, PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior, StringComparison.OrdinalIgnoreCase))
-            {
-                behavior = ChooseUninstallBehavior();
-                if (string.IsNullOrWhiteSpace(behavior))
-                {
-                    workflowNotifications.Failure(
-                        "uninstall",
-                        Game.GameId,
-                        PclsResources.Get(
-                            "LOCPLSUninstallBehaviorRequired",
-                            "Remove cached copy needs a deterministic uninstall behavior. Open plugin settings in Desktop mode, choose file-only or install-folder removal, then try again."));
-                    return;
-                }
-            }
 
             var requestedTargetPath = ResolveTargetPath(behavior, launchPath, installDirectory);
             string refusalReason;
@@ -71,7 +58,9 @@ namespace PersonalCloudLibrarySource
                     item.Title,
                     refusalReason,
                     nameof(PersonalCloudLibrarySourceSettings.LocalCacheFolder)));
-                return;
+                // Playnite has no uninstallation-cancel event; its exception path
+                // resets IsUninstalling and disposes this controller.
+                throw new InvalidOperationException("Cached-copy deletion refused: " + refusalReason);
             }
 
             try
@@ -82,14 +71,7 @@ namespace PersonalCloudLibrarySource
                     settings.AllowUninstallOutsideCacheFolder);
                 if (!deletion.Allowed)
                 {
-                    logger.Info($"Personal Cloud Library Source uninstall skipped for {Game.GameId}: {deletion.Reason}.");
-                    workflowNotifications.Warning("uninstall", Game.GameId, PclsResources.Format(
-                        "LOCPLSUninstallSkippedNotification",
-                        "Remove cached copy was skipped.{0}{0}Item: {1}{0}Reason: {2}",
-                        Environment.NewLine,
-                        item.Title,
-                        deletion.Reason));
-                    return;
+                    throw new InvalidOperationException("Cached-copy deletion refused: " + deletion.Reason);
                 }
 
                 var postDeletionState = new LibraryItemStateApplicator().Reconcile(
@@ -98,10 +80,10 @@ namespace PersonalCloudLibrarySource
                     launchPath,
                     installDirectory,
                     settings.TreatMissingFilesAsUninstalled);
-                if (!postDeletionState.IsInstalled)
-                {
+                // A completed removal must notify the host even when the
+                // optional missing-file status preference remains enabled.
+                if (hasPlayniteHost)
                     InvokeOnUninstalled();
-                }
                 logger.Info($"Personal Cloud Library Source uninstall succeeded for {Game.GameId}: deleted {targetPath}.");
                 workflowNotifications.Success("uninstall", Game.GameId, PclsResources.Format(
                     "LOCPLSUninstallCompletedNotification",
@@ -121,6 +103,7 @@ namespace PersonalCloudLibrarySource
                     Environment.NewLine,
                     item.Title,
                     ex.Message));
+                throw;
             }
         }
 
@@ -158,12 +141,6 @@ namespace PersonalCloudLibrarySource
             return string.Empty;
         }
 
-        private string ChooseUninstallBehavior()
-        {
-            logger.Warn("Personal Cloud Library Source AskEachTime uninstall is unavailable in a standard controller. Select a deterministic uninstall behavior in plugin settings.");
-            return string.Empty;
-        }
-
         private static string ResolveTargetPath(string behavior, string launchPath, string installDirectory)
         {
             if (string.Equals(behavior, PersonalCloudLibrarySourceSettings.RemoveCachedFileOnlyUninstallBehavior, StringComparison.OrdinalIgnoreCase))
@@ -181,7 +158,9 @@ namespace PersonalCloudLibrarySource
 
         private static string NormalizeUninstallBehavior(string behavior)
         {
-            return string.IsNullOrWhiteSpace(behavior)
+            return string.IsNullOrWhiteSpace(behavior) ||
+                   string.Equals(behavior, PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior,
+                       StringComparison.OrdinalIgnoreCase)
                 ? PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior
                 : behavior;
         }

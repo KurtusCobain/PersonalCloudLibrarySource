@@ -218,8 +218,7 @@ namespace PersonalCloudLibrarySource
         public string[] UninstallBehaviorOptions { get; } =
         {
             PersonalCloudLibrarySourceSettings.RemoveCachedFileOnlyUninstallBehavior,
-            PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior,
-            PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior
+            PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior
         };
 
         public PersonalCloudLibrarySourceSettings Settings

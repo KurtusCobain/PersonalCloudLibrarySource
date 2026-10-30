@@ -28,7 +28,7 @@ namespace PersonalCloudLibrarySource.Tests
             Assert.That(result.Settings.RcloneTimeoutSeconds, Is.EqualTo(75));
             Assert.That(result.Settings.AllowDownloads, Is.False);
             Assert.That(result.Settings.TreatMissingFilesAsUninstalled, Is.False);
-            Assert.That(result.Settings.UninstallBehavior, Is.EqualTo(PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior));
+            Assert.That(result.Settings.UninstallBehavior, Is.EqualTo(PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior));
             Assert.That(result.Settings.AllowUninstallOutsideCacheFolder, Is.True);
         }
 
@@ -142,6 +142,22 @@ namespace PersonalCloudLibrarySource.Tests
         }
 
         [Test]
+        public void Migrate_CurrentVersionAskEachTime_NormalizesOnceWithoutDroppingPaths()
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                SettingsVersion = PersonalCloudLibrarySourceSettingsV3.CurrentSettingsVersion,
+                UninstallBehavior = PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior,
+                LocalCacheFolder = @"D:\ExistingCache"
+            };
+            Assert.That(SettingsMigrationService.Migrate(settings).WasMigrated, Is.True);
+            Assert.That(settings.UninstallBehavior,
+                Is.EqualTo(PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior));
+            Assert.That(settings.LocalCacheFolder, Is.EqualTo(@"D:\ExistingCache"));
+            Assert.That(SettingsMigrationService.Migrate(settings).WasMigrated, Is.False);
+        }
+
+        [Test]
         public void LoadLegacyOrDefault_LoaderThrows_ReturnsSafeLegacyDefaults()
         {
             var settings = SettingsMigrationService.LoadLegacyOrDefault(
@@ -183,7 +199,7 @@ namespace PersonalCloudLibrarySource.Tests
             Assert.That(settings.LocalCacheFolder, Is.EqualTo(@"D:\PlayniteCache"));
             Assert.That(settings.AllowDownloads, Is.False);
             Assert.That(settings.AllowUninstallOutsideCacheFolder, Is.True);
-            Assert.That(settings.UninstallBehavior, Is.EqualTo(PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior));
+            Assert.That(settings.UninstallBehavior, Is.EqualTo(PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior));
             Assert.That(settings.ShowTopPanelButton, Is.True);
             Assert.That(settings.ShowSidebarDashboard, Is.True);
             Assert.That(settings.ShowSetupReminders, Is.True);
@@ -244,7 +260,7 @@ namespace PersonalCloudLibrarySource.Tests
             Assert.That(result.Settings.RcloneTimeoutSeconds, Is.EqualTo(75));
             Assert.That(result.Settings.AllowDownloads, Is.False);
             Assert.That(result.Settings.EnableDiagnostics, Is.False);
-            Assert.That(result.Settings.UninstallBehavior, Is.EqualTo(PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior));
+            Assert.That(result.Settings.UninstallBehavior, Is.EqualTo(PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior));
             Assert.That(result.Settings.AllowUninstallOutsideCacheFolder, Is.True);
             Assert.That(result.Settings.AutoRefreshOnApplicationStart, Is.True);
             Assert.That(result.Settings.AutoGenerateManifestOnApplicationStart, Is.True);

@@ -57,7 +57,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
                 ignored => deleted = true);
             var controller = CreateUninstallController(outside, FileOnlySettings(), sink, executor);
 
-            controller.Uninstall(new UninstallActionArgs());
+            Assert.Throws<InvalidOperationException>(() => controller.Uninstall(new UninstallActionArgs()));
 
             Assert.That(File.Exists(outside), Is.True);
             Assert.That(deleted, Is.False);
@@ -79,11 +79,11 @@ namespace PersonalCloudLibrarySource.Tests.Services
                 ignored => deleted = true);
             var controller = CreateUninstallController(source, settings, sink, executor, source);
 
-            controller.Uninstall(new UninstallActionArgs());
+            Assert.Throws<InvalidOperationException>(() => controller.Uninstall(new UninstallActionArgs()));
 
             Assert.That(File.Exists(source), Is.True);
             Assert.That(deleted, Is.False);
-            Assert.That(sink.Messages[0].Text, Does.Contain("source item"));
+            Assert.That(sink.Messages[0].Text, Does.Contain("refused"));
         }
 
         [Test]
@@ -102,7 +102,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
             var controller = CreateUninstallController(targetFolder, settings, sink, executor, source);
             settings.UninstallBehavior = PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior;
 
-            controller.Uninstall(new UninstallActionArgs());
+            Assert.Throws<InvalidOperationException>(() => controller.Uninstall(new UninstallActionArgs()));
 
             Assert.That(File.Exists(source), Is.True);
             Assert.That(deleted, Is.False);
@@ -122,15 +122,15 @@ namespace PersonalCloudLibrarySource.Tests.Services
                 ignored => deleted = true);
             var controller = CreateUninstallController(external, settings, sink, executor, string.Empty);
 
-            controller.Uninstall(new UninstallActionArgs());
+            Assert.Throws<InvalidOperationException>(() => controller.Uninstall(new UninstallActionArgs()));
 
             Assert.That(File.Exists(external), Is.True);
             Assert.That(deleted, Is.False);
-            Assert.That(sink.Messages[0].Text, Does.Contain("cannot verify"));
+            Assert.That(sink.Messages[0].Text, Does.Contain("refused"));
         }
 
         [Test]
-        public void Uninstall_AskEachTime_FailsClosedWithoutDeleteOrDesktopDialog()
+        public void Uninstall_LegacyAskEachTime_MigratesToSafeFolderRemoval()
         {
             var launch = CreateFile(Path.Combine(cache, "game", "play.exe"));
             var settings = FileOnlySettings();
@@ -145,9 +145,8 @@ namespace PersonalCloudLibrarySource.Tests.Services
 
             controller.Uninstall(new UninstallActionArgs());
 
-            Assert.That(File.Exists(launch), Is.True);
-            Assert.That(deleted, Is.False);
-            Assert.That(sink.Messages[0].Text, Does.Contain("deterministic"));
+            Assert.That(deleted, Is.True);
+            Assert.That(sink.Messages[0].Text, Does.Contain("completed"));
         }
 
         [Test]

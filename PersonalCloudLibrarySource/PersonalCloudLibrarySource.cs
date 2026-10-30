@@ -454,7 +454,8 @@ namespace PersonalCloudLibrarySource
 
             if (string.Equals(behavior, PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior, StringComparison.OrdinalIgnoreCase))
             {
-                return !string.IsNullOrWhiteSpace(installDirectory) ? installDirectory : launchPath;
+                // Defensive fallback for a historical settings snapshot.
+                return installDirectory;
             }
 
             return string.Empty;

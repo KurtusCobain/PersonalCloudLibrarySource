@@ -111,10 +111,6 @@ namespace PersonalCloudLibrarySource
                 !string.Equals(
                     draft.UninstallBehavior,
                     PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior,
-                    StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(
-                    draft.UninstallBehavior,
-                    PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior,
                     StringComparison.OrdinalIgnoreCase))
             {
                 errors.Add("Choose a valid cached-copy removal behavior.");

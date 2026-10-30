@@ -119,10 +119,18 @@ namespace PersonalCloudLibrarySource
                 settings.TransferConcurrency = 1;
             }
 
+            // Previous releases offered AskEachTime without a working prompt.
+            // Preserve paths and IDs but replace the broken choice on load.
+            var normalizedUninstall = string.Equals(settings.UninstallBehavior,
+                PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior,
+                StringComparison.OrdinalIgnoreCase);
+            if (normalizedUninstall)
+                settings.UninstallBehavior = PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior;
+
             return new SettingsMigrationResult(
                 settings,
                 previousVersion,
-                appliedVersions.Count > 0,
+                appliedVersions.Count > 0 || normalizedUninstall,
                 appliedVersions);
         }
 
