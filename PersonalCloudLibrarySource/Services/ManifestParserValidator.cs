@@ -38,15 +38,17 @@ namespace PersonalCloudLibrarySource
         public ManifestParseResult Parse(string json)
         {
             var result = new ManifestParseResult();
-            if (string.IsNullOrWhiteSpace(json))
+            // Enforce the size limit before scanning or deserializing the input,
+            // including inputs consisting entirely of whitespace.
+            if (json != null && json.Length > MaxManifestCharacters)
             {
-                result.Error = "Manifest JSON was empty.";
+                result.Error = "Manifest is too large (maximum 32 million characters).";
                 return result;
             }
 
-            if (json.Length > MaxManifestCharacters)
+            if (string.IsNullOrWhiteSpace(json))
             {
-                result.Error = "Manifest is too large (maximum 32 million characters).";
+                result.Error = "Manifest JSON was empty.";
                 return result;
             }
 
