@@ -7,6 +7,7 @@
 - Restrict new install destinations to the configured cache folder, reject unsafe fallback game IDs, and retain catalog visibility for existing external paths.
 - Correct rclone transfers for empty files/directories, Windows argument quoting, and bounded cloud manifest output.
 - Apply explicit local/remote manifest limits and prevent stale verification snapshots from replacing live dashboard cached counts.
+- Reject local folder transfers that could follow junctions/symlinks outside the chosen source, and prevent folder copies into their own source tree; ensure rejected installs terminate the Playnite install lifecycle.
 - Remove seven nonfunctional settings controls while keeping upgrade-compatible stored fields; explain mandatory transfer-safety behavior.
 - Add a bounded, cancellable read-only game preview to first-run setup, with the first ten detected titles, skipped counts, and clear remote prerequisites.
 - Move local/NAS manifest generation during wizard Finish to a cancellable background task, retaining Playnite settings updates on the UI thread and preventing persistence after cancellation.
