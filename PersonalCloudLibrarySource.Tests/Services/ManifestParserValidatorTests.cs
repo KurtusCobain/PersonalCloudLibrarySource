@@ -1,4 +1,6 @@
 using NUnit.Framework;
+using System;
+using System.Text;
 
 namespace PersonalCloudLibrarySource.Tests.Services
 {
@@ -34,6 +36,33 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(result.Succeeded, Is.True);
             Assert.That(result.Manifest.Items, Is.Empty);
             Assert.That(result.Issues, Is.Empty);
+        }
+
+        [Test]
+        public void Parse_OversizedJson_RejectsBeforeDeserializing()
+        {
+            var result = new ManifestParserValidator().Parse(
+                new string(' ', ManifestParserValidator.MaxManifestCharacters + 1));
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Error, Does.Contain("too large"));
+        }
+
+        [Test]
+        public void Parse_ExcessiveItemCount_FailsWithFriendlyError()
+        {
+            var json = new StringBuilder("{\"version\":3,\"items\":[");
+            for (var i = 0; i <= ManifestParserValidator.MaxManifestItems; i++)
+            {
+                if (i != 0) json.Append(',');
+                json.Append("{\"id\":\"g\",\"title\":\"Game\"}");
+            }
+            json.Append("]}");
+
+            var result = new ManifestParserValidator().Parse(json.ToString());
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Error, Does.Contain("too many"));
         }
 
         [Test]

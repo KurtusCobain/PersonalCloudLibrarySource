@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text;
 
 namespace PersonalCloudLibrarySource
 {
@@ -37,7 +38,10 @@ namespace PersonalCloudLibrarySource
                 if (string.Equals(provider, PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType, StringComparison.OrdinalIgnoreCase))
                 {
                     if (readRclone == null) return ManifestLoadResult.Failure("rclone", "Rclone manifest reader is unavailable.");
-                    return ManifestLoadResult.Success(readRclone(settings), "rclone");
+                    var remoteJson = readRclone(settings);
+                    if (remoteJson != null && remoteJson.Length > ManifestParserValidator.MaxManifestCharacters)
+                        return ManifestLoadResult.Failure("rclone", "Remote manifest exceeds the 32 million character limit.");
+                    return ManifestLoadResult.Success(remoteJson, "rclone");
                 }
 
                 string path;
@@ -58,11 +62,37 @@ namespace PersonalCloudLibrarySource
 
                 if (string.IsNullOrWhiteSpace(path)) return ManifestLoadResult.Failure(path, "Manifest path is empty or could not be resolved.");
                 if (!File.Exists(path)) return ManifestLoadResult.Failure(path, "Manifest was not found: " + path);
-                return ManifestLoadResult.Success(File.ReadAllText(path), path);
+                return ManifestLoadResult.Success(ReadBoundedManifest(path), path);
             }
             catch (Exception ex)
             {
                 return ManifestLoadResult.Failure(provider, ex.Message);
+            }
+        }
+
+        private static string ReadBoundedManifest(string path)
+        {
+            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            {
+                // Reject large files before allocating; also enforce the limit while
+                // reading in case the file grows between opening and reading.
+                if (stream.Length > ManifestParserValidator.MaxManifestCharacters)
+                    throw new InvalidOperationException("Manifest file exceeds the 32 MB size limit.");
+
+                using (var reader = new StreamReader(stream, Encoding.UTF8, true))
+                {
+                    var text = new StringBuilder();
+                    var buffer = new char[4096];
+                    int count;
+                    while ((count = reader.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        if (text.Length > ManifestParserValidator.MaxManifestCharacters - count)
+                            throw new InvalidOperationException("Manifest exceeds the 32 million character limit.");
+                        text.Append(buffer, 0, count);
+                    }
+
+                    return text.ToString();
+                }
             }
         }
 

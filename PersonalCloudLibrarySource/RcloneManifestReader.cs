@@ -113,7 +113,7 @@ namespace PersonalCloudLibrarySource
                 return "\"\"";
             }
 
-            return "\"" + value.Replace("\"", "\\\"") + "\"";
+            return RcloneCommandBuilder.QuoteArgument(value);
         }
 
         internal static string TrimForLog(string value)

@@ -27,6 +27,34 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void QuoteArgument_TrailingBackslash_DoublesItBeforeClosingQuote()
+        {
+            Assert.That(RcloneCommandBuilder.QuoteArgument(@"C:\My Games\"),
+                Is.EqualTo("\"C:\\My Games\\\\\""));
+        }
+
+        [Test]
+        public void QuoteArgument_EmbeddedQuotesAndPrecedingBackslashes_EscapesWindowsCorrectly()
+        {
+            Assert.That(RcloneCommandBuilder.QuoteArgument("folder\\\"name"),
+                Is.EqualTo("\"folder\\\\\\\"name\""));
+        }
+
+        [Test]
+        public void BuildArguments_DestinationEndingInBackslash_UsesWindowsSafeQuoting()
+        {
+            var args = RcloneCommandBuilder.BuildArguments(new RcloneTransferRequest
+            {
+                RemoteName = "games",
+                RemoteSourcePath = "library/game",
+                DestinationPath = @"C:\Cache\My Folder\",
+                IsDirectory = true
+            });
+
+            Assert.That(args, Does.Contain("\"C:\\Cache\\My Folder\\\\\""));
+        }
+
+        [Test]
         public void BuildArguments_DirectoryTransfer_UsesCopyAndCreateEmptyDirectories()
         {
             var request = new RcloneTransferRequest

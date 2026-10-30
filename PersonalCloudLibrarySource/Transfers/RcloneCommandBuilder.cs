@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 
 namespace PersonalCloudLibrarySource
 {
@@ -19,8 +20,8 @@ namespace PersonalCloudLibrarySource
             var destinationPath = request.DestinationPath ?? string.Empty;
             var command = request.IsDirectory ? "copy" : "copyto";
             var arguments = command + " " +
-                            Quote(remoteName + ":" + sourcePath) + " " +
-                            Quote(destinationPath) +
+                            QuoteArgument(remoteName + ":" + sourcePath) + " " +
+                            QuoteArgument(destinationPath) +
                             " --stats=1s --stats-one-line --progress";
 
             if (request.IsDirectory)
@@ -31,9 +32,38 @@ namespace PersonalCloudLibrarySource
             return arguments;
         }
 
-        private static string Quote(string value)
+        // Correct Windows command-line escaping for ProcessStartInfo.Arguments.
+        // In particular, trailing backslashes must be doubled before the closing
+        // quote, and backslashes before embedded quotation marks must be escaped.
+        public static string QuoteArgument(string value)
         {
-            return "\"" + (value ?? string.Empty).Replace("\"", "\\\"") + "\"";
+            var result = new StringBuilder("\"");
+            var backslashes = 0;
+            foreach (var ch in value ?? string.Empty)
+            {
+                if (ch == '\\')
+                {
+                    backslashes++;
+                    continue;
+                }
+
+                if (ch == '"')
+                {
+                    result.Append('\\', backslashes * 2 + 1);
+                    result.Append('"');
+                }
+                else
+                {
+                    result.Append('\\', backslashes);
+                    result.Append(ch);
+                }
+
+                backslashes = 0;
+            }
+
+            result.Append('\\', backslashes * 2);
+            result.Append('"');
+            return result.ToString();
         }
     }
 }

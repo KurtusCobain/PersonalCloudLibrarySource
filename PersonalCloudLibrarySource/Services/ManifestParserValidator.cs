@@ -31,6 +31,9 @@ namespace PersonalCloudLibrarySource
     {
         public const int MinimumSupportedVersion = 1;
         public const int MaximumSupportedVersion = 3;
+        // Conservative caps for user-supplied catalogs; do not deserialize unbounded input.
+        public const int MaxManifestCharacters = 32 * 1024 * 1024;
+        public const int MaxManifestItems = 100000;
 
         public ManifestParseResult Parse(string json)
         {
@@ -38,6 +41,12 @@ namespace PersonalCloudLibrarySource
             if (string.IsNullOrWhiteSpace(json))
             {
                 result.Error = "Manifest JSON was empty.";
+                return result;
+            }
+
+            if (json.Length > MaxManifestCharacters)
+            {
+                result.Error = "Manifest is too large (maximum 32 million characters).";
                 return result;
             }
 
@@ -61,6 +70,12 @@ namespace PersonalCloudLibrarySource
             if (result.Manifest.Version < MinimumSupportedVersion || result.Manifest.Version > MaximumSupportedVersion)
             {
                 result.Error = "Manifest version " + result.Manifest.Version + " is unsupported.";
+                return result;
+            }
+
+            if (result.Manifest.Items.Count > MaxManifestItems)
+            {
+                result.Error = "Manifest has too many games (maximum " + MaxManifestItems + ").";
                 return result;
             }
 

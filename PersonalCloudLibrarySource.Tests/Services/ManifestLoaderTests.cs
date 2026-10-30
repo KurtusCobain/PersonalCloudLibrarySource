@@ -55,6 +55,40 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Load_OversizedRemoteManifest_RejectsBeforeParsing()
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                SourceProviderType = PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType
+            };
+            var result = new ManifestLoader().Load(settings,
+                ignored => new string('a', ManifestParserValidator.MaxManifestCharacters + 1));
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Error, Does.Contain("limit"));
+        }
+
+        [Test]
+        public void Load_OversizedLocalFile_RejectsWithoutReadingWholeFile()
+        {
+            var path = Path.Combine(testRoot, "large.json");
+            using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write))
+            {
+                stream.SetLength(ManifestParserValidator.MaxManifestCharacters + 1);
+            }
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType,
+                LocalManifestPath = path
+            };
+
+            var result = new ManifestLoader().Load(settings, null);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Error, Does.Contain("32 MB"));
+        }
+
+        [Test]
         public void Load_RcloneException_ReturnsProviderFailureResult()
         {
             var settings = new PersonalCloudLibrarySourceSettingsV3
