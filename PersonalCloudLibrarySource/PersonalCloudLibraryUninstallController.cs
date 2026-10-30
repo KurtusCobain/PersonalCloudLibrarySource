@@ -52,6 +52,15 @@ namespace PersonalCloudLibrarySource
                     PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior,
                     StringComparison.OrdinalIgnoreCase))
                 refusalReason = "File-based cache entries cannot authorize recursive folder deletion; select file-only removal.";
+            // Until durable transfer receipts are issued and verified, a manifest
+            // alone cannot establish ownership of an entire directory tree.
+            if (string.IsNullOrWhiteSpace(refusalReason) &&
+                PersonalCloudLibrarySource.IsDirectoryItem(item) &&
+                string.Equals(behavior,
+                    PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior,
+                    StringComparison.OrdinalIgnoreCase))
+                refusalReason = "Directory cache ownership is unverified; recursive removal is disabled.";
+
             var insideCache = PersonalCloudLibrarySource.IsPathInsideCacheFolder(targetPath, settings.LocalCacheFolder);
 
             logger.Info(
