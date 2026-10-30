@@ -184,7 +184,9 @@ namespace PersonalCloudLibrarySource
                         args.Game,
                         item,
                         pluginSettings,
-                        GetTransferQueue()));
+                        GetTransferQueue(),
+                        ownershipReceipts: new CacheOwnershipReceiptStore(
+                            Path.Combine(GetPluginDataDirectory(), "ownership-receipts"))));
                     logger.Info($"Personal Cloud Library Source install action returned for {item.Id}.");
                     return installActions;
                 }
