@@ -60,7 +60,12 @@ namespace PersonalCloudLibrarySource
                         if (parsed == null || (parsed.Version != 1 && parsed.Version != 2) ||
                             !string.Equals(parsed.ItemId, itemId, StringComparison.Ordinal) ||
                             !string.Equals(PathBoundary.Normalize(parsed.CacheRoot),
-                                PathBoundary.Normalize(cacheRoot), StringComparison.OrdinalIgnoreCase))
+                                PathBoundary.Normalize(cacheRoot), StringComparison.OrdinalIgnoreCase) ||
+                            string.IsNullOrWhiteSpace(parsed.Destination) ||
+                            !PathBoundary.IsContained(cacheRoot, parsed.Destination) ||
+                            string.Equals(PathBoundary.Normalize(parsed.Destination),
+                                PathBoundary.Normalize(cacheRoot), StringComparison.OrdinalIgnoreCase) ||
+                            (parsed.Version == 2 && !IsValidV2Inventory(parsed)))
                             return false;
                         receipt = parsed;
                         return true;
@@ -71,6 +76,23 @@ namespace PersonalCloudLibrarySource
             {
                 return false;
             }
+        }
+
+        private static bool IsValidV2Inventory(CacheOwnershipReceipt receipt)
+        {
+            if (receipt.InventoryFileCount < 0 || receipt.InventoryDirectoryCount < 0 ||
+                receipt.InventoryFileCount + (long)receipt.InventoryDirectoryCount >
+                    CacheTreeInventoryScanner.MaximumEntries ||
+                string.IsNullOrWhiteSpace(receipt.InventoryFingerprint) ||
+                receipt.InventoryFingerprint.Length != 64)
+                return false;
+            foreach (var character in receipt.InventoryFingerprint)
+            {
+                if (!((character >= '0' && character <= '9') ||
+                      (character >= 'A' && character <= 'F')))
+                    return false;
+            }
+            return true;
         }
 
         // Validate a receipt against the destination derived from the current
