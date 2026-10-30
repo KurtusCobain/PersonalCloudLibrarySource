@@ -322,6 +322,58 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Install_SuccessfulDirectoryTransfer_IssuesV2InventoryAndDetectsNewContent()
+        {
+            var original = Path.Combine(root, "original");
+            var source = Path.Combine(original, "directory");
+            var sourceLaunch = CreateFile(Path.Combine(source, "play.exe"));
+            File.WriteAllText(sourceLaunch, "original game bytes");
+            CreateFile(Path.Combine(source, "assets", "texture.bin"));
+            var game = Game("directory-receipt");
+            game.IsInstalled = false;
+            var settings = FileOnlySettings();
+            settings.SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFolderProviderType;
+            settings.LocalLibraryRoot = original;
+            settings.UninstallBehavior = PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior;
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "directory-receipt", Title = "Directory Receipt",
+                SourceType = "directory", SourcePath = "directory",
+                InstallDirectory = "directory-receipt", LaunchFile = "play.exe"
+            };
+            var destination = Path.Combine(cache, "directory-receipt");
+            var receipts = new CacheOwnershipReceiptStore(Path.Combine(root, "ownership-receipts"));
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager,
+                new CloudTransferExecutor(manager, new LocalTransferAdapter())))
+            {
+                var controller = new RcloneInstallController(null, game, item, settings, queue,
+                    ownershipReceipts: receipts);
+                controller.Install(new InstallActionArgs());
+                Assert.That(SpinWait.SpinUntil(() => game.IsInstalled, 10000), Is.True,
+                    "Successful directory install must complete asynchronously.");
+                CacheOwnershipReceipt receipt;
+                Assert.That(receipts.TryRead(cache, item.Id, out receipt), Is.True);
+                Assert.That(receipt.Version, Is.EqualTo(2));
+                Assert.That(receipt.Destination, Is.EqualTo(destination));
+                Assert.That(receipt.InventoryFileCount, Is.EqualTo(2));
+                bool matches;
+                Assert.That(receipts.TryCompareInventory(cache, item.Id, destination, out matches), Is.True);
+                Assert.That(matches, Is.True);
+                var policy = new GameWorkflowPolicyService().Evaluate(item, settings);
+                Assert.That(policy.CanUninstall, Is.False,
+                    "V2 inventory does not yet authorize recursive deletion.");
+
+                var personal = Path.Combine(destination, "personal-save.txt");
+                File.WriteAllText(personal, "user data");
+                Assert.That(receipts.TryCompareInventory(cache, item.Id, destination, out matches), Is.True);
+                Assert.That(matches, Is.False);
+                Assert.That(File.ReadAllText(personal), Is.EqualTo("user data"));
+                controller.Dispose();
+            }
+        }
+
+        [Test]
         public void Install_PreexistingCacheFile_DoesNotCreateOwnershipReceipt()
         {
             var source = CreateFile(Path.Combine(root, "original", "play.exe"));
