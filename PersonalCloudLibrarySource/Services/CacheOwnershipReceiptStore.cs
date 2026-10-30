@@ -31,7 +31,7 @@ namespace PersonalCloudLibrarySource
         {
             if (string.IsNullOrWhiteSpace(cacheRoot) || string.IsNullOrWhiteSpace(itemId))
                 throw new ArgumentException("Cache root and item ID are required.");
-            var identity = PathBoundary.Normalize(cacheRoot).ToUpperInvariant() + "\n" + itemId;
+            var identity = PathBoundary.Normalize(cacheRoot).ToUpperInvariant() + "\n" + itemId.ToUpperInvariant();
             using (var sha = SHA256.Create())
             {
                 var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(identity));
@@ -71,6 +71,9 @@ namespace PersonalCloudLibrarySource
 
         public void RecordCompleted(string cacheRoot, string itemId, string destination)
         {
+            if (PathBoundary.IsContained(cacheRoot, storeRoot) ||
+                PathBoundary.IsContained(storeRoot, cacheRoot))
+                throw new InvalidOperationException("Ownership receipts must be stored outside the cache tree.");
             if (string.IsNullOrWhiteSpace(destination) ||
                 !PathBoundary.IsContained(cacheRoot, destination) ||
                 string.Equals(PathBoundary.Normalize(cacheRoot),
