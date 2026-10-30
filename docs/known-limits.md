@@ -28,3 +28,8 @@ File-type manifest entries authorize only their own cached file, not the contain
 ### Unverified directory caches (draft safety gate)
 
 Draft builds no longer offer or perform automatic **recursive directory removal** for directory-type items without verified PCLS-created installation provenance. Existing folders remain detectable as cached and are not migrated, adopted, or deleted by this restriction. The current provenance classifier is **not** yet a durable verified receipt system, so recursive directory uninstall remains disabled even for new transfers. File-only cache removal remains separately governed by its existing path safety checks. To remove a legacy directory cache before provenance support is completed, review its contents and manage it manually outside PCLS. This is a deliberate temporary compatibility limitation, not a completed ownership-ledger rollout.
+
+
+### Receipt store foundation (draft, not enforced)
+
+The candidate now includes a create-only JSON receipt store keyed by cache root and item ID. It rejects duplicate records and invalid/missing destinations, and reading fails closed on malformed data. **This is not yet wired to transfers, is not cryptographically authenticated, and cannot be used as deletion authorization.** The host must provide a stable receipt directory outside the cache and source roots; the transfer lifecycle must issue receipts only after a newly created destination commits; readers must validate destination and identity; and an actual deletion gate and migration/compatibility tests are still required. No existing cache is automatically adopted. Do not consider recursive removal safe or release-ready on the basis of this store.
