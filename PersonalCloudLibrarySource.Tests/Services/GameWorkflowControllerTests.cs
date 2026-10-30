@@ -294,6 +294,34 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Install_SuccessfulTransfer_RecordsReceiptWithoutGrantingDeletion()
+        {
+            var source = CreateFile(Path.Combine(root, "original", "play.exe"));
+            var game = Game("receipt-game");
+            game.IsInstalled = false;
+            var settings = FileOnlySettings();
+            settings.SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType;
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "receipt-game", Title = "Receipt Game",
+                SourcePath = source, CachePath = "receipt-game/play.exe"
+            };
+            var receipts = new CacheOwnershipReceiptStore(Path.Combine(root, "ownership-receipts"));
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager, new CloudTransferExecutor(manager, new LocalTransferAdapter())))
+            {
+                var controller = new RcloneInstallController(null, game, item, settings, queue,
+                    ownershipReceipts: receipts);
+                controller.Install(new InstallActionArgs());
+                Assert.That(SpinWait.SpinUntil(() => game.IsInstalled, 5000), Is.True);
+                CacheOwnershipReceipt receipt = null;
+                Assert.That(SpinWait.SpinUntil(() => receipts.TryRead(cache, item.Id, out receipt), 5000), Is.True);
+                Assert.That(receipt.Destination, Is.EqualTo(Path.Combine(cache, "receipt-game", "play.exe")));
+                controller.Dispose();
+            }
+        }
+
+        [Test]
         public void Install_DisposedController_CancelsActiveTransferAndDoesNotMarkInstalled()
         {
             var source = CreateFile(Path.Combine(root, "original", "play.exe"));
