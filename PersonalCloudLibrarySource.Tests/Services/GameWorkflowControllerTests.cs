@@ -445,6 +445,41 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Install_DisposedDirectoryTransfer_DoesNotIssueOwnershipReceipt()
+        {
+            var sourceRoot = Path.Combine(root, "original");
+            CreateFile(Path.Combine(sourceRoot, "directory", "play.exe"));
+            var game = Game("cancel-directory");
+            game.IsInstalled = false;
+            var settings = FileOnlySettings();
+            settings.SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFolderProviderType;
+            settings.LocalLibraryRoot = sourceRoot;
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "cancel-directory", Title = "Cancelled Directory",
+                SourceType = "directory", SourcePath = "directory",
+                InstallDirectory = "cancel-directory", LaunchFile = "play.exe"
+            };
+            var receipts = new CacheOwnershipReceiptStore(Path.Combine(root, "ownership-receipts"));
+            var manager = new CloudTransferManager(1);
+            var executor = new PausingTransferExecutor(manager);
+            using (var queue = new TransferQueueService(manager, executor))
+            {
+                var controller = new RcloneInstallController(null, game, item, settings, queue,
+                    ownershipReceipts: receipts);
+                controller.Install(new InstallActionArgs());
+                Assert.That(executor.Started.Wait(TimeSpan.FromSeconds(3)), Is.True);
+                controller.Dispose();
+                executor.Release.Set();
+                Assert.That(SpinWait.SpinUntil(() => manager.Jobs[0].IsTerminal, 5000), Is.True);
+                Assert.That(manager.Jobs[0].State, Is.EqualTo(CloudTransferState.Cancelled));
+                Assert.That(game.IsInstalled, Is.False);
+                CacheOwnershipReceipt receipt;
+                Assert.That(receipts.TryRead(cache, item.Id, out receipt), Is.False);
+            }
+        }
+
+        [Test]
         public void Install_DisposedController_CancelsActiveTransferAndDoesNotMarkInstalled()
         {
             var source = CreateFile(Path.Combine(root, "original", "play.exe"));
