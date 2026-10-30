@@ -17,6 +17,7 @@ namespace PersonalCloudLibrarySource
         private readonly IImportUiDispatcher uiDispatcher;
         private Guid activeJobId;
         private bool disposed;
+        private readonly bool hasPlayniteHost;
 
         public RcloneInstallController(
             IPlayniteAPI playniteApi,
@@ -30,6 +31,7 @@ namespace PersonalCloudLibrarySource
             this.settings = settings;
             this.transferQueue = transferQueue ?? throw new ArgumentNullException(nameof(transferQueue));
             this.workflowNotifications = workflowNotifications ?? CreateNotifications(playniteApi);
+            hasPlayniteHost = playniteApi != null;
             uiDispatcher = playniteApi == null
                 ? (IImportUiDispatcher)new ImmediateGameWorkflowUiDispatcher()
                 : new PlayniteImportUiDispatcher(playniteApi);
@@ -86,7 +88,7 @@ namespace PersonalCloudLibrarySource
                 logger.Error(ex, "PCLS could not enqueue install for " + item.Id);
                 workflowNotifications.Failure("install", Game.GameId,
                     "Could not start download: " + ex.Message);
-                InvokeOnInstallationCancelled(new GameInstallationCancelledEventArgs());
+                SignalCancelledIfHosted();
             }
         }
 
@@ -117,7 +119,7 @@ namespace PersonalCloudLibrarySource
                         activeJobId = Guid.Empty;
                         workflowNotifications.Failure("install", Game.GameId,
                             "Download failed: " + ex.Message);
-                        InvokeOnInstallationCancelled(new GameInstallationCancelledEventArgs());
+                        SignalCancelledIfHosted();
                     });
                 }
                 catch (Exception dispatchError)
@@ -139,7 +141,7 @@ namespace PersonalCloudLibrarySource
                 if (cancelled)
                 {
                     logger.Info($"Personal Cloud Library Source transfer cancelled for item {item.Id}.");
-                    InvokeOnInstallationCancelled(new GameInstallationCancelledEventArgs());
+                    SignalCancelledIfHosted();
                     workflowNotifications.Warning("install", Game.GameId, PclsResources.Format(
                         "LOCPLSInstallCancelledNotification",
                         "Download to local cache was cancelled.{0}{0}Item: {1}{0}Partial files were removed and the game remains uninstalled.",
@@ -157,7 +159,7 @@ namespace PersonalCloudLibrarySource
                     logger.Error($"Personal Cloud Library Source failed to download item {item.Id}: {message}");
                 }
 
-                InvokeOnInstallationCancelled(new GameInstallationCancelledEventArgs());
+                SignalCancelledIfHosted();
                 workflowNotifications.Failure("install", Game.GameId, PclsResources.Format(
                     "LOCPLSInstallFailedNotification",
                     "Download to local cache failed.{0}{0}Item: {1}{0}Source type: {2}{0}Result: {3}{0}{0}Next: review the manifest source path and cache settings, then try again.",
@@ -180,7 +182,7 @@ namespace PersonalCloudLibrarySource
             if (!itemState.IsCached)
             {
                 logger.Warn($"Personal Cloud Library Source downloaded item {item.Id}, but the expected launch file was not found.");
-                InvokeOnInstallationCancelled(new GameInstallationCancelledEventArgs());
+                SignalCancelledIfHosted();
                 workflowNotifications.Warning("install", Game.GameId, PclsResources.Format(
                     "LOCPLSInstallWarningNotification",
                     "Download to local cache finished with warnings.{0}{0}Item: {1}{0}Source type: {2}{0}Result: files were copied, but the expected launch file was not found.{0}{0}Next: review {3}, {4}, and {5} in the manifest.",
@@ -195,10 +197,13 @@ namespace PersonalCloudLibrarySource
 
             new LibraryItemStateApplicator().Apply(Game, itemState);
 
-            InvokeOnInstalled(new GameInstalledEventArgs(new GameInstallationData
+            if (hasPlayniteHost)
             {
-                InstallDirectory = installDirectory
-            }));
+                InvokeOnInstalled(new GameInstalledEventArgs(new GameInstallationData
+                {
+                    InstallDirectory = installDirectory
+                }));
+            }
 
             logger.Info($"Personal Cloud Library Source downloaded item {item.Id} to local cache.");
             workflowNotifications.Success("install", Game.GameId, PclsResources.Format(
@@ -210,6 +215,14 @@ namespace PersonalCloudLibrarySource
                 itemState.HasPlayAction
                     ? PclsResources.Get("LOCPLSInstallLaunchReadySuffix", " and launch-ready.")
                     : "."));
+        }
+
+        private void SignalCancelledIfHosted()
+        {
+            // Test controllers have no Playnite synchronization context.
+            // The SDK event helper uses that context, which only the host supplies.
+            if (hasPlayniteHost)
+                InvokeOnInstallationCancelled(new GameInstallationCancelledEventArgs());
         }
 
         public override void Dispose()
