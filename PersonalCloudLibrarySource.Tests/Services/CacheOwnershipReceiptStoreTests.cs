@@ -129,6 +129,35 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void InventoryComparisonDetectsModifiedAndRemovedFiles()
+        {
+            var executable = Path.Combine(game, "play.exe");
+            File.WriteAllText(executable, "original");
+            var store = new CacheOwnershipReceiptStore(receipts);
+            store.RecordCompletedWithInventory(cache, "game-id", game);
+            bool matches;
+            File.WriteAllText(executable, "changed");
+            Assert.That(store.TryCompareInventory(cache, "game-id", game, out matches), Is.True);
+            Assert.That(matches, Is.False);
+            File.Delete(executable);
+            Assert.That(store.TryCompareInventory(cache, "game-id", game, out matches), Is.True);
+            Assert.That(matches, Is.False);
+        }
+
+        [Test]
+        public void InventoryComparisonRejectsInvalidOrOutsideDestinationWithoutThrowing()
+        {
+            File.WriteAllText(Path.Combine(game, "play.exe"), "game");
+            var store = new CacheOwnershipReceiptStore(receipts);
+            store.RecordCompletedWithInventory(cache, "game-id", game);
+            bool matches;
+            Assert.That(store.TryCompareInventory(cache, "game-id", null, out matches), Is.False);
+            Assert.That(matches, Is.False);
+            Assert.That(store.TryCompareInventory(cache, "game-id", Path.Combine(root, "outside"), out matches), Is.False);
+            Assert.That(matches, Is.False);
+        }
+
+        [Test]
         public void V1ReceiptCannotClaimInventoriedOwnership()
         {
             var store = new CacheOwnershipReceiptStore(receipts);
