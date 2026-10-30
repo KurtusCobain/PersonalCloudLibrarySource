@@ -214,8 +214,12 @@ namespace PersonalCloudLibrarySource
         {
             if (isDirectory)
             {
-                if (!Directory.Exists(destination))
+                if (!Directory.Exists(destination) ||
+                    !string.IsNullOrWhiteSpace(
+                        SafeCacheDeletionExecutor.GetUnsafeDescendantReason(destination)))
                 {
+                    // A staged tree may have changed before final verification.
+                    // Never follow unexpected junctions/symlinks here.
                     return false;
                 }
 
@@ -233,7 +237,8 @@ namespace PersonalCloudLibrarySource
                 return actualBytes == expectedBytes.Value;
             }
 
-            if (!File.Exists(destination))
+            if (!File.Exists(destination) ||
+                (File.GetAttributes(destination) & FileAttributes.ReparsePoint) != 0)
             {
                 return false;
             }
