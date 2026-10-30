@@ -15,6 +15,25 @@ namespace PersonalCloudLibrarySource.Tests.Ui
             { "Content", "Header", "Text", "Title", "ToolTip" };
 
         [Test]
+        public void Settings_DoesNotExposeControlsWithoutRuntimeEffect()
+        {
+            var xaml = File.ReadAllText(FindRepositoryFile(
+                "PersonalCloudLibrarySource", "PersonalCloudLibrarySourceSettingsView.xaml"));
+            foreach (var property in new[]
+            {
+                "VerifyAfterTransfer", "RemoveIncompleteTransferFiles",
+                "NotifyLibraryUpdates", "NotifyTransferCompleted",
+                "NotifyTransferFailed", "NotifySourceUnavailable",
+                "NotifyVerificationWarnings"
+            })
+            {
+                Assert.That(xaml, Does.Not.Contain("Settings." + property), property);
+            }
+
+            Assert.That(xaml, Does.Contain("LOCPLSCacheSafetyAlwaysOn"));
+        }
+
+        [Test]
         public void LocalizationKeys_AreUnique()
         {
             var keys = ReadResources().Select(resource => resource.Key).ToList();
