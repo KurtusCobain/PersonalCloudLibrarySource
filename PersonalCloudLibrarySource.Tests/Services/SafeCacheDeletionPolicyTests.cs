@@ -122,6 +122,46 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Executor_RefusesRecursiveDeleteWhenDescendantIsJunction()
+        {
+            var original = Path.Combine(testRoot, "original");
+            Directory.CreateDirectory(original);
+            var precious = Path.Combine(original, "keep.txt");
+            File.WriteAllText(precious, "keep");
+            var cached = Path.Combine(cacheRoot, "cached");
+            Directory.CreateDirectory(cached);
+            File.WriteAllText(Path.Combine(cached, "ordinary.txt"), "data");
+            var junction = Path.Combine(cached, "linked");
+            if (!TryCreateJunction(junction, original))
+                Assert.Ignore("Junction creation is unavailable on this Windows host.");
+
+            try
+            {
+                var result = new SafeCacheDeletionExecutor().Delete(cacheRoot, cached, false);
+                Assert.That(result.Allowed, Is.False);
+                Assert.That(result.Reason, Does.Contain("linked"));
+                Assert.That(Directory.Exists(cached), Is.True);
+                Assert.That(File.ReadAllText(precious), Is.EqualTo("keep"));
+            }
+            finally
+            {
+                if (Directory.Exists(junction)) Directory.Delete(junction, false);
+            }
+        }
+
+        [Test]
+        public void Executor_BoundedDescendantInspectionRefusesOversizedTree()
+        {
+            var cached = Path.Combine(cacheRoot, "huge");
+            Directory.CreateDirectory(cached);
+            File.WriteAllText(Path.Combine(cached, "one"), "1");
+            File.WriteAllText(Path.Combine(cached, "two"), "2");
+            var result = SafeCacheDeletionExecutor.GetUnsafeDescendantReason(cached, maxEntries: 1);
+            Assert.That(result, Does.Contain("too large"));
+            Assert.That(Directory.Exists(cached), Is.True);
+        }
+
+        [Test]
         public void Executor_RelativeTarget_IsRefusedWithoutDeletingAnything()
         {
             var mutationAttempted = false;
