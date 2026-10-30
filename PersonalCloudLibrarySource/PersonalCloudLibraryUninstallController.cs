@@ -43,6 +43,15 @@ namespace PersonalCloudLibrarySource
             var targetPath = PersonalCloudLibrarySource.ResolveSafeUninstallTarget(settings, requestedTargetPath, out refusalReason);
             if (string.IsNullOrWhiteSpace(refusalReason))
                 refusalReason = GetLocalSourceProtectionRefusal(targetPath);
+            // A single-file manifest entry never proves exclusive ownership of
+            // its containing directory. Folder removal could erase unrelated
+            // user files even if the launch file itself is cache-contained.
+            if (string.IsNullOrWhiteSpace(refusalReason) &&
+                !PersonalCloudLibrarySource.IsDirectoryItem(item) &&
+                string.Equals(behavior,
+                    PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior,
+                    StringComparison.OrdinalIgnoreCase))
+                refusalReason = "File-based cache entries cannot authorize recursive folder deletion; select file-only removal.";
             var insideCache = PersonalCloudLibrarySource.IsPathInsideCacheFolder(targetPath, settings.LocalCacheFolder);
 
             logger.Info(
