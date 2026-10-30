@@ -63,3 +63,8 @@ Disposing the install controller now signals cancellation to directory-inventory
 ### Existing-cache ownership non-adoption regression (draft)
 
 A controller-level regression checks that a local install targeting a pre-existing cached file fails without overwriting its bytes or issuing an ownership receipt. The transfer adapters' no-overwrite staging behavior remains the foundation; simply finding content on disk never claims ownership. A passing synthetic regression does not establish that Windows host races, rclone destinations or filesystems are fully safe. Recursive directory uninstall remains disabled.
+
+
+### Directory V2 lifecycle and receipt validation tests (draft)
+
+The draft Windows test fixtures now exercise a successful local directory transfer through V2 receipt issuance, a matching initial inventory, a user-added file causing mismatch, and the continued refusal to offer recursive uninstall. A separate paused directory-transfer fixture confirms disposal before terminal success cannot issue an ownership receipt. Receipt reads reject destinations outside the configured cache, malformed V2 inventory metadata, and receipt stores that overlap the cache tree. These are safeguards against accidental adoption and tampered metadata, **not cryptographic authenticity or filesystem race elimination**. No installed-host Playnite Desktop/Fullscreen acceptance is claimed and no recursive directory deletion is enabled.
