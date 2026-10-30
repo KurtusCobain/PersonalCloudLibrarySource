@@ -84,6 +84,7 @@
     <Compile Include="Services\LibraryVerificationManifestDiagnosticsTests.cs" />
     <Compile Include="Services\SafeCacheDeletionPolicyTests.cs" />
     <Compile Include="Services\CacheOwnershipPolicyTests.cs" />
+    <Compile Include="Services\CacheOwnershipReceiptStoreTests.cs" />
     <Compile Include="Services\PluginNavigationServiceTests.cs" />
     <Compile Include="SettingsEditSessionTests.cs" />
     <Compile Include="SettingsMigrationServiceTests.cs" />
