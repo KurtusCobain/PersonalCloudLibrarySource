@@ -101,6 +101,42 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(result.Error, Does.Contain("escapes"));
         }
 
+        [TestCase("../outside")]
+        [TestCase("../../outside")]
+        [TestCase(@"..\outside")]
+        [TestCase(@"C:\outside")]
+        [TestCase("C:evil")]
+        [TestCase("CON")]
+        [TestCase("NUL")]
+        [TestCase("game/child")]
+        [TestCase(@"game\child")]
+        public void CacheResolver_UnsafeFallbackId_RejectsBeforeInstall(string id)
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                LocalCacheFolder = Path.Combine(testRoot, "cache")
+            };
+            var item = new PersonalCloudLibraryItem { Id = id, SourcePath = "file.exe" };
+
+            var result = new CachePathResolver().Resolve(item, settings);
+
+            Assert.That(result.Succeeded, Is.False, id);
+            Assert.That(result.Error, Is.Not.Empty);
+        }
+
+        [Test]
+        public void CacheResolver_NormalFallbackId_StaysInsideCache()
+        {
+            var root = Path.Combine(testRoot, "cache");
+            var result = new CachePathResolver().Resolve(
+                new PersonalCloudLibraryItem { Id = "game-safe", SourcePath = "game.exe" },
+                new PersonalCloudLibrarySourceSettingsV3 { LocalCacheFolder = root });
+
+            Assert.That(result.Succeeded, Is.True, result.Error);
+            Assert.That(PathBoundary.IsContained(root, result.DestinationFile), Is.True);
+            Assert.That(PathBoundary.IsContained(root, result.DestinationDirectory), Is.True);
+        }
+
         [Test]
         public void CacheResolver_RootedLaunchFile_IsRejected()
         {

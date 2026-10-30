@@ -7,6 +7,43 @@ namespace PersonalCloudLibrarySource.Tests.Services
     [TestFixture]
     public class GameWorkflowPolicyServiceTests
     {
+        [Test]
+        public void Install_ExplicitExternalDestination_IsRefused()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "PCLS-ExternalInstall", Guid.NewGuid().ToString("N"));
+            try
+            {
+                var source = Path.Combine(root, "source");
+                var cache = Path.Combine(root, "cache");
+                Directory.CreateDirectory(source);
+                Directory.CreateDirectory(cache);
+                File.WriteAllText(Path.Combine(source, "game.exe"), "source");
+                var settings = new PersonalCloudLibrarySourceSettingsV3
+                {
+                    Enabled = true,
+                    AllowDownloads = true,
+                    SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFolderProviderType,
+                    LocalLibraryRoot = source,
+                    LocalCacheFolder = cache
+                };
+                var item = new PersonalCloudLibraryItem
+                {
+                    Id = "external", Title = "External",
+                    SourcePath = "game.exe",
+                    CachePath = Path.Combine(root, "external", "game.exe")
+                };
+
+                var result = new GameWorkflowPolicyService().Evaluate(item, settings);
+
+                Assert.That(result.CanInstall, Is.False);
+                Assert.That(result.InstallRefusalReason, Does.Contain("inside LocalCacheFolder"));
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, true);
+            }
+        }
+
         private string root;
         private string cache;
 

@@ -59,7 +59,26 @@ namespace PersonalCloudLibrarySource
             }
             else
             {
-                result.CanInstall = true;
+                // Externally stored entries may be catalogued or played, but installs
+                // must write only inside the user-selected cache folder.
+                var destination = string.Equals(
+                    PersonalCloudLibrarySource.GetItemSourceType(item), "directory",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? result.Paths.DestinationDirectory
+                    : result.Paths.DestinationFile;
+                if (string.IsNullOrWhiteSpace(destination) ||
+                    !PathBoundary.IsContained(settings.LocalCacheFolder, destination) ||
+                    string.Equals(
+                        PathBoundary.Normalize(settings.LocalCacheFolder),
+                        PathBoundary.Normalize(destination),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    result.InstallRefusalReason = "Install destination must be inside LocalCacheFolder.";
+                }
+                else
+                {
+                    result.CanInstall = true;
+                }
             }
 
             var requestedTarget = PersonalCloudLibrarySource.ResolveUninstallTargetPath(
