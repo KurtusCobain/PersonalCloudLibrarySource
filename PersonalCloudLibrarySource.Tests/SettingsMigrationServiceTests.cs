@@ -207,7 +207,7 @@ namespace PersonalCloudLibrarySource.Tests
                 LocalCacheFolder = @"E:\PlayniteCache",
                 TreatMissingFilesAsUninstalled = false,
                 RcloneExecutablePath = @"C:\Tools\rclone.exe",
-                RcloneRemoteName = "romcade_drive",
+                RcloneRemoteName = "sample_drive",
                 RcloneManifestPath = "PersonalLibrary/library.json",
                 RcloneContentRoot = "PersonalLibrary",
                 RcloneTimeoutSeconds = 75,
@@ -238,7 +238,7 @@ namespace PersonalCloudLibrarySource.Tests
             Assert.That(result.Settings.LocalCacheFolder, Is.EqualTo(@"E:\PlayniteCache"));
             Assert.That(result.Settings.TreatMissingFilesAsUninstalled, Is.False);
             Assert.That(result.Settings.RcloneExecutablePath, Is.EqualTo(@"C:\Tools\rclone.exe"));
-            Assert.That(result.Settings.RcloneRemoteName, Is.EqualTo("romcade_drive"));
+            Assert.That(result.Settings.RcloneRemoteName, Is.EqualTo("sample_drive"));
             Assert.That(result.Settings.RcloneManifestPath, Is.EqualTo("PersonalLibrary/library.json"));
             Assert.That(result.Settings.RcloneContentRoot, Is.EqualTo("PersonalLibrary"));
             Assert.That(result.Settings.RcloneTimeoutSeconds, Is.EqualTo(75));
@@ -261,7 +261,7 @@ namespace PersonalCloudLibrarySource.Tests
             {
                 SettingsVersion = PersonalCloudLibrarySourceSettingsV3.CurrentSettingsVersion,
                 SourceProviderType = PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
-                RcloneRemoteName = "romcade_drive",
+                RcloneRemoteName = "sample_drive",
                 ShowTopPanelButton = false,
                 ShowSidebarDashboard = false,
                 OpenDashboardAtStartup = true,
@@ -274,7 +274,7 @@ namespace PersonalCloudLibrarySource.Tests
             Assert.That(v3Clone, Is.Not.Null);
             Assert.That(v3Clone, Is.Not.SameAs(settings));
             Assert.That(v3Clone.SettingsVersion, Is.EqualTo(PersonalCloudLibrarySourceSettingsV3.CurrentSettingsVersion));
-            Assert.That(v3Clone.RcloneRemoteName, Is.EqualTo("romcade_drive"));
+            Assert.That(v3Clone.RcloneRemoteName, Is.EqualTo("sample_drive"));
             Assert.That(v3Clone.ShowTopPanelButton, Is.False);
             Assert.That(v3Clone.ShowSidebarDashboard, Is.False);
             Assert.That(v3Clone.OpenDashboardAtStartup, Is.True);

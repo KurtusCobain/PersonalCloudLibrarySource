@@ -237,11 +237,14 @@ namespace PersonalCloudLibrarySource.Tests.Repository
                 StringAssert.Contains("docs/images/" + name, listing);
             }
 
-            foreach (var forbidden in new[] { "ROMcade_Master", "katie\\", "019f5d68-bcfb" })
-            {
-                Assert.That(liveText.IndexOf(forbidden, StringComparison.OrdinalIgnoreCase), Is.LessThan(0),
-                    "Private screenshot/demo text leaked: " + forbidden);
-            }
+            // Prevent accidental display of host-specific Windows or Unix home directories
+            // in user-facing documentation and demonstration text.
+            Assert.That(
+                Regex.IsMatch(liveText,
+                    @"(?i)(?:[a-z]:\\(?:users|documents and settings)\\[^\\\r\n]+\\|/home/[^/\s]+/)"),
+                Is.False,
+                "User-facing release content contains a host-specific home directory.");
+
         }
 
         [Test]

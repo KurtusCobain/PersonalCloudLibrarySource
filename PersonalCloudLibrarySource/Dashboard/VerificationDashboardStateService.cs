@@ -40,7 +40,9 @@ namespace PersonalCloudLibrarySource
 
             context.SourceAvailable = true;
             context.ManifestItemCount = Math.Max(0, report.TotalManifestItems);
-            context.CachedGameCount = Math.Max(0, report.CachedInstalledCount);
+            // CachedGameCount is computed from the current Playnite game database.
+            // A verification report is a point-in-time snapshot and must not
+            // overwrite it after a game is installed or uninstalled.
             return context;
         }
     }

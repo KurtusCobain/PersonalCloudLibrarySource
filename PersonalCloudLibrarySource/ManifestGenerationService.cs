@@ -65,7 +65,6 @@ namespace PersonalCloudLibrarySource
 
         private static readonly string[] DefaultExcludedFolders =
         {
-            "ROMcade_Data",
             "CloudLibrary",
             "MetadataCache",
             "ArtworkCache",

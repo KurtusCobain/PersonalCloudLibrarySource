@@ -35,7 +35,7 @@ namespace PersonalCloudLibrarySource.Tests.Dashboard
         }
 
         [Test]
-        public void Apply_SuccessfulManifestUsesFreshVerificationCounts()
+        public void Apply_SuccessfulManifestPreservesLiveCachedCount()
         {
             var context = new LibraryStatusContext
             {
@@ -55,7 +55,7 @@ namespace PersonalCloudLibrarySource.Tests.Dashboard
 
             Assert.That(result.SourceAvailable, Is.True);
             Assert.That(result.ManifestItemCount, Is.EqualTo(7));
-            Assert.That(result.CachedGameCount, Is.EqualTo(5));
+            Assert.That(result.CachedGameCount, Is.EqualTo(3), "An older report must not replace the live cached count.");
             Assert.That(result.WarningCount, Is.EqualTo(0));
         }
 
