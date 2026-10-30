@@ -144,6 +144,12 @@ namespace PersonalCloudLibrarySource
             }
             catch (Exception ex)
             {
+                // Do not leak partly resolved paths to state detection or UI.
+                result.Succeeded = false;
+                result.LaunchPath = string.Empty;
+                result.InstallDirectory = string.Empty;
+                result.DestinationFile = string.Empty;
+                result.DestinationDirectory = string.Empty;
                 result.Error = "Cache paths could not be resolved: " + ex.Message;
             }
             return result;
@@ -178,9 +184,12 @@ namespace PersonalCloudLibrarySource
         private static string ResolveCandidate(string candidate, string cacheRoot)
         {
             if (string.IsNullOrWhiteSpace(candidate)) return string.Empty;
-            if (Path.IsPathRooted(candidate)) return PathBoundary.Normalize(candidate);
-            if (string.IsNullOrWhiteSpace(cacheRoot)) throw new InvalidOperationException("LocalCacheFolder is required for relative cache paths.");
-            var resolved = Path.GetFullPath(Path.Combine(cacheRoot, candidate));
+            if (string.IsNullOrWhiteSpace(cacheRoot)) throw new InvalidOperationException("LocalCacheFolder is required for cache paths.");
+            // Legacy manifests may contain absolute paths *inside* the cache,
+            // but a user-provided absolute path must never escape it.
+            var resolved = Path.IsPathRooted(candidate)
+                ? PathBoundary.Normalize(candidate)
+                : Path.GetFullPath(Path.Combine(cacheRoot, candidate));
             if (!PathBoundary.IsContained(cacheRoot, resolved)) throw new InvalidOperationException("Cache path escapes LocalCacheFolder.");
             return resolved;
         }

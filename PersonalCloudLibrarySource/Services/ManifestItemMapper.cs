@@ -32,6 +32,11 @@ namespace PersonalCloudLibrarySource
                 }
 
                 var paths = new CachePathResolver().Resolve(item, settings);
+                if (!paths.Succeeded)
+                {
+                    diagnostics?.Add("itemId=" + item.Id + "; skipReason=unsafe or invalid cache path: " + paths.Error);
+                    continue;
+                }
                 var state = new LibraryItemStateResolver().Resolve(
                     item,
                     paths.LaunchPath,

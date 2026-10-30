@@ -29,6 +29,12 @@ namespace PersonalCloudLibrarySource
             }
 
             result.Paths = new CachePathResolver().Resolve(item, settings);
+            if (!result.Paths.Succeeded)
+            {
+                result.InstallRefusalReason = result.Paths.Error;
+                result.UninstallRefusalReason = result.Paths.Error;
+                return result;
+            }
             result.State = new LibraryItemStateResolver().Resolve(
                 item,
                 result.Paths.LaunchPath,
