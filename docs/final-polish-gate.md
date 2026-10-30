@@ -14,7 +14,7 @@ First-run experience should read: **Choose a source → preview results → conf
 
 | Area | Acceptance | Primary code |
 |---|---|---|
-| Preview lifecycle | Safe return/back/redo/cancel; bounded reading; no source writes; skipped reasons visible; no stale UI callbacks | `Setup/SetupWizardView.xaml.cs`, `ManifestGenerationService.cs` |
+| Preview and Finish lifecycle | Safe return/back/redo/cancel; bounded reading; no preview source writes; skipped reasons visible; finishing local/NAS setup does not scan on the UI thread, and cancellation does not save settings | `Setup/SetupWizardView.xaml.cs`, `ManifestGenerationService.cs` |
 | Install lifecycle | Playnite controller returns promptly; exactly one terminal signal; no stale Game mutation after disposal, shutdown or cancel; cancellation race covered | `RcloneInstallController.cs`, `Transfers/TransferQueueService.cs` |
 | Source health | Disconnected NAS/removable/rclone source gives understandable error; never treats it as an intentionally empty library or deletes cached games | `Services/ManifestLoader.cs`, import/report services |
 | Filesystem safety | No traversal, reparse escape, source overwrite, cache-root deletion, or partial ownership confusion; outside-cache deletion stays high-risk and off by default | `Services/PathResolvers.cs`, `Services/SafeCacheDeletionPolicy.cs`, transfer adapters |
