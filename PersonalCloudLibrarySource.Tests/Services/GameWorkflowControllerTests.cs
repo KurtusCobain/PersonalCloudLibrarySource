@@ -322,6 +322,40 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Install_PreexistingCacheFile_DoesNotCreateOwnershipReceipt()
+        {
+            var source = CreateFile(Path.Combine(root, "original", "play.exe"));
+            var existing = CreateFile(Path.Combine(cache, "already", "play.exe"));
+            File.WriteAllText(existing, "personal content");
+            var game = Game("already");
+            game.IsInstalled = false;
+            var settings = FileOnlySettings();
+            settings.SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType;
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "already", Title = "Existing File",
+                SourcePath = source, CachePath = "already/play.exe"
+            };
+            var receipts = new CacheOwnershipReceiptStore(Path.Combine(root, "ownership-receipts"));
+            var sink = new RecordingSink();
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager,
+                new CloudTransferExecutor(manager, new LocalTransferAdapter())))
+            {
+                var controller = new RcloneInstallController(null, game, item, settings, queue,
+                    new GameWorkflowNotificationService(sink), receipts);
+                controller.Install(new InstallActionArgs());
+                Assert.That(SpinWait.SpinUntil(() => manager.Jobs.Count > 0 &&
+                    manager.Jobs[0].IsTerminal, 5000), Is.True);
+                Assert.That(manager.Jobs[0].State, Is.EqualTo(CloudTransferState.Failed));
+                CacheOwnershipReceipt receipt;
+                Assert.That(receipts.TryRead(cache, item.Id, out receipt), Is.False);
+                Assert.That(File.ReadAllText(existing), Is.EqualTo("personal content"));
+                controller.Dispose();
+            }
+        }
+
+        [Test]
         public void Install_DisposedController_CancelsActiveTransferAndDoesNotMarkInstalled()
         {
             var source = CreateFile(Path.Combine(root, "original", "play.exe"));
