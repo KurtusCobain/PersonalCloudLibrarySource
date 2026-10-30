@@ -38,3 +38,8 @@ The candidate now includes a create-only JSON receipt store keyed by cache root 
 ### Receipt issuance on successful transfers (draft)
 
 The draft install controller now attempts to write a create-only receipt to the plugin user-data `ownership-receipts` directory after a successful local or rclone transfer. Failed and cancelled transfers do not issue a receipt. Storage refuses to overlap the cache root. Receipt-write errors are logged without making the successfully copied game unusable. **Receipts are still informational**: they do not authenticate filesystem contents, prove an entire tree remains unchanged, or grant automatic deletion. Recursive directory uninstall remains blocked until a verified deletion contract and migration tests are implemented. The host integration needs installed-Windows testing.
+
+
+### Read-only cache inventory (draft)
+
+A bounded SHA-256 directory inventory scanner is available for testing provenance. It hashes relative paths and file contents, rejects linked entries, and limits enumeration to 150,000 entries and individual file sizes to 4 GiB. It does not yet attach fingerprints to issued receipts, has no cancellation support, and does not eliminate time-of-check/time-of-use races. **It is not a deletion authorization mechanism.** Recursive directory uninstall remains disabled; a future revision needs safe snapshot issuance, verified ownership and host acceptance before release.
