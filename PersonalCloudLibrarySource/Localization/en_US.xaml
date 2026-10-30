@@ -56,7 +56,7 @@
     <sys:String x:Key="LOCPLSSetupCacheTitle">Choose cache and install behavior</sys:String>
     <sys:String x:Key="LOCPLSSetupAllowDownloads">Download or copy games when Install is selected</sys:String>
     <sys:String x:Key="LOCPLSSetupCatalogOnly">Leave this off for catalog-only mode.</sys:String>
-    <sys:String x:Key="LOCPLSSetupCacheWorkflow">Install copies or downloads selected games into this PC's cache folder. Play uses the local copy. Removing a cached copy keeps your original source files and catalog entry. Only approved cache locations can be removed.</sys:String>
+    <sys:String x:Key="LOCPLSSetupCacheWorkflow">Install copies or downloads selected games into this PC's cache folder. Play uses the local copy. By default, removing a cached copy preserves your original source files and catalog entry. Keep advanced outside-cache removal disabled for ordinary use.</sys:String>
     <sys:String x:Key="LOCPLSSetupMissingFiles">Mark games uninstalled when cached files are missing</sys:String>
     <sys:String x:Key="LOCPLSSetupReviewTitle">Review your setup</sys:String>
     <sys:String x:Key="LOCPLSSetupReviewDescription">Confirm the source and cache settings before saving them.</sys:String>
@@ -150,7 +150,7 @@
     <sys:String x:Key="LOCPLSSettingsRcloneTimeout">rclone timeout in seconds (5–300)</sys:String>
     <sys:String x:Key="LOCPLSSettingsDangerousRemoval">Dangerous file removal option</sys:String>
     <sys:String x:Key="LOCPLSSettingsAllowOutsideCache">Allow uninstall outside the managed cache folder</sys:String>
-    <sys:String x:Key="LOCPLSSettingsOutsideCacheWarning">Keep this disabled unless you fully understand the configured paths. Normal uninstall only removes plugin-managed cached copies and never removes cloud, NAS, or source-library files.</sys:String>
+    <sys:String x:Key="LOCPLSSettingsOutsideCacheWarning">Advanced and risky: enabling this allows deletion outside the managed cache. PCLS now refuses known source-item paths and library roots, but cannot guarantee unrelated external files are safe. Keep it disabled unless you understand the exact deletion target.</sys:String>
     <sys:String x:Key="LOCPLSSettingsLegalBoundary">Legal-use boundary</sys:String>
     <sys:String x:Key="LOCPLSSettingsLegalDescription">This plugin does not provide games, ROMs, BIOS files, cracks, keys, artwork, storefront access, or download sources. It only imports and manages entries from manifests and storage locations supplied by the user.</sys:String>
 

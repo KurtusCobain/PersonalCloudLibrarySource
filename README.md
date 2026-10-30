@@ -88,7 +88,7 @@ Detailed guides:
 
 Manifest entries import as normal Playnite games with stable IDs. A valid cached launch path is shown as installed and playable; a missing cache path can remain visible as uninstalled. Eligible entries can be copied or downloaded to the cache. Transfers are queued, can be cancelled or retried, and verify destination existence/size before completion.
 
-Cache deletion is deliberately narrow. Uninstall removes only an authorized cached file or install folder. It refuses filesystem roots, the cache root itself, paths outside the configured cache by default, and unsafe reparse-point paths. It never deletes the manifest, local source library, or rclone remote content.
+Cache deletion is deliberately narrow. With **default settings**, Uninstall removes only an authorized cached file or install folder. It refuses filesystem roots, the cache root itself, paths outside the configured cache, and unsafe reparse-point paths. A separate, advanced **allow outside-cache uninstall** setting widens permitted deletion destinations and should stay disabled for normal use. Even with that setting, the candidate refuses known local source-item paths and library roots; however, it cannot guarantee the safety of every unrelated external path. Rclone remote content is never deleted by this uninstall action. Do not direct external-cache uninstall at your source storage.
 
 ## Desktop and Fullscreen
 

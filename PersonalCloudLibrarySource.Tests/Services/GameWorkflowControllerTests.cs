@@ -63,6 +63,71 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Uninstall_ExplicitOutsideCachePermission_NeverDeletesOriginalLocalSource()
+        {
+            var source = CreateFile(Path.Combine(root, "original", "play.exe"));
+            var sink = new RecordingSink();
+            var settings = FileOnlySettings();
+            settings.AllowUninstallOutsideCacheFolder = true;
+            settings.SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType;
+            var deleted = false;
+            var executor = new SafeCacheDeletionExecutor(
+                new SafeCacheDeletionPolicy(),
+                ignored => deleted = true,
+                ignored => deleted = true);
+            var controller = CreateUninstallController(source, settings, sink, executor, source);
+
+            controller.Uninstall(new UninstallActionArgs());
+
+            Assert.That(File.Exists(source), Is.True);
+            Assert.That(deleted, Is.False);
+            Assert.That(sink.Messages[0].Text, Does.Contain("source item"));
+        }
+
+        [Test]
+        public void Uninstall_ExplicitOutsideCachePermission_RefusesAncestorOfOriginalSource()
+        {
+            var source = CreateFile(Path.Combine(root, "original", "sub", "play.exe"));
+            var targetFolder = Path.Combine(root, "original");
+            var sink = new RecordingSink();
+            var settings = FileOnlySettings();
+            settings.AllowUninstallOutsideCacheFolder = true;
+            var deleted = false;
+            var executor = new SafeCacheDeletionExecutor(
+                new SafeCacheDeletionPolicy(),
+                ignored => deleted = true,
+                ignored => deleted = true);
+            var controller = CreateUninstallController(targetFolder, settings, sink, executor, source);
+            settings.UninstallBehavior = PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior;
+
+            controller.Uninstall(new UninstallActionArgs());
+
+            Assert.That(File.Exists(source), Is.True);
+            Assert.That(deleted, Is.False);
+        }
+
+        [Test]
+        public void Uninstall_OutsideCachePermission_UnknownLocalSourceFailsClosed()
+        {
+            var external = CreateFile(Path.Combine(root, "external", "play.exe"));
+            var sink = new RecordingSink();
+            var settings = FileOnlySettings();
+            settings.AllowUninstallOutsideCacheFolder = true;
+            var deleted = false;
+            var executor = new SafeCacheDeletionExecutor(
+                new SafeCacheDeletionPolicy(),
+                ignored => deleted = true,
+                ignored => deleted = true);
+            var controller = CreateUninstallController(external, settings, sink, executor, string.Empty);
+
+            controller.Uninstall(new UninstallActionArgs());
+
+            Assert.That(File.Exists(external), Is.True);
+            Assert.That(deleted, Is.False);
+            Assert.That(sink.Messages[0].Text, Does.Contain("cannot verify"));
+        }
+
+        [Test]
         public void Uninstall_AskEachTime_FailsClosedWithoutDeleteOrDesktopDialog()
         {
             var launch = CreateFile(Path.Combine(cache, "game", "play.exe"));
@@ -124,14 +189,15 @@ namespace PersonalCloudLibrarySource.Tests.Services
             string launch,
             PersonalCloudLibrarySourceSettingsV3 settings,
             RecordingSink sink,
-            SafeCacheDeletionExecutor executor = null)
+            SafeCacheDeletionExecutor executor = null,
+            string sourcePath = "source.exe")
         {
             var item = new PersonalCloudLibraryItem
             {
                 Id = "game",
                 Title = "Game",
                 CachePath = launch,
-                SourcePath = "source.exe"
+                SourcePath = sourcePath
             };
             return new PersonalCloudLibraryUninstallController(
                 null,

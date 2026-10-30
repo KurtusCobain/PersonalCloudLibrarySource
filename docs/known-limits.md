@@ -12,6 +12,7 @@ These limits apply to the 1.0 release candidate while the installed package rema
 - Recent dashboard activity is an in-memory, bounded list and is not a persistent audit log.
 - Verification reports and diagnostics are support aids, not backups of source content.
 - Existing absolute paths may be catalogued, but new installs must remain **inside** the configured local cache and cannot target the cache root. Enabling outside-cache uninstall does not authorize outside-cache installs or override root/reparse-point safety checks.
+- Outside-cache uninstall is an advanced opt-in that may delete external files. Known local source items and the LocalFolder source root are explicitly protected by the candidate, but unrelated external paths are not automatically recognizable as source files. Keep the option off for normal use and verify any external deletion target before enabling.
 - The candidate rejects local manifests exceeding 32 MiB, parsed manifests exceeding 32 million characters, and catalogs exceeding 100,000 items.
 - The wizard's Review source step confirms configuration only; full detected/skipped game preview remains a usability improvement under development.
 - Installed provider, upgrade, package, high-DPI, and Fullscreen rows remain part of release qualification.

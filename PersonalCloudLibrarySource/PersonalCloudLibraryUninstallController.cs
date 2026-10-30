@@ -54,6 +54,8 @@ namespace PersonalCloudLibrarySource
             var requestedTargetPath = ResolveTargetPath(behavior, launchPath, installDirectory);
             string refusalReason;
             var targetPath = PersonalCloudLibrarySource.ResolveSafeUninstallTarget(settings, requestedTargetPath, out refusalReason);
+            if (string.IsNullOrWhiteSpace(refusalReason))
+                refusalReason = GetLocalSourceProtectionRefusal(targetPath);
             var insideCache = PersonalCloudLibrarySource.IsPathInsideCacheFolder(targetPath, settings.LocalCacheFolder);
 
             logger.Info(
@@ -120,6 +122,40 @@ namespace PersonalCloudLibrarySource
                     item.Title,
                     ex.Message));
             }
+        }
+
+        // Even the explicit outside-cache option must never authorize deletion
+        // of the source item, an ancestor of it, or the managed local library root.
+        private string GetLocalSourceProtectionRefusal(string targetPath)
+        {
+            if (string.IsNullOrWhiteSpace(targetPath))
+                return "uninstall target could not be verified";
+
+            var provider = PersonalCloudLibrarySource.GetProviderType(settings);
+            if (string.Equals(provider, PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
+                StringComparison.OrdinalIgnoreCase))
+                return string.Empty;
+
+            var itemSource = PersonalCloudLibrarySource.GetItemSourcePath(item);
+            var resolved = new SourcePathResolver().ResolveLocal(settings, itemSource);
+            if (!resolved.Succeeded)
+            {
+                return settings.AllowUninstallOutsideCacheFolder &&
+                       !PathBoundary.IsContained(settings.LocalCacheFolder, targetPath)
+                    ? "cannot verify the original local source path for outside-cache uninstall"
+                    : string.Empty;
+            }
+
+            if (PathBoundary.IsContained(resolved.Path, targetPath) ||
+                PathBoundary.IsContained(targetPath, resolved.Path))
+                return "uninstall target overlaps the original source item";
+
+            if (string.Equals(provider, PersonalCloudLibrarySourceSettings.LocalFolderProviderType,
+                StringComparison.OrdinalIgnoreCase) &&
+                PathBoundary.IsContained(settings.LocalLibraryRoot, targetPath))
+                return "uninstall target is within the original library source folder";
+
+            return string.Empty;
         }
 
         private string ChooseUninstallBehavior()
