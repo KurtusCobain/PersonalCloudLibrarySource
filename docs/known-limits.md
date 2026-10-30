@@ -43,3 +43,8 @@ The draft install controller now attempts to write a create-only receipt to the 
 ### Read-only cache inventory (draft)
 
 A bounded SHA-256 directory inventory scanner is available for testing provenance. It hashes relative paths and file contents, rejects linked entries, and limits enumeration to 150,000 entries and individual file sizes to 4 GiB. It does not yet attach fingerprints to issued receipts, has no cancellation support, and does not eliminate time-of-check/time-of-use races. **It is not a deletion authorization mechanism.** Recursive directory uninstall remains disabled; a future revision needs safe snapshot issuance, verified ownership and host acceptance before release.
+
+
+### Versioned directory inventory receipts (draft)
+
+After a successful directory transfer, PCLS now attempts a version 2 receipt containing the SHA-256 tree inventory. This scan runs off the Playnite UI thread; errors leave the copied game usable but do not establish inventory provenance. Existing version 1 receipts remain readable but cannot pass the new inventory comparison. A read-only comparison detects ordinary added, removed or changed files and returns no authorization to delete. Scans are currently bounded but may require substantial disk I/O, and TOCTOU, Windows links and identity/permission enforcement still require further review and installed-host testing. **All recursive directory deletion remains disabled.**
