@@ -36,7 +36,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
                 var result = new GameWorkflowPolicyService().Evaluate(item, settings);
 
                 Assert.That(result.CanInstall, Is.False);
-                Assert.That(result.InstallRefusalReason, Does.Contain("inside LocalCacheFolder"));
+                Assert.That(result.InstallRefusalReason, Does.Contain("escapes LocalCacheFolder"));
             }
             finally
             {
@@ -103,7 +103,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
             var result = new GameWorkflowPolicyService().Evaluate(item, settings);
 
             Assert.That(result.CanUninstall, Is.False);
-            Assert.That(result.UninstallRefusalReason, Does.Contain("outside"));
+            Assert.That(result.UninstallRefusalReason, Does.Contain("escapes LocalCacheFolder"));
         }
 
         [Test]

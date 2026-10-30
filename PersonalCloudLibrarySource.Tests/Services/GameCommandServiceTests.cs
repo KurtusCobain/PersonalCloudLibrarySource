@@ -137,9 +137,9 @@ namespace PersonalCloudLibrarySource.Tests.Services
 
             var target = new GameCommandService().ResolveTargets(new[] { game }, new[] { item }, settings, pluginId)[0];
 
-            Assert.That(target.PolicyContext.HasCachedPath, Is.True);
+            Assert.That(target.PolicyContext.HasCachedPath, Is.False);
             Assert.That(target.PolicyContext.CanRemoveCachedCopy, Is.False);
-            Assert.That(target.UninstallRefusalReason, Does.Contain("outside LocalCacheFolder"));
+            Assert.That(target.UninstallRefusalReason, Does.Contain("escapes LocalCacheFolder"));
         }
 
         [TestCase(false, true)]
