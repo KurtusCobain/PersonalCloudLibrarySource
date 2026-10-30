@@ -69,6 +69,20 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(lastTotal, Is.EqualTo(new FileInfo(source).Length));
         }
 
+        [TestCase(FileAttributes.Directory, true)]
+        [TestCase(FileAttributes.Normal, true)]
+        [TestCase(FileAttributes.Directory | FileAttributes.ReparsePoint, false)]
+        [TestCase(FileAttributes.ReparsePoint, false)]
+        public void CopyDirectory_RejectsJunctionsAndLinkedSourceEntries(
+            FileAttributes attributes, bool allowed)
+        {
+            var method = typeof(LocalTransferAdapter).GetMethod(
+                "IsSafeCopyEntry",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.That(method, Is.Not.Null);
+            Assert.That((bool)method.Invoke(null, new object[] { attributes }), Is.EqualTo(allowed));
+        }
+
         [Test]
         public void CopyDirectory_PreservesNestedStructureAndRemovesPartialDirectory()
         {

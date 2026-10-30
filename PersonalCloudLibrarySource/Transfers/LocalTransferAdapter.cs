@@ -181,8 +181,11 @@ namespace PersonalCloudLibrarySource
 
                 var sourceRoot = Path.GetFullPath(sourceDirectory)
                     .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                var directories = Directory.GetDirectories(sourceRoot, "*", SearchOption.AllDirectories);
-                var files = Directory.GetFiles(sourceRoot, "*", SearchOption.AllDirectories);
+                // Never recursively follow Windows junctions/symlinks into a source
+                // outside the selected library. Enumerate top-down and reject links.
+                List<string> directories;
+                List<string> files;
+                CollectSafeSourceTree(sourceRoot, cancellationToken, out directories, out files);
                 var totalBytes = files.Sum(file => new FileInfo(file).Length);
                 var spaceError = CheckDiskSpace(normalizedDestination, totalBytes);
                 if (!string.IsNullOrWhiteSpace(spaceError))
@@ -240,6 +243,52 @@ namespace PersonalCloudLibrarySource
                 DeleteDirectoryIfExists(partialDirectory);
                 return CloudTransferExecutionResult.Failure(ex.Message, ex);
             }
+        }
+
+        // Directory.GetFiles(..., AllDirectories) may traverse junctions and
+        // symbolic links. A user-selected directory must not implicitly pull
+        // arbitrary content from outside the source tree.
+        private static void CollectSafeSourceTree(
+            string root, CancellationToken token,
+            out List<string> directories, out List<string> files)
+        {
+            if (!IsSafeCopyEntry(File.GetAttributes(root)))
+                throw new IOException("Source library folder is a link or junction.");
+
+            directories = new List<string>();
+            files = new List<string>();
+            var pending = new Stack<string>();
+            pending.Push(root);
+            while (pending.Count > 0)
+            {
+                token.ThrowIfCancellationRequested();
+                var current = pending.Pop();
+                foreach (var directory in Directory.GetDirectories(current, "*", SearchOption.TopDirectoryOnly))
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (!IsSafeCopyEntry(File.GetAttributes(directory)))
+                        throw new IOException("Source directory contains a link or junction: " + directory);
+                    if (!PathBoundary.IsContained(root, directory))
+                        throw new IOException("Source directory escapes the chosen library folder.");
+                    directories.Add(directory);
+                    pending.Push(directory);
+                }
+
+                foreach (var file in Directory.GetFiles(current, "*", SearchOption.TopDirectoryOnly))
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (!IsSafeCopyEntry(File.GetAttributes(file)))
+                        throw new IOException("Source directory contains a linked file: " + file);
+                    if (!PathBoundary.IsContained(root, file))
+                        throw new IOException("Source file escapes the chosen library folder.");
+                    files.Add(file);
+                }
+            }
+        }
+
+        internal static bool IsSafeCopyEntry(FileAttributes attributes)
+        {
+            return (attributes & FileAttributes.ReparsePoint) == 0;
         }
 
         // Best-effort local destination preflight. When Windows cannot report free
@@ -349,6 +398,8 @@ namespace PersonalCloudLibrarySource
         {
             if (!string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
             {
+                if (!IsSafeCopyEntry(File.GetAttributes(path)))
+                    throw new IOException("Refusing to recursively delete a linked partial directory.");
                 Directory.Delete(path, true);
             }
         }
