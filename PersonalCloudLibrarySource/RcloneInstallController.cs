@@ -105,6 +105,25 @@ namespace PersonalCloudLibrarySource
                 // Never synchronously wait on Playnite's calling (UI) thread.
                 var result = await transferQueue.GetCompletion(jobId).ConfigureAwait(false);
                 if (disposed) return;
+                // Hash directory transfers away from Playnite's UI thread.
+                // Failed inventory issuance never converts a failed transfer to
+                // success or grants deletion authority.
+                if (result.Succeeded && ownershipReceipts != null &&
+                    string.Equals(sourceType, "directory", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        var destination = PersonalCloudLibrarySource.ResolveDownloadDestinationFolder(
+                            item, settings, launchPath);
+                        await Task.Run(() => ownershipReceipts.RecordCompletedWithInventory(
+                            settings.LocalCacheFolder, item.Id, destination)).ConfigureAwait(false);
+                    }
+                    catch (Exception receiptError)
+                    {
+                        logger.Warn(receiptError, "PCLS could not record directory inventory receipt.");
+                    }
+                }
+                if (disposed) return;
                 uiDispatcher.Invoke(() =>
                 {
                     if (disposed) return;
@@ -203,7 +222,8 @@ namespace PersonalCloudLibrarySource
             // A successful queue result follows the adapters' no-overwrite staging
             // and final move. Receipts are issued only for that terminal success,
             // never while merely scanning a pre-existing legacy cache.
-            if (ownershipReceipts != null)
+            if (ownershipReceipts != null &&
+                !string.Equals(sourceType, "directory", StringComparison.OrdinalIgnoreCase))
             {
                 try
                 {
