@@ -58,3 +58,8 @@ The SHA-256 scanner now accepts an optional cancellation token and checks it bet
 ### Controller disposal cancellation (draft)
 
 Disposing the install controller now signals cancellation to directory-inventory hashing and checks cancellation before publishing a new V2 receipt. This prevents a pre-cancelled or cooperatively cancelled scan from creating ownership claims. It does **not** roll back an already committed transfer, interrupt a blocking filesystem read immediately, or guarantee that cancellation wins a race after receipt publication. No directory-delete authorization has been enabled. Installed Windows Playnite lifecycle acceptance is still required.
+
+
+### Existing-cache ownership non-adoption regression (draft)
+
+A controller-level regression checks that a local install targeting a pre-existing cached file fails without overwriting its bytes or issuing an ownership receipt. The transfer adapters' no-overwrite staging behavior remains the foundation; simply finding content on disk never claims ownership. A passing synthetic regression does not establish that Windows host races, rclone destinations or filesystems are fully safe. Recursive directory uninstall remains disabled.
