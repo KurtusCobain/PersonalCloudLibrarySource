@@ -3,6 +3,7 @@ using Playnite.SDK.Models;
 using Playnite.SDK.Plugins;
 using System;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace PersonalCloudLibrarySource
 {
@@ -16,6 +17,7 @@ namespace PersonalCloudLibrarySource
         private readonly GameWorkflowNotificationService workflowNotifications;
         private readonly IImportUiDispatcher uiDispatcher;
         private readonly CacheOwnershipReceiptStore ownershipReceipts;
+        private readonly CancellationTokenSource inventoryCancellation = new CancellationTokenSource();
         private Guid activeJobId;
         private volatile bool disposed;
         private readonly bool hasPlayniteHost;
@@ -116,7 +118,12 @@ namespace PersonalCloudLibrarySource
                         var destination = PersonalCloudLibrarySource.ResolveDownloadDestinationFolder(
                             item, settings, launchPath);
                         await Task.Run(() => ownershipReceipts.RecordCompletedWithInventory(
-                            settings.LocalCacheFolder, item.Id, destination)).ConfigureAwait(false);
+                            settings.LocalCacheFolder, item.Id, destination,
+                            inventoryCancellation.Token)).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        logger.Info("PCLS directory inventory receipt cancelled during controller disposal.");
                     }
                     catch (Exception receiptError)
                     {
@@ -274,6 +281,7 @@ namespace PersonalCloudLibrarySource
         public override void Dispose()
         {
             disposed = true;
+            inventoryCancellation.Cancel();
             if (activeJobId != Guid.Empty)
             {
                 try { transferQueue.Cancel(activeJobId); }
