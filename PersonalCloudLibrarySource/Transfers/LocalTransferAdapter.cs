@@ -172,6 +172,16 @@ namespace PersonalCloudLibrarySource
                     return CloudTransferExecutionResult.Failure("Destination already exists: " + normalizedDestination);
                 }
 
+                // Never copy a directory into itself (or into one of its children).
+                // Otherwise enumeration can absorb a previous cache and copying
+                // can recursively consume the source library or disk space.
+                if (PathBoundary.IsContained(sourceDirectory, normalizedDestination) ||
+                    PathBoundary.IsContained(normalizedDestination, sourceDirectory))
+                {
+                    return CloudTransferExecutionResult.Failure(
+                        "Source directory overlaps the cache destination; choose a separate cache location.");
+                }
+
                 DeleteDirectoryIfExists(partialDirectory);
                 var destinationParent = Path.GetDirectoryName(normalizedDestination);
                 if (!string.IsNullOrWhiteSpace(destinationParent))

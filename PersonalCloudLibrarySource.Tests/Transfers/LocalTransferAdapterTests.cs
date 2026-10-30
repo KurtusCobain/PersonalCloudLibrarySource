@@ -84,6 +84,25 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void CopyDirectory_CacheInsideSource_RefusesWithoutCreatingPartialOrCopying()
+        {
+            var source = Path.Combine(testRoot, "game-folder");
+            Directory.CreateDirectory(source);
+            var original = Path.Combine(source, "play.exe");
+            File.WriteAllText(original, "original fixture");
+            var destination = Path.Combine(source, "cache", "game-folder");
+
+            var result = new LocalTransferAdapter().CopyDirectory(
+                source, destination, CancellationToken.None, null);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Message, Does.Contain("overlaps"));
+            Assert.That(File.ReadAllText(original), Is.EqualTo("original fixture"));
+            Assert.That(Directory.Exists(destination), Is.False);
+            Assert.That(Directory.Exists(destination + ".pcls-partial"), Is.False);
+        }
+
+        [Test]
         public void CopyDirectory_PreservesNestedStructureAndRemovesPartialDirectory()
         {
             var source = Path.Combine(testRoot, "source-folder");
