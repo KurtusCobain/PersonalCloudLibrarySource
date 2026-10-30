@@ -111,6 +111,34 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void InventoryReceiptDetectsAddedAndChangedFiles()
+        {
+            File.WriteAllText(Path.Combine(game, "play.exe"), "original");
+            var store = new CacheOwnershipReceiptStore(receipts);
+            store.RecordCompletedWithInventory(cache, "game-id", game);
+            CacheOwnershipReceipt receipt;
+            Assert.That(store.TryRead(cache, "game-id", out receipt), Is.True);
+            Assert.That(receipt.Version, Is.EqualTo(2));
+            bool matches;
+            Assert.That(store.TryCompareInventory(cache, "game-id", game, out matches), Is.True);
+            Assert.That(matches, Is.True);
+            File.WriteAllText(Path.Combine(game, "personal.txt"), "keep");
+            Assert.That(store.TryCompareInventory(cache, "game-id", game, out matches), Is.True);
+            Assert.That(matches, Is.False);
+            Assert.That(File.Exists(Path.Combine(game, "personal.txt")), Is.True);
+        }
+
+        [Test]
+        public void V1ReceiptCannotClaimInventoriedOwnership()
+        {
+            var store = new CacheOwnershipReceiptStore(receipts);
+            store.RecordCompleted(cache, "game-id", game);
+            bool matches;
+            Assert.That(store.TryCompareInventory(cache, "game-id", game, out matches), Is.False);
+            Assert.That(matches, Is.False);
+        }
+
+        [Test]
         public void CorruptReceiptFailsClosed()
         {
             var store = new CacheOwnershipReceiptStore(receipts);
