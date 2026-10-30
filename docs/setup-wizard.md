@@ -4,6 +4,12 @@ The setup wizard is a Playnite Desktop management surface. Fullscreen users shou
 
 ![Setup wizard source selection](images/pcls-setup-source.png)
 
+## Dedicated wizard versus advanced settings
+
+The five-step desktop wizard selects and reviews a source location; its **Review source** step is not an inventory scan. For a Local Folder or NAS choice without a supplied manifest, completing the wizard generates the catalog. Inspect detected/skipped counts with **Verify setup / generate report** in PCLS settings. Then run Playnite's **Update Game Library**. The review-and-verify workflow below is performed through the settings screen, not entirely within the wizard.
+
+Cloud/rclone mode requires an installed, configured rclone remote first. A normal synced folder or NAS share does not require rclone.
+
 ## Goal
 
 A normal Playnite user should be able to:

@@ -36,7 +36,7 @@
 
     <sys:String x:Key="LOCPLSSetupWizardTitle">Personal Cloud Library Setup</sys:String>
     <sys:String x:Key="LOCPLSSetupChooseSourceTitle">Choose where your library is stored</sys:String>
-    <sys:String x:Key="LOCPLSSetupChooseSourceDescription">Select the option that best matches where your game files or manifest are stored.</sys:String>
+    <sys:String x:Key="LOCPLSSetupChooseSourceDescription">For a folder on this PC, external drive, or NAS, select its location and PCLS will build a catalog. Choose an existing manifest only if you already have a JSON catalog. Cloud accounts require a separately configured rclone remote.</sys:String>
     <sys:String x:Key="LOCPLSSetupExistingManifest">I already have a manifest file</sys:String>
     <sys:String x:Key="LOCPLSSetupLocalFolder">On this computer or an external drive</sys:String>
     <sys:String x:Key="LOCPLSSetupNetworkFolder">On a NAS or network location</sys:String>
@@ -48,10 +48,11 @@
     <sys:String x:Key="LOCPLSSetupRcloneRemoteName">Configured remote name</sys:String>
     <sys:String x:Key="LOCPLSSetupRcloneManifestPath">Remote manifest path</sys:String>
     <sys:String x:Key="LOCPLSSetupRcloneContentRoot">Remote content root</sys:String>
-    <sys:String x:Key="LOCPLSSetupRcloneTimeout">Connection timeout in seconds</sys:String>
+    <sys:String x:Key="LOCPLSSetupRcloneTimeout">rclone timeout in seconds</sys:String>
+    <sys:String x:Key="LOCPLSSetupRclonePrerequisites">Advanced cloud setup: install rclone and configure your own remote first. If your cloud files are already synced to a folder, use the local-folder option instead. PCLS never asks for your cloud password.</sys:String>
     <sys:String x:Key="LOCPLSSetupBrowse">Browse</sys:String>
     <sys:String x:Key="LOCPLSSetupScanTitle">Review the selected source</sys:String>
-    <sys:String x:Key="LOCPLSSetupScanDescription">The selected source is ready. Finishing setup will use the chosen manifest or generate one from the selected folder before you update the Playnite library.</sys:String>
+    <sys:String x:Key="LOCPLSSetupScanDescription">This step reviews the source location; it does not scan or verify games yet. When you finish, PCLS will generate a catalog for a selected local or network folder (unless you supplied a manifest). Then run Verify Setup and Update Game Library in Playnite.</sys:String>
     <sys:String x:Key="LOCPLSSetupCacheTitle">Choose cache and install behavior</sys:String>
     <sys:String x:Key="LOCPLSSetupAllowDownloads">Download or copy games when Install is selected</sys:String>
     <sys:String x:Key="LOCPLSSetupCatalogOnly">Leave this off for catalog-only mode.</sys:String>

@@ -11,5 +11,7 @@ These limits apply to the 1.0 release candidate while the installed package rema
 - Automatic startup actions are bounded and report failures; PCLS does not auto-download an entire library.
 - Recent dashboard activity is an in-memory, bounded list and is not a persistent audit log.
 - Verification reports and diagnostics are support aids, not backups of source content.
-- Absolute cache paths outside the configured cache are refused by default. Enabling outside-cache uninstall does not override root or reparse-point safety checks.
+- Existing absolute paths may be catalogued, but new installs must remain **inside** the configured local cache and cannot target the cache root. Enabling outside-cache uninstall does not authorize outside-cache installs or override root/reparse-point safety checks.
+- The candidate rejects local manifests exceeding 32 MiB, parsed manifests exceeding 32 million characters, and catalogs exceeding 100,000 items.
+- The wizard's Review source step confirms configuration only; full detected/skipped game preview remains a usability improvement under development.
 - Installed provider, upgrade, package, high-DPI, and Fullscreen rows remain part of release qualification.
