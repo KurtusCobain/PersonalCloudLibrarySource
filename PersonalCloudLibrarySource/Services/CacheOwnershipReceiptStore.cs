@@ -92,15 +92,17 @@ namespace PersonalCloudLibrarySource
             string destination, out bool matches)
         {
             matches = false;
-            CacheOwnershipReceipt receipt;
-            if (!TryRead(cacheRoot, itemId, out receipt) ||
-                receipt.Version != 2 ||
-                string.IsNullOrWhiteSpace(receipt.InventoryFingerprint) ||
-                !string.Equals(PathBoundary.Normalize(destination),
-                    PathBoundary.Normalize(receipt.Destination), StringComparison.OrdinalIgnoreCase))
-                return false;
             try
             {
+                CacheOwnershipReceipt receipt;
+                if (!TryRead(cacheRoot, itemId, out receipt) ||
+                    receipt.Version != 2 ||
+                    string.IsNullOrWhiteSpace(receipt.InventoryFingerprint) ||
+                    string.IsNullOrWhiteSpace(destination) ||
+                    string.IsNullOrWhiteSpace(receipt.Destination) ||
+                    !string.Equals(PathBoundary.Normalize(destination),
+                        PathBoundary.Normalize(receipt.Destination), StringComparison.OrdinalIgnoreCase))
+                    return false;
                 var current = new CacheTreeInventoryScanner().Scan(cacheRoot, destination);
                 matches = current.FileCount == receipt.InventoryFileCount &&
                     current.DirectoryCount == receipt.InventoryDirectoryCount &&
