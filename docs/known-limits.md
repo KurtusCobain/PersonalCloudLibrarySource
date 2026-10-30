@@ -33,3 +33,8 @@ Draft builds no longer offer or perform automatic **recursive directory removal*
 ### Receipt store foundation (draft, not enforced)
 
 The candidate now includes a create-only JSON receipt store keyed by cache root and item ID. It rejects duplicate records and invalid/missing destinations, and reading fails closed on malformed data. **This is not yet wired to transfers, is not cryptographically authenticated, and cannot be used as deletion authorization.** The host must provide a stable receipt directory outside the cache and source roots; the transfer lifecycle must issue receipts only after a newly created destination commits; readers must validate destination and identity; and an actual deletion gate and migration/compatibility tests are still required. No existing cache is automatically adopted. Do not consider recursive removal safe or release-ready on the basis of this store.
+
+
+### Receipt issuance on successful transfers (draft)
+
+The draft install controller now attempts to write a create-only receipt to the plugin user-data `ownership-receipts` directory after a successful local or rclone transfer. Failed and cancelled transfers do not issue a receipt. Storage refuses to overlap the cache root. Receipt-write errors are logged without making the successfully copied game unusable. **Receipts are still informational**: they do not authenticate filesystem contents, prove an entire tree remains unchanged, or grant automatic deletion. Recursive directory uninstall remains blocked until a verified deletion contract and migration tests are implemented. The host integration needs installed-Windows testing.
