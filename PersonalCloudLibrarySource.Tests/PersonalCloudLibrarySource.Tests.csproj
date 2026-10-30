@@ -99,6 +99,7 @@
     <Compile Include="Transfers\CloudTransferQueueItemViewModelTests.cs" />
     <Compile Include="Transfers\LocalTransferAdapterTests.cs" />
     <Compile Include="Transfers\RcloneCommandBuilderTests.cs" />
+    <Compile Include="Transfers\RcloneManifestReaderBoundsTests.cs" />
     <Compile Include="Transfers\RcloneProgressParserTests.cs" />
     <Compile Include="Transfers\RcloneProcessRunnerTests.cs" />
     <Compile Include="Transfers\RcloneActivityTimeoutTests.cs" />

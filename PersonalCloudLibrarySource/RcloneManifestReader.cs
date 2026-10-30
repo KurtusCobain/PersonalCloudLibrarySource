@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Text;
+using System.Threading;
 
 namespace PersonalCloudLibrarySource
 {
@@ -36,6 +37,7 @@ namespace PersonalCloudLibrarySource
             {
                 var output = new StringBuilder();
                 var error = new StringBuilder();
+                var oversizedOutput = 0;
 
                 process.StartInfo = new ProcessStartInfo
                 {
@@ -49,17 +51,20 @@ namespace PersonalCloudLibrarySource
 
                 process.OutputDataReceived += (sender, args) =>
                 {
-                    if (args.Data != null)
+                    if (args.Data == null) return;
+                    lock (output)
                     {
-                        output.AppendLine(args.Data);
+                        if (!TryAppendLineWithinLimit(output, args.Data, ManifestParserValidator.MaxManifestCharacters))
+                            Interlocked.Exchange(ref oversizedOutput, 1);
                     }
                 };
 
                 process.ErrorDataReceived += (sender, args) =>
                 {
-                    if (args.Data != null)
+                    if (args.Data == null) return;
+                    lock (error)
                     {
-                        error.AppendLine(args.Data);
+                        TryAppendLineWithinLimit(error, args.Data, 4096);
                     }
                 };
 
@@ -75,20 +80,25 @@ namespace PersonalCloudLibrarySource
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
 
-                if (!process.WaitForExit(timeoutSeconds * 1000))
+                var timer = Stopwatch.StartNew();
+                while (!process.WaitForExit(200))
                 {
-                    try
+                    if (Volatile.Read(ref oversizedOutput) != 0)
                     {
-                        process.Kill();
-                    }
-                    catch
-                    {
+                        StopProcess(process);
+                        throw new InvalidOperationException("Rclone manifest exceeds the 32 million character limit.");
                     }
 
-                    throw new TimeoutException($"rclone manifest retrieval timed out after {timeoutSeconds} seconds.");
+                    if (timer.Elapsed.TotalSeconds > timeoutSeconds)
+                    {
+                        StopProcess(process);
+                        throw new TimeoutException($"rclone manifest retrieval timed out after {timeoutSeconds} seconds.");
+                    }
                 }
 
                 process.WaitForExit();
+                if (Volatile.Read(ref oversizedOutput) != 0)
+                    throw new InvalidOperationException("Rclone manifest exceeds the 32 million character limit.");
 
                 if (process.ExitCode != 0)
                 {
@@ -103,6 +113,31 @@ namespace PersonalCloudLibrarySource
                 }
 
                 return json;
+            }
+        }
+
+        internal static bool TryAppendLineWithinLimit(StringBuilder buffer, string line, int limit)
+        {
+            if (line == null) return true;
+            if (limit < 0 || line.Length > limit - buffer.Length - Environment.NewLine.Length)
+                return false;
+            buffer.AppendLine(line);
+            return true;
+        }
+
+        private static void StopProcess(Process process)
+        {
+            try
+            {
+                if (!process.HasExited)
+                {
+                    process.Kill();
+                    process.WaitForExit(5000);
+                }
+            }
+            catch
+            {
+                // Preserve the original size or timeout failure.
             }
         }
 
