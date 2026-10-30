@@ -69,6 +69,20 @@ namespace PersonalCloudLibrarySource
             }
         }
 
+        // Validate a receipt against the destination derived from the current
+        // manifest, not a caller-supplied receipt path. This remains informational:
+        // a matching receipt does not prove the directory contents are unchanged.
+        public CacheOwnershipAssessment AssessCurrentDestination(
+            string cacheRoot, string itemId, string expectedDestination)
+        {
+            var policy = new CacheOwnershipPolicy();
+            CacheOwnershipReceipt receipt;
+            if (!TryRead(cacheRoot, itemId, out receipt))
+                return policy.Assess(cacheRoot, expectedDestination, null, null, itemId);
+            return policy.Assess(cacheRoot, expectedDestination,
+                receipt.Destination, receipt.ItemId, itemId);
+        }
+
         public void RecordCompleted(string cacheRoot, string itemId, string destination)
         {
             if (PathBoundary.IsContained(cacheRoot, storeRoot) ||
