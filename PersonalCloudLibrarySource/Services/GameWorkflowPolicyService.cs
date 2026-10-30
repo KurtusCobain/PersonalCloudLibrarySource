@@ -105,6 +105,13 @@ namespace PersonalCloudLibrarySource
             {
                 result.UninstallRefusalReason = refusalReason;
             }
+            else if (!PersonalCloudLibrarySource.IsDirectoryItem(item) &&
+                !string.Equals(settings.UninstallBehavior,
+                    PersonalCloudLibrarySourceSettings.RemoveCachedFileOnlyUninstallBehavior,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                result.UninstallRefusalReason = "File-based items cannot authorize recursive folder removal.";
+            }
             else if (!File.Exists(result.UninstallTarget) && !Directory.Exists(result.UninstallTarget))
             {
                 result.UninstallRefusalReason = "The authorized cache target is unavailable.";
