@@ -18,3 +18,8 @@ These limits apply to the 1.0 release candidate while the installed package rema
 - The wizard now offers a read-only preview for local folders, NAS locations, and local manifest files. Completing it generates a local-folder manifest on a background worker with cancellation checked before settings persistence; a disconnected/hung filesystem operation may not stop instantaneously. Filesystem previews stop at 10,000 entries, can be cancelled, and do not replace actual import/verification. Cloud/rclone requires a separately configured remote and later verification.
 - The install controller now observes completion asynchronously to keep the action responsive; **real Playnite Desktop/Fullscreen, cancellation and disposal acceptance remains mandatory** before release.
 - Installed provider, upgrade, package, high-DPI, and Fullscreen rows remain part of release qualification.
+
+
+### Draft ownership hardening (October 30, 2026; not yet released)
+
+File-type manifest entries authorize only their own cached file, not the containing directory. If a file item is configured for folder removal (including legacy Ask each time migration), draft builds refuse the uninstall action rather than recursively deleting possible unrelated files. Choose the file-only uninstall mode for those entries. Directory-type entries still require a separately verified ownership strategy before unattended recursive deletion can be considered safe. A classification-only CacheOwnershipPolicy exists but is not a persisted receipt ledger and does **not** authorize deletion; no legacy cache has been automatically adopted. The draft remains blocked pending full ownership persistence/migration implementation and native Playnite Windows acceptance.
