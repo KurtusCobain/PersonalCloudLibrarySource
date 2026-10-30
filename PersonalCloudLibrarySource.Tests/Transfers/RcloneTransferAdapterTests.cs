@@ -349,7 +349,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         private static bool TryCreateJunction(string junction, string destination)
         {
             using (var process = Process.Start(new ProcessStartInfo(
-                "cmd.exe", "/c mklink /J \\"" + junction + "\\" \\"" + destination + "\\"")
+                "cmd.exe", "/c mklink /J \"" + junction + "\" \"" + destination + "\"")
             {
                 UseShellExecute = false,
                 CreateNoWindow = true
