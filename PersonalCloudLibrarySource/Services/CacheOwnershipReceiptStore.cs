@@ -15,6 +15,9 @@ namespace PersonalCloudLibrarySource
         public string ItemId { get; set; }
         public string CacheRoot { get; set; }
         public string Destination { get; set; }
+        public string InventoryFingerprint { get; set; }
+        public int InventoryFileCount { get; set; }
+        public int InventoryDirectoryCount { get; set; }
     }
 
     public sealed class CacheOwnershipReceiptStore
@@ -53,7 +56,7 @@ namespace PersonalCloudLibrarySource
                     {
                         var parsed = new JavaScriptSerializer { MaxJsonLength = 4096 }
                             .Deserialize<CacheOwnershipReceipt>(reader.ReadToEnd());
-                        if (parsed == null || parsed.Version != 1 ||
+                        if (parsed == null || (parsed.Version != 1 && parsed.Version != 2) ||
                             !string.Equals(parsed.ItemId, itemId, StringComparison.Ordinal) ||
                             !string.Equals(PathBoundary.Normalize(parsed.CacheRoot),
                                 PathBoundary.Normalize(cacheRoot), StringComparison.OrdinalIgnoreCase))
@@ -83,7 +86,50 @@ namespace PersonalCloudLibrarySource
                 receipt.Destination, receipt.ItemId, itemId);
         }
 
+        // Inventory comparison is strictly diagnostic. V1 receipts remain valid
+        // for legacy display but never gain a fingerprint by inference.
+        public bool TryCompareInventory(string cacheRoot, string itemId,
+            string destination, out bool matches)
+        {
+            matches = false;
+            CacheOwnershipReceipt receipt;
+            if (!TryRead(cacheRoot, itemId, out receipt) ||
+                receipt.Version != 2 ||
+                string.IsNullOrWhiteSpace(receipt.InventoryFingerprint) ||
+                !string.Equals(PathBoundary.Normalize(destination),
+                    PathBoundary.Normalize(receipt.Destination), StringComparison.OrdinalIgnoreCase))
+                return false;
+            try
+            {
+                var current = new CacheTreeInventoryScanner().Scan(cacheRoot, destination);
+                matches = current.FileCount == receipt.InventoryFileCount &&
+                    current.DirectoryCount == receipt.InventoryDirectoryCount &&
+                    string.Equals(current.Fingerprint, receipt.InventoryFingerprint,
+                        StringComparison.Ordinal);
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        public void RecordCompletedWithInventory(string cacheRoot, string itemId,
+            string destination)
+        {
+            // Scan before creating the ownership record; any scan failure leaves
+            // no new receipt and never falls back to a path-only V1 record.
+            var snapshot = new CacheTreeInventoryScanner().Scan(cacheRoot, destination);
+            RecordCompletedCore(cacheRoot, itemId, destination, snapshot);
+        }
+
         public void RecordCompleted(string cacheRoot, string itemId, string destination)
+        {
+            RecordCompletedCore(cacheRoot, itemId, destination, null);
+        }
+
+        private void RecordCompletedCore(string cacheRoot, string itemId,
+            string destination, CacheTreeInventory inventory)
         {
             if (PathBoundary.IsContained(cacheRoot, storeRoot) ||
                 PathBoundary.IsContained(storeRoot, cacheRoot))
@@ -97,9 +143,12 @@ namespace PersonalCloudLibrarySource
 
             var receipt = new CacheOwnershipReceipt
             {
-                Version = 1, ItemId = itemId,
+                Version = inventory == null ? 1 : 2, ItemId = itemId,
                 CacheRoot = PathBoundary.Normalize(cacheRoot),
-                Destination = PathBoundary.Normalize(destination)
+                Destination = PathBoundary.Normalize(destination),
+                InventoryFingerprint = inventory?.Fingerprint,
+                InventoryFileCount = inventory?.FileCount ?? 0,
+                InventoryDirectoryCount = inventory?.DirectoryCount ?? 0
             };
             var path = ReceiptFile(cacheRoot, itemId);
             Directory.CreateDirectory(storeRoot);
