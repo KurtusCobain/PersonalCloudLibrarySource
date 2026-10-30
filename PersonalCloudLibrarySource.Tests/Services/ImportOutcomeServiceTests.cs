@@ -74,7 +74,9 @@ namespace PersonalCloudLibrarySource.Tests.Services
             var json = "{\"version\":3,\"items\":[" +
                 "{\"id\":\"first\",\"title\":\"First\",\"sourcePath\":\"first.exe\",\"cachePath\":\"same/play.exe\"}," +
                 "{\"id\":\"second\",\"title\":\"Second\",\"sourcePath\":\"second.exe\",\"cachePath\":\"same/play.exe\"}]}";
-            var outcome = new ImportOutcomeService().Import(LocalFileSettings(WriteManifest(json)), null);
+            var settings = LocalFileSettings(WriteManifest(json));
+            settings.LocalCacheFolder = Path.Combine(testRoot, "cache");
+            var outcome = new ImportOutcomeService().Import(settings, null);
             Assert.That(outcome.Succeeded, Is.False);
             Assert.That(outcome.FailureKind, Is.EqualTo(ImportFailureKind.InvalidManifest));
             Assert.That(outcome.Error, Does.Contain("first"));
