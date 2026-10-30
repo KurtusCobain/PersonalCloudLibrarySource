@@ -104,6 +104,17 @@ namespace PersonalCloudLibrarySource
                 errors.Add("Choose a cache folder or select catalog-only mode.");
             }
 
+            if (draft.AllowDownloads &&
+                (draft.SelectedSource == SetupSourceKind.LocalFolder ||
+                 draft.SelectedSource == SetupSourceKind.NetworkFolder) &&
+                !string.IsNullOrWhiteSpace(draft.LocalLibraryRoot) &&
+                !string.IsNullOrWhiteSpace(draft.CachePath))
+            {
+                if (PathBoundary.IsContained(draft.LocalLibraryRoot, draft.CachePath) ||
+                    PathBoundary.IsContained(draft.CachePath, draft.LocalLibraryRoot))
+                    errors.Add("Cache folder must be separate from the source library folder.");
+            }
+
             if (!string.Equals(
                     draft.UninstallBehavior,
                     PersonalCloudLibrarySourceSettings.RemoveCachedFileOnlyUninstallBehavior,

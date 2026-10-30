@@ -13,6 +13,7 @@ namespace PersonalCloudLibrarySource
         {
             var games = new List<GameMetadata>();
             var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var destinations = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var item in items ?? new PersonalCloudLibraryItem[0])
             {
                 if (item == null)
@@ -37,6 +38,17 @@ namespace PersonalCloudLibrarySource
                     diagnostics?.Add("itemId=" + item.Id + "; skipReason=unsafe or invalid cache path: " + paths.Error);
                     continue;
                 }
+                var destination = PersonalCloudLibrarySource.IsDirectoryItem(item)
+                    ? paths.DestinationDirectory : paths.DestinationFile;
+                if (!string.IsNullOrWhiteSpace(destination))
+                {
+                    string previousId;
+                    if (destinations.TryGetValue(destination, out previousId))
+                        throw new InvalidOperationException("Games '" + previousId +
+                            "' and '" + item.Id + "' share the same cache destination.");
+                    destinations.Add(destination, item.Id);
+                }
+
                 var state = new LibraryItemStateResolver().Resolve(
                     item,
                     paths.LaunchPath,

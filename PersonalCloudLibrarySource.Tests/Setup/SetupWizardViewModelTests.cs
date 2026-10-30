@@ -45,6 +45,22 @@ namespace PersonalCloudLibrarySource.Tests.Setup
         }
 
         [Test]
+        public void Validate_LocalFolderCacheWithinSource_RefusesFeedbackLoop()
+        {
+            var draft = new SetupDraft
+            {
+                SelectedSource = SetupSourceKind.LocalFolder,
+                LocalLibraryRoot = @"C:\Games",
+                CachePath = @"C:\Games\PCLS-Cache",
+                AllowDownloads = true,
+                UninstallBehavior = PersonalCloudLibrarySourceSettings.RemoveCachedFileOnlyUninstallBehavior
+            };
+            var result = new SetupValidationService().Validate(draft, SetupWizardStep.CacheBehavior);
+            Assert.That(result.IsValid, Is.False);
+            Assert.That(result.Errors, Has.Some.Contains("separate"));
+        }
+
+        [Test]
         public void Back_ReturnsToPreviousStepWithoutChangingActiveSettings()
         {
             var active = new PersonalCloudLibrarySourceSettingsV3

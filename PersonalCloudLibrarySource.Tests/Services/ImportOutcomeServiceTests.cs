@@ -69,6 +69,21 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Import_DuplicateResolvedCacheDestination_FailsBeforeReturningAnyGames()
+        {
+            var json = "{\"version\":3,\"items\":[" +
+                "{\"id\":\"first\",\"title\":\"First\",\"sourcePath\":\"first.exe\",\"cachePath\":\"same/play.exe\"}," +
+                "{\"id\":\"second\",\"title\":\"Second\",\"sourcePath\":\"second.exe\",\"cachePath\":\"same/play.exe\"}]}";
+            var outcome = new ImportOutcomeService().Import(LocalFileSettings(WriteManifest(json)), null);
+            Assert.That(outcome.Succeeded, Is.False);
+            Assert.That(outcome.FailureKind, Is.EqualTo(ImportFailureKind.InvalidManifest));
+            Assert.That(outcome.Error, Does.Contain("first"));
+            Assert.That(outcome.Error, Does.Contain("second"));
+            Assert.That(outcome.Games, Is.Empty);
+            Assert.Throws<ImportOutcomeException>(() => ImportExecutionPolicy.Complete(outcome));
+        }
+
+        [Test]
         public void Import_TemporarilyMissingManifest_ReturnsFailureThenRecoversOnReconnect()
         {
             var path = WriteManifest("{\"version\":3,\"items\":[]}");
