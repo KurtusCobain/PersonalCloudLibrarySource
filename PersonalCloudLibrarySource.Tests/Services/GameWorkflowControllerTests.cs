@@ -165,6 +165,31 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Uninstall_DirectoryItemWithoutVerifiedOwnership_LeavesAllFilesIntact()
+        {
+            var launch = CreateFile(Path.Combine(cache, "directory-game", "play.exe"));
+            var personal = CreateFile(Path.Combine(cache, "directory-game", "personal.txt"));
+            var settings = FileOnlySettings();
+            settings.UninstallBehavior = PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior;
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "directory-game", Title = "Directory Game",
+                SourceType = "directory", SourcePath = "directory-game",
+                InstallDirectory = "directory-game", LaunchFile = "play.exe"
+            };
+            var sink = new RecordingSink();
+            var controller = new PersonalCloudLibraryUninstallController(
+                null, Game("directory-game"), item, settings,
+                new GameWorkflowNotificationService(sink));
+
+            Assert.Throws<InvalidOperationException>(
+                () => controller.Uninstall(new UninstallActionArgs()));
+            Assert.That(File.Exists(launch), Is.True);
+            Assert.That(File.Exists(personal), Is.True);
+            Assert.That(sink.Messages[0].Text, Does.Contain("refused"));
+        }
+
+        [Test]
         public void Install_OutsideCacheDestination_BlocksBeforeQueueing()
         {
             var game = Game("blocked-destination");
