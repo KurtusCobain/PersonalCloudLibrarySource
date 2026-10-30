@@ -319,6 +319,9 @@ namespace PersonalCloudLibrarySource
                     string.Empty));
             }
 
+            // The parser refuses catalogs with more than 100,000 items.
+            // Never write a generated manifest that our importer cannot read.
+            ValidateGeneratedItemCount(items.Count);
             var sortedItems = items
                 .OrderBy(item => item.Platform, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(item => item.Title, StringComparer.OrdinalIgnoreCase)
@@ -380,6 +383,15 @@ namespace PersonalCloudLibrarySource
             }
 
             return report;
+        }
+
+        internal static void ValidateGeneratedItemCount(int count)
+        {
+            if (count > ManifestParserValidator.MaxManifestItems)
+                throw new InvalidOperationException(
+                    "Detected too many games for one manifest (maximum " +
+                    ManifestParserValidator.MaxManifestItems +
+                    "). Choose a smaller library folder.");
         }
 
         private void EnumerateTree(

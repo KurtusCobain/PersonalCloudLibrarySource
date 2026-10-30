@@ -16,7 +16,7 @@ namespace PersonalCloudLibrarySource
         private readonly GameWorkflowNotificationService workflowNotifications;
         private readonly IImportUiDispatcher uiDispatcher;
         private Guid activeJobId;
-        private bool disposed;
+        private volatile bool disposed;
         private readonly bool hasPlayniteHost;
 
         public RcloneInstallController(
@@ -40,35 +40,37 @@ namespace PersonalCloudLibrarySource
 
         public override void Install(InstallActionArgs args)
         {
-            var sourceType = PersonalCloudLibrarySource.GetItemSourceType(item);
-            var launchPath = PersonalCloudLibrarySource.ResolveLaunchPath(item, settings);
-            var installDirectory = PersonalCloudLibrarySource.ResolveInstallDirectory(item, settings, launchPath);
-            var destinationFilePath = PersonalCloudLibrarySource.ResolveDownloadDestinationFilePath(item, settings, launchPath);
-            var destinationFolderPath = PersonalCloudLibrarySource.ResolveDownloadDestinationFolder(item, settings, launchPath);
-            var sourcePath = PersonalCloudLibrarySource.GetItemSourcePath(item);
-            // Defense in depth: do not trust a manifest-supplied cache destination
-            // even if an install controller was constructed outside the normal policy.
-            var intendedDestination = string.Equals(sourceType, "directory", StringComparison.OrdinalIgnoreCase)
-                ? destinationFolderPath : destinationFilePath;
-            if (string.IsNullOrWhiteSpace(intendedDestination) ||
-                !PathBoundary.IsContained(settings?.LocalCacheFolder, intendedDestination) ||
-                string.Equals(
-                    PathBoundary.Normalize(settings.LocalCacheFolder),
-                    PathBoundary.Normalize(intendedDestination),
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                workflowNotifications.Failure("install", Game.GameId,
-                    "Download blocked: the destination must be inside the configured local cache folder.");
-                return;
-            }
-
-            logger.Info($"Personal Cloud Library Source queueing item {item.Id} as {sourceType}.");
-            var providerType = PersonalCloudLibrarySource.GetProviderType(settings);
-            var destinationPath = sourceType == "directory"
-                ? destinationFolderPath
-                : destinationFilePath;
+            if (disposed) return;
             try
             {
+                var sourceType = PersonalCloudLibrarySource.GetItemSourceType(item);
+                var launchPath = PersonalCloudLibrarySource.ResolveLaunchPath(item, settings);
+                var installDirectory = PersonalCloudLibrarySource.ResolveInstallDirectory(item, settings, launchPath);
+                var destinationFilePath = PersonalCloudLibrarySource.ResolveDownloadDestinationFilePath(item, settings, launchPath);
+                var destinationFolderPath = PersonalCloudLibrarySource.ResolveDownloadDestinationFolder(item, settings, launchPath);
+                var sourcePath = PersonalCloudLibrarySource.GetItemSourcePath(item);
+                // Defense in depth: do not trust a manifest-supplied cache destination
+                // even if an install controller was constructed outside the normal policy.
+                var intendedDestination = string.Equals(sourceType, "directory", StringComparison.OrdinalIgnoreCase)
+                    ? destinationFolderPath : destinationFilePath;
+                if (string.IsNullOrWhiteSpace(intendedDestination) ||
+                    !PathBoundary.IsContained(settings?.LocalCacheFolder, intendedDestination) ||
+                    string.Equals(
+                        PathBoundary.Normalize(settings.LocalCacheFolder),
+                        PathBoundary.Normalize(intendedDestination),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    workflowNotifications.Failure("install", Game.GameId,
+                        "Download blocked: the destination must be inside the configured local cache folder.");
+                    SignalCancelledIfHosted();
+                    return;
+                }
+
+                logger.Info($"Personal Cloud Library Source queueing item {item.Id} as {sourceType}.");
+                var providerType = PersonalCloudLibrarySource.GetProviderType(settings);
+                var destinationPath = sourceType == "directory"
+                    ? destinationFolderPath
+                    : destinationFilePath;
                 var job = string.Equals(providerType,
                     PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
                     StringComparison.OrdinalIgnoreCase)
@@ -85,7 +87,7 @@ namespace PersonalCloudLibrarySource
             }
             catch (Exception ex)
             {
-                logger.Error(ex, "PCLS could not enqueue install for " + item.Id);
+                logger.Error(ex, "PCLS could not start install for " + (item?.Id ?? "unknown"));
                 workflowNotifications.Failure("install", Game.GameId,
                     "Could not start download: " + ex.Message);
                 SignalCancelledIfHosted();

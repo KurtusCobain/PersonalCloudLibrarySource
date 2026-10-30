@@ -151,6 +151,35 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Install_OutsideCacheDestination_BlocksBeforeQueueing()
+        {
+            var game = Game("blocked-destination");
+            game.IsInstalled = false;
+            var settings = FileOnlySettings();
+            settings.SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType;
+            var outside = Path.Combine(root, "external", "play.exe");
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "blocked-destination", Title = "Blocked",
+                SourcePath = outside, CachePath = outside
+            };
+            var sink = new RecordingSink();
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager,
+                new CloudTransferExecutor(manager, new LocalTransferAdapter())))
+            {
+                var controller = new RcloneInstallController(null, game, item, settings, queue,
+                    new GameWorkflowNotificationService(sink));
+                controller.Install(new InstallActionArgs());
+                Assert.That(manager.Jobs, Is.Empty, "Unsafe destinations must never queue an install.");
+                Assert.That(sink.Messages, Has.Count.EqualTo(1));
+                Assert.That(sink.Messages[0].Text, Does.Contain("inside the configured local cache"));
+                Assert.That(game.IsInstalled, Is.False);
+                controller.Dispose();
+            }
+        }
+
+        [Test]
         public void Install_TransferFailure_NotifiesWithoutPlayniteApiOrDesktopDialog()
         {
             var missingSource = Path.Combine(root, "source", "missing.exe");

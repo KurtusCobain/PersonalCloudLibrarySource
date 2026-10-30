@@ -11,6 +11,21 @@ namespace PersonalCloudLibrarySource.Tests.Services
     public class ManifestGenerationPreviewTests
     {
         [Test]
+        public void Generator_RefusesCatalogExceedingImporterItemLimit()
+        {
+            var method = typeof(ManifestGenerationService).GetMethod(
+                "ValidateGeneratedItemCount",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.That(method, Is.Not.Null);
+            Assert.DoesNotThrow(() => method.Invoke(null,
+                new object[] { ManifestParserValidator.MaxManifestItems }));
+            var error = Assert.Throws<System.Reflection.TargetInvocationException>(() =>
+                method.Invoke(null, new object[] { ManifestParserValidator.MaxManifestItems + 1 }));
+            Assert.That(error.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(error.InnerException.Message, Does.Contain("Choose a smaller library folder"));
+        }
+
+        [Test]
         public void Preview_RealFolder_IsReadOnly_AndUsesSameDiscoveryAsGeneration()
         {
             var root = Path.Combine(Path.GetTempPath(), "PCLS-Preview-" + Guid.NewGuid().ToString("N"));
