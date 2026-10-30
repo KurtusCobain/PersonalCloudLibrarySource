@@ -325,8 +325,17 @@ namespace PersonalCloudLibrarySource
             var root = generate ? pluginSettings.LocalLibraryRoot : string.Empty;
             if (generate)
             {
+                // Resolve Playnite-owned paths on the host thread before starting
+                // filesystem enumeration and atomic writes on the worker.
+                var options = new ManifestGenerationOptions
+                {
+                    SourceRoot = root,
+                    OutputPath = GetDefaultGeneratedManifestPath(),
+                    ReportPath = GetDefaultGeneratedReportPath(),
+                    BackupDirectory = GetBackupsDirectory()
+                };
                 var report = await Task.Run(
-                    () => GenerateManifestFromFolder(root, token), token);
+                    () => manifestGenerationService.Generate(options, token), token);
                 token.ThrowIfCancellationRequested();
                 pluginSettings.LocalManifestPath = report.OutputPath;
                 pluginSettings.ManifestRelativePath = string.Empty;
