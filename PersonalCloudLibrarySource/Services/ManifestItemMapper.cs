@@ -35,8 +35,11 @@ namespace PersonalCloudLibrarySource
                 var paths = new CachePathResolver().Resolve(item, settings);
                 if (!paths.Succeeded)
                 {
-                    diagnostics?.Add("itemId=" + item.Id + "; skipReason=unsafe or invalid cache path: " + paths.Error);
-                    continue;
+                    // Failing the entire import preserves existing Playnite games.
+                    // Silently skipping old absolute-cache entries could turn an
+                    // upgraded user's populated library into an empty result.
+                    throw new InvalidOperationException("Item '" + item.Id +
+                        "' has an invalid cache path: " + paths.Error);
                 }
                 var destination = PersonalCloudLibrarySource.IsDirectoryItem(item)
                     ? paths.DestinationDirectory : paths.DestinationFile;

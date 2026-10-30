@@ -69,6 +69,20 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Import_UnsafeRootedCacheEntry_FailsWholeImportInsteadOfDroppingGames()
+        {
+            var json = "{\"version\":3,\"items\":[{\"id\":\"unsafe\",\"title\":\"Unsafe\"," +
+                "\"sourcePath\":\"game.exe\",\"cachePath\":\"../outside.exe\"}]}";
+            var settings = LocalFileSettings(WriteManifest(json));
+            settings.LocalCacheFolder = Path.Combine(testRoot, "cache");
+            var outcome = new ImportOutcomeService().Import(settings, null);
+            Assert.That(outcome.Succeeded, Is.False);
+            Assert.That(outcome.FailureKind, Is.EqualTo(ImportFailureKind.InvalidManifest));
+            Assert.That(outcome.Error, Does.Contain("unsafe"));
+            Assert.Throws<ImportOutcomeException>(() => ImportExecutionPolicy.Complete(outcome));
+        }
+
+        [Test]
         public void Import_DuplicateResolvedCacheDestination_FailsBeforeReturningAnyGames()
         {
             var json = "{\"version\":3,\"items\":[" +
