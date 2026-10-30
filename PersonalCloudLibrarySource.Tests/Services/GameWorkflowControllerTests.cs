@@ -130,7 +130,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
-        public void Uninstall_LegacyAskEachTime_MigratesToSafeFolderRemoval()
+        public void Uninstall_LegacyAskEachTime_RefusesUnownedFileParentFolder()
         {
             var launch = CreateFile(Path.Combine(cache, "game", "play.exe"));
             var settings = FileOnlySettings();
@@ -143,10 +143,25 @@ namespace PersonalCloudLibrarySource.Tests.Services
                 ignored => deleted = true);
             var controller = CreateUninstallController(launch, settings, sink, executor);
 
-            controller.Uninstall(new UninstallActionArgs());
+            Assert.Throws<InvalidOperationException>(() => controller.Uninstall(new UninstallActionArgs()));
 
-            Assert.That(deleted, Is.True);
-            Assert.That(sink.Messages[0].Text, Does.Contain("completed"));
+            Assert.That(deleted, Is.False);
+            Assert.That(File.Exists(launch), Is.True);
+            Assert.That(sink.Messages[0].Text, Does.Contain("refused"));
+        }
+
+        [Test]
+        public void Uninstall_FileEntryFolderMode_ProtectsUnrelatedSibling()
+        {
+            var launch = CreateFile(Path.Combine(cache, "shared", "play.exe"));
+            var sibling = CreateFile(Path.Combine(cache, "shared", "personal.txt"));
+            var settings = FileOnlySettings();
+            settings.UninstallBehavior = PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior;
+            var controller = CreateUninstallController(launch, settings, new RecordingSink());
+
+            Assert.Throws<InvalidOperationException>(() => controller.Uninstall(new UninstallActionArgs()));
+            Assert.That(File.Exists(launch), Is.True);
+            Assert.That(File.Exists(sibling), Is.True);
         }
 
         [Test]
