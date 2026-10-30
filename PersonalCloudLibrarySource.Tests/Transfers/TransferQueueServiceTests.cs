@@ -79,6 +79,26 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void CancelAcceptedBeforeExecutorReturnsSuccess_ReportsCancelledNotInstalled()
+        {
+            var manager = new CloudTransferManager(1);
+            var executor = new BlockingExecutor(manager);
+            using (var queue = new TransferQueueService(manager, executor))
+            {
+                var job = queue.EnqueueLocal(Guid.NewGuid(), "Race", "source", "dest", "LocalFolder", false);
+                Assert.That(executor.OneStarted.Wait(TimeSpan.FromSeconds(3)), Is.True);
+                Assert.That(queue.Cancel(job.Id), Is.True);
+                executor.Release.Set();
+
+                var result = queue.GetCompletion(job.Id).Result;
+                Assert.That(job.State, Is.EqualTo(CloudTransferState.Cancelled));
+                Assert.That(result.Cancelled, Is.True);
+                Assert.That(result.Succeeded, Is.False,
+                    "A cancelled job must never signal Playnite that installation succeeded.");
+            }
+        }
+
+        [Test]
         public void CancelDuringVerification_CancelsOnceAndLeavesNoPartialOrFinalData()
         {
             var root = CreateVerifiedTestRoot();

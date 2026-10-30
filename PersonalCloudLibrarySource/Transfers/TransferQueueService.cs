@@ -278,6 +278,16 @@ namespace PersonalCloudLibrarySource
                 }
             }
 
+            // Cancellation can win the race after an executor returns its result,
+            // but before the queue commits the terminal state. Always report the
+            // committed terminal outcome to installation observers.
+            if (request.Job.State == CloudTransferState.Cancelled && !result.Cancelled)
+                result = CloudTransferExecutionResult.CancelledResult();
+            else if (request.Job.State == CloudTransferState.Failed && result.Succeeded)
+                result = CloudTransferExecutionResult.Failure(
+                    string.IsNullOrWhiteSpace(request.Job.ErrorSummary)
+                        ? "Transfer failed." : request.Job.ErrorSummary);
+
             PublishTerminalOnce(request.Job);
             request.Completion.TrySetResult(result);
         }
