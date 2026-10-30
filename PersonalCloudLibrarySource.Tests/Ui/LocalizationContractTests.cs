@@ -34,6 +34,22 @@ namespace PersonalCloudLibrarySource.Tests.Ui
         }
 
         [Test]
+        public void SetupWizard_ExplainsCacheLifecycleInApp()
+        {
+            var wizard = File.ReadAllText(FindRepositoryFile(
+                "PersonalCloudLibrarySource", "Setup", "SetupWizardView.xaml"));
+            var resources = ReadResources().ToDictionary(entry => entry.Key, entry => entry.Value);
+
+            Assert.That(wizard, Does.Contain("LOCPLSSetupCacheWorkflow"));
+            Assert.That(resources.ContainsKey("LOCPLSSetupCacheWorkflow"), Is.True);
+            var description = resources["LOCPLSSetupCacheWorkflow"];
+            Assert.That(description, Does.Contain("Install"));
+            Assert.That(description, Does.Contain("Play"));
+            Assert.That(description, Does.Contain("original source files"));
+            Assert.That(description, Does.Contain("catalog entry"));
+        }
+
+        [Test]
         public void LocalizationKeys_AreUnique()
         {
             var keys = ReadResources().Select(resource => resource.Key).ToList();

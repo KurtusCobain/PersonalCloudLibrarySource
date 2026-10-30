@@ -56,6 +56,7 @@
     <sys:String x:Key="LOCPLSSetupCacheTitle">Choose cache and install behavior</sys:String>
     <sys:String x:Key="LOCPLSSetupAllowDownloads">Download or copy games when Install is selected</sys:String>
     <sys:String x:Key="LOCPLSSetupCatalogOnly">Leave this off for catalog-only mode.</sys:String>
+    <sys:String x:Key="LOCPLSSetupCacheWorkflow">Install copies or downloads selected games into this PC's cache folder. Play uses the local copy. Removing a cached copy keeps your original source files and catalog entry. Only approved cache locations can be removed.</sys:String>
     <sys:String x:Key="LOCPLSSetupMissingFiles">Mark games uninstalled when cached files are missing</sys:String>
     <sys:String x:Key="LOCPLSSetupReviewTitle">Review your setup</sys:String>
     <sys:String x:Key="LOCPLSSetupReviewDescription">Confirm the source and cache settings before saving them.</sys:String>

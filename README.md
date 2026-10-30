@@ -2,6 +2,8 @@
 
 Personal Cloud Library Source (PCLS) is a Playnite `GameLibrary` plugin that imports a user-supplied manifest for a personal cloud, NAS, external-drive, or local library. It catalogs content; it does not provide or stream games.
 
+PCLS is the Playnite library for files you already own: catalog games from your local folder, external drive, NAS, or rclone remote; **Install** copies a selected game into this PC's cache, **Play** launches that local copy, and **Uninstall** removes an authorized cached copy without deleting the original source or removing the catalog entry. Source files are not provided, hosted, or streamed by PCLS.
+
 ## Current status
 
 The **published Playnite package remains v0.2.0**. The `main` branch now contains the consolidated `0.3.2` source / **1.0 release candidate** code, merged on 2026-09-21 after automated qualification. That source merge does **not** publish 0.3.2 or 1.0 to installed users: `playnite-addon/installer.yaml` remains pinned to the existing v0.2.0 release package.
