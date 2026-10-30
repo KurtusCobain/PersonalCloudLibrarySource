@@ -53,3 +53,8 @@ After a successful directory transfer, PCLS now attempts a version 2 receipt con
 ### Cancelable inventory scanner foundation (draft)
 
 The SHA-256 scanner now accepts an optional cancellation token and checks it between entries and 1 MiB file read chunks. The existing two-argument scanner call remains compatible. This does not yet wire host shutdown/controller disposal to the inventory cancellation token, and synchronous filesystem reads can still take time to return. The operation remains read-only and never authorizes recursive deletion.
+
+
+### Controller disposal cancellation (draft)
+
+Disposing the install controller now signals cancellation to directory-inventory hashing and checks cancellation before publishing a new V2 receipt. This prevents a pre-cancelled or cooperatively cancelled scan from creating ownership claims. It does **not** roll back an already committed transfer, interrupt a blocking filesystem read immediately, or guarantee that cancellation wins a race after receipt publication. No directory-delete authorization has been enabled. Installed Windows Playnite lifecycle acceptance is still required.
