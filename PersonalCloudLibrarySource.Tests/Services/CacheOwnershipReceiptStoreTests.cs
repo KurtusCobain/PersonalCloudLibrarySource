@@ -82,6 +82,35 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void AssessmentWithoutReceipt_LeavesLegacyFolderUnverified()
+        {
+            var result = new CacheOwnershipReceiptStore(receipts)
+                .AssessCurrentDestination(cache, "game-id", game);
+            Assert.That(result.Kind, Is.EqualTo(CacheOwnershipKind.LegacyUnverified));
+        }
+
+        [Test]
+        public void AssessmentWithWrongManifestDestination_RefusesOwnership()
+        {
+            var store = new CacheOwnershipReceiptStore(receipts);
+            store.RecordCompleted(cache, "game-id", game);
+            var other = Path.Combine(cache, "other");
+            Directory.CreateDirectory(other);
+            var result = store.AssessCurrentDestination(cache, "game-id", other);
+            Assert.That(result.Kind, Is.EqualTo(CacheOwnershipKind.ReceiptMismatch));
+        }
+
+        [Test]
+        public void AssessmentWithMatchingReceipt_IsInformationalOnly()
+        {
+            var store = new CacheOwnershipReceiptStore(receipts);
+            store.RecordCompleted(cache, "game-id", game);
+            var result = store.AssessCurrentDestination(cache, "game-id", game);
+            Assert.That(result.Kind, Is.EqualTo(CacheOwnershipKind.VerifiedReceipt));
+            Assert.That(Directory.Exists(game), Is.True);
+        }
+
+        [Test]
         public void CorruptReceiptFailsClosed()
         {
             var store = new CacheOwnershipReceiptStore(receipts);
