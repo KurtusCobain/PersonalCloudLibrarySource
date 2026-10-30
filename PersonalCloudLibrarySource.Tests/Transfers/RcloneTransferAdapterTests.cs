@@ -2,6 +2,7 @@ using NUnit.Framework;
 using System;
 using System.IO;
 using System.Threading;
+using System.Diagnostics;
 
 namespace PersonalCloudLibrarySource.Tests.Transfers
 {
@@ -296,6 +297,67 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(result.Message, Does.Contain("progress consumer failed"));
             Assert.That(File.Exists(destination), Is.False);
             Assert.That(File.Exists(TransferPartialPathPolicy.Create(destination, jobId)), Is.False);
+        }
+
+        [Test]
+        public void CopyDirectory_NestedJunctionFailsClosedWithoutDeletingExternalFiles()
+        {
+            var valuable = Path.Combine(testRoot, "valuable");
+            Directory.CreateDirectory(valuable);
+            var keep = Path.Combine(valuable, "keep.txt");
+            File.WriteAllText(keep, "untouched");
+            // Check junction support before starting the fake rclone execution.
+            var probe = Path.Combine(testRoot, "junction-probe");
+            if (!TryCreateJunction(probe, valuable))
+                Assert.Ignore("Windows directory junction creation is unavailable.");
+            Directory.Delete(probe, false);
+
+            var destination = Path.Combine(testRoot, "cache", "linked-game");
+            string staged = null;
+            string junction = null;
+            try
+            {
+                var runner = new FakeRcloneProcessRunner(request =>
+                {
+                    staged = request.DestinationPath;
+                    Directory.CreateDirectory(staged);
+                    junction = Path.Combine(staged, "unsafe-link");
+                    if (!TryCreateJunction(junction, valuable))
+                        throw new IOException("Junction became unavailable during test.");
+                    return RcloneProcessResult.Success("synthetic success with linked descendant");
+                });
+                var result = new RcloneTransferAdapter(runner).Copy(
+                    CreateSettings(), "library/linked-game", destination,
+                    true, CancellationToken.None, null);
+
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(Directory.Exists(destination), Is.False);
+                Assert.That(File.ReadAllText(keep), Is.EqualTo("untouched"));
+                Assert.That(result.Message, Does.Contain("cleanup"));
+            }
+            finally
+            {
+                // Remove only the junction object before deleting the test-owned
+                // staging folder, so fixture cleanup never traverses its target.
+                if (!string.IsNullOrWhiteSpace(junction) && Directory.Exists(junction))
+                    Directory.Delete(junction, false);
+                if (!string.IsNullOrWhiteSpace(staged) && Directory.Exists(staged))
+                    Directory.Delete(staged, true);
+            }
+        }
+
+        private static bool TryCreateJunction(string junction, string destination)
+        {
+            using (var process = Process.Start(new ProcessStartInfo(
+                "cmd.exe", "/c mklink /J \\"" + junction + "\\" \\"" + destination + "\\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true
+            }))
+            {
+                process.WaitForExit();
+                return process.ExitCode == 0 && Directory.Exists(junction);
+            }
         }
 
         private static PersonalCloudLibrarySourceSettingsV3 CreateSettings()
