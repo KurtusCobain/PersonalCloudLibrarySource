@@ -32,10 +32,19 @@ namespace PersonalCloudLibrarySource
             if (string.IsNullOrWhiteSpace(cacheRoot) ||
                 string.IsNullOrWhiteSpace(expectedDestination) ||
                 string.IsNullOrWhiteSpace(expectedItemId) ||
-                !PathBoundary.IsContained(cacheRoot, expectedDestination) ||
-                string.Equals(PathBoundary.Normalize(cacheRoot),
-                    PathBoundary.Normalize(expectedDestination), StringComparison.OrdinalIgnoreCase))
+                !PathBoundary.IsContained(cacheRoot, expectedDestination))
                 return Result(CacheOwnershipKind.ReceiptMismatch, "Invalid cache ownership scope.");
+
+            try
+            {
+                if (string.Equals(PathBoundary.Normalize(cacheRoot),
+                    PathBoundary.Normalize(expectedDestination), StringComparison.OrdinalIgnoreCase))
+                    return Result(CacheOwnershipKind.ReceiptMismatch, "Cache root cannot be owned by one item.");
+            }
+            catch (Exception)
+            {
+                return Result(CacheOwnershipKind.ReceiptMismatch, "Invalid cache ownership path.");
+            }
 
             if (!File.Exists(expectedDestination) && !Directory.Exists(expectedDestination))
                 return Result(CacheOwnershipKind.Missing, "Cache destination is absent.");
