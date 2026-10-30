@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 
 namespace PersonalCloudLibrarySource
 {
@@ -21,6 +22,12 @@ namespace PersonalCloudLibrarySource
 
         public CacheTreeInventory Scan(string cacheRoot, string target)
         {
+            return Scan(cacheRoot, target, CancellationToken.None);
+        }
+
+        public CacheTreeInventory Scan(string cacheRoot, string target, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(cacheRoot) ||
                 string.IsNullOrWhiteSpace(target) ||
                 !PathBoundary.IsContained(cacheRoot, target) ||
@@ -41,11 +48,13 @@ namespace PersonalCloudLibrarySource
             pending.Push(root);
             while (pending.Count > 0)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var current = pending.Pop();
                 if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
                     throw new IOException("Inventory refuses a linked directory.");
                 foreach (var entry in Directory.EnumerateFileSystemEntries(current, "*", SearchOption.TopDirectoryOnly))
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     if (entries.Count >= MaximumEntries)
                         throw new IOException("Inventory entry limit exceeded.");
                     var attributes = File.GetAttributes(entry);
@@ -67,7 +76,16 @@ namespace PersonalCloudLibrarySource
                         using (var sha = SHA256.Create())
                         using (var stream = new FileStream(entry, FileMode.Open, FileAccess.Read, FileShare.Read))
                         {
-                            var digest = BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "");
+                            var buffer = new byte[1024 * 1024];
+                            int count;
+                            while ((count = stream.Read(buffer, 0, buffer.Length)) > 0)
+                            {
+                                cancellationToken.ThrowIfCancellationRequested();
+                                sha.TransformBlock(buffer, 0, count, buffer, 0);
+                            }
+                            cancellationToken.ThrowIfCancellationRequested();
+                            sha.TransformFinalBlock(new byte[0], 0, 0);
+                            var digest = BitConverter.ToString(sha.Hash).Replace("-", "");
                             entries.Add("F:" + relative + ":" + info.Length + ":" + digest);
                         }
                     }
