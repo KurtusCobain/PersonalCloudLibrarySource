@@ -74,6 +74,7 @@
     <Compile Include="Services\GameWorkflowControllerTests.cs" />
     <Compile Include="Services\ManifestParserValidatorTests.cs" />
     <Compile Include="Services\ManifestGenerationCancellationTests.cs" />
+    <Compile Include="Services\ManifestGenerationPreviewTests.cs" />
     <Compile Include="Services\ImportNotificationServiceTests.cs" />
     <Compile Include="Services\ImportOutcomeServiceTests.cs" />
     <Compile Include="Services\ManifestLoaderTests.cs" />

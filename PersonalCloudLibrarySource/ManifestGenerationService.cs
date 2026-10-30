@@ -117,7 +117,20 @@ namespace PersonalCloudLibrarySource
             return Generate(options, CancellationToken.None);
         }
 
+        // Used by the setup wizard: the same detection rules as generation, with
+        // no writes, a bounded scan, and a cancellation token for slow NAS shares.
+        public ManifestGenerationReport Preview(ManifestGenerationOptions options, CancellationToken cancellationToken)
+        {
+            return GenerateCore(options, cancellationToken, previewOnly: true);
+        }
+
         public ManifestGenerationReport Generate(ManifestGenerationOptions options, CancellationToken cancellationToken)
+        {
+            return GenerateCore(options, cancellationToken, previewOnly: false);
+        }
+
+        private ManifestGenerationReport GenerateCore(
+            ManifestGenerationOptions options, CancellationToken cancellationToken, bool previewOnly)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (options == null)
@@ -135,7 +148,7 @@ namespace PersonalCloudLibrarySource
                 throw new DirectoryNotFoundException("The source root folder was not found: " + options.SourceRoot);
             }
 
-            if (string.IsNullOrWhiteSpace(options.OutputPath))
+            if (!previewOnly && string.IsNullOrWhiteSpace(options.OutputPath))
             {
                 throw new InvalidOperationException("An output manifest path is required.");
             }
@@ -156,13 +169,13 @@ namespace PersonalCloudLibrarySource
             var rootFullPath = Path.GetFullPath(options.SourceRoot);
             var directories = new List<ScanEntry>();
             var files = new List<ScanEntry>();
-            EnumerateTree(rootFullPath, directories, files, cancellationToken);
+            EnumerateTree(rootFullPath, directories, files, cancellationToken, previewOnly ? 10000 : 150000);
 
             var report = new ManifestGenerationReport
             {
                 SourceRoot = rootFullPath,
-                OutputPath = options.OutputPath,
-                ReportPath = options.NoReport ? string.Empty : options.ReportPath,
+                OutputPath = previewOnly ? string.Empty : options.OutputPath,
+                ReportPath = previewOnly || options.NoReport ? string.Empty : options.ReportPath,
                 DirectoryCount = directories.Count,
                 FileCount = files.Count,
                 ScannedEntryCount = directories.Count + files.Count
@@ -334,6 +347,9 @@ namespace PersonalCloudLibrarySource
                 Items = sortedItems
             };
 
+            if (previewOnly)
+                return report;
+
             var outputDirectory = Path.GetDirectoryName(options.OutputPath);
             cancellationToken.ThrowIfCancellationRequested();
             if (!string.IsNullOrWhiteSpace(outputDirectory))
@@ -370,7 +386,8 @@ namespace PersonalCloudLibrarySource
             string rootFullPath,
             ICollection<ScanEntry> directories,
             ICollection<ScanEntry> files,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            int maxEntries)
         {
             var pending = new Stack<string>();
             pending.Push(rootFullPath);
@@ -381,22 +398,30 @@ namespace PersonalCloudLibrarySource
                 foreach (var directory in fileSystem.EnumerateDirectories(current))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    // Never follow junctions/symlinks into arbitrary directories or cycles.
+                    if (fileSystem is ManifestGenerationFileSystem &&
+                        (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+                        continue;
+                    if (!PathBoundary.IsContained(rootFullPath, directory))
+                        continue;
                     var entry = NewScanEntry(rootFullPath, directory, true);
                     if (!string.IsNullOrWhiteSpace(entry.Path))
-                    {
                         directories.Add(entry);
-                    }
+                    if (directories.Count + files.Count > maxEntries)
+                        throw new InvalidOperationException("Library scan limit reached (" + maxEntries + " entries). Choose a smaller source folder.");
                     pending.Push(directory);
                 }
 
                 foreach (var file in fileSystem.EnumerateFiles(current))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    if (!PathBoundary.IsContained(rootFullPath, file))
+                        continue;
                     var entry = NewScanEntry(rootFullPath, file, false);
                     if (!string.IsNullOrWhiteSpace(entry.Path))
-                    {
                         files.Add(entry);
-                    }
+                    if (directories.Count + files.Count > maxEntries)
+                        throw new InvalidOperationException("Library scan limit reached (" + maxEntries + " entries). Choose a smaller source folder.");
                 }
             }
         }

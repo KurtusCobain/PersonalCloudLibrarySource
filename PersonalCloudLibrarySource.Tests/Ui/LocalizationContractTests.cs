@@ -50,6 +50,19 @@ namespace PersonalCloudLibrarySource.Tests.Ui
         }
 
         [Test]
+        public void SetupWizard_PreviewUsesReadOnlyBoundedGeneratorAndCancellation()
+        {
+            var ui = File.ReadAllText(FindRepositoryFile("PersonalCloudLibrarySource", "Setup", "SetupWizardView.xaml.cs"));
+            var generator = File.ReadAllText(FindRepositoryFile("PersonalCloudLibrarySource", "ManifestGenerationService.cs"));
+
+            Assert.That(ui, Does.Contain("Task.Run"));
+            Assert.That(ui, Does.Contain("CancelPreview();"));
+            Assert.That(ui, Does.Contain("ManifestGenerationService().Preview"));
+            Assert.That(generator, Does.Contain("previewOnly ? 10000 : 150000"));
+            Assert.That(generator, Does.Contain("if (previewOnly)"));
+        }
+
+        [Test]
         public void LocalizationKeys_AreUnique()
         {
             var keys = ReadResources().Select(resource => resource.Key).ToList();

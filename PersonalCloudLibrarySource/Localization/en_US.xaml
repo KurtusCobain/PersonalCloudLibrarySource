@@ -52,7 +52,14 @@
     <sys:String x:Key="LOCPLSSetupRclonePrerequisites">Advanced cloud setup: install rclone and configure your own remote first. If your cloud files are already synced to a folder, use the local-folder option instead. PCLS never asks for your cloud password.</sys:String>
     <sys:String x:Key="LOCPLSSetupBrowse">Browse</sys:String>
     <sys:String x:Key="LOCPLSSetupScanTitle">Review the selected source</sys:String>
-    <sys:String x:Key="LOCPLSSetupScanDescription">This step reviews the source location; it does not scan or verify games yet. When you finish, PCLS will generate a catalog for a selected local or network folder (unless you supplied a manifest). Then run Verify Setup and Update Game Library in Playnite.</sys:String>
+    <sys:String x:Key="LOCPLSSetupScanDescription">For a local or network folder, PCLS previews up to 10,000 filesystem entries without saving changes. For a local manifest, it previews valid entries. Cloud accounts require a separate rclone connection check. Finishing the wizard saves configuration; use Verify Setup and Update Game Library to import.</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewAgain">Scan again</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewStop">Stop scan</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewCancelled">Preview cancelled. Nothing was changed.</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewCloud">Cloud preview is unavailable until rclone is configured. Finish setup, then use Test rclone connection and Verify setup.</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewScanning">Reading your library without changing any files...</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewFound">Found {0} games. Scanned {1} entries; {2} skipped; {3} warnings.</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewFailed">Could not preview: {0}. You can still finish setup, or choose a smaller source.</sys:String>
     <sys:String x:Key="LOCPLSSetupCacheTitle">Choose cache and install behavior</sys:String>
     <sys:String x:Key="LOCPLSSetupAllowDownloads">Download or copy games when Install is selected</sys:String>
     <sys:String x:Key="LOCPLSSetupCatalogOnly">Leave this off for catalog-only mode.</sys:String>
