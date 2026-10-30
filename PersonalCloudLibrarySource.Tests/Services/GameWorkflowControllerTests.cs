@@ -356,6 +356,43 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Install_PreexistingDirectory_DoesNotIssueV2OwnershipReceipt()
+        {
+            var source = Path.Combine(root, "original", "directory");
+            Directory.CreateDirectory(source);
+            CreateFile(Path.Combine(source, "play.exe"));
+            var existing = CreateFile(Path.Combine(cache, "already-dir", "personal.txt"));
+            File.WriteAllText(existing, "personal data");
+            var game = Game("already-dir");
+            game.IsInstalled = false;
+            var settings = FileOnlySettings();
+            settings.SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFolderProviderType;
+            settings.LocalLibraryRoot = Path.Combine(root, "original");
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "already-dir", Title = "Existing Folder",
+                SourceType = "directory", SourcePath = "directory",
+                InstallDirectory = "already-dir", LaunchFile = "play.exe"
+            };
+            var receipts = new CacheOwnershipReceiptStore(Path.Combine(root, "ownership-receipts"));
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager,
+                new CloudTransferExecutor(manager, new LocalTransferAdapter())))
+            {
+                var controller = new RcloneInstallController(null, game, item, settings, queue,
+                    ownershipReceipts: receipts);
+                controller.Install(new InstallActionArgs());
+                Assert.That(SpinWait.SpinUntil(() => manager.Jobs.Count > 0 &&
+                    manager.Jobs[0].IsTerminal, 5000), Is.True);
+                Assert.That(manager.Jobs[0].State, Is.EqualTo(CloudTransferState.Failed));
+                CacheOwnershipReceipt receipt;
+                Assert.That(receipts.TryRead(cache, item.Id, out receipt), Is.False);
+                Assert.That(File.ReadAllText(existing), Is.EqualTo("personal data"));
+                controller.Dispose();
+            }
+        }
+
+        [Test]
         public void Install_DisposedController_CancelsActiveTransferAndDoesNotMarkInstalled()
         {
             var source = CreateFile(Path.Combine(root, "original", "play.exe"));
