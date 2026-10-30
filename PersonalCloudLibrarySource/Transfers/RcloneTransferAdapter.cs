@@ -210,7 +210,8 @@ namespace PersonalCloudLibrarySource
             copiedBytes = 0;
             if (isDirectory)
             {
-                if (!Directory.Exists(partialPath))
+                if (!Directory.Exists(partialPath) ||
+                    !IsSafeStagedEntry(File.GetAttributes(partialPath)))
                 {
                     return false;
                 }
@@ -222,7 +223,8 @@ namespace PersonalCloudLibrarySource
                 return true;
             }
 
-            if (!File.Exists(partialPath))
+            if (!File.Exists(partialPath) ||
+                !IsSafeStagedEntry(File.GetAttributes(partialPath)))
             {
                 return false;
             }
@@ -239,6 +241,11 @@ namespace PersonalCloudLibrarySource
                 : destinationPath ?? string.Empty;
         }
 
+        internal static bool IsSafeStagedEntry(FileAttributes attributes)
+        {
+            return (attributes & FileAttributes.ReparsePoint) == 0;
+        }
+
         private static bool TryDeletePartial(string path, out string error)
         {
             error = string.Empty;
@@ -249,6 +256,12 @@ namespace PersonalCloudLibrarySource
 
             try
             {
+                // Never recursively delete a junction/symlink planted at the
+                // temporary transfer destination, even on cancellation.
+                if ((File.Exists(path) || Directory.Exists(path)) &&
+                    !IsSafeStagedEntry(File.GetAttributes(path)))
+                    throw new IOException("Refusing to clean a linked partial transfer path.");
+
                 if (File.Exists(path))
                 {
                     File.Delete(path);

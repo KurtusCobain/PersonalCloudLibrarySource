@@ -26,6 +26,20 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             }
         }
 
+        [TestCase(FileAttributes.Normal, true)]
+        [TestCase(FileAttributes.Directory, true)]
+        [TestCase(FileAttributes.ReparsePoint, false)]
+        [TestCase(FileAttributes.Directory | FileAttributes.ReparsePoint, false)]
+        public void StagedTransfers_RefuseLinkedTemporaryTargets(
+            FileAttributes attributes, bool expected)
+        {
+            var method = typeof(RcloneTransferAdapter).GetMethod(
+                "IsSafeStagedEntry",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.That(method, Is.Not.Null);
+            Assert.That((bool)method.Invoke(null, new object[] { attributes }), Is.EqualTo(expected));
+        }
+
         [Test]
         public void CopyFile_Success_MovesVerifiedPartialFileIntoFinalDestination()
         {
