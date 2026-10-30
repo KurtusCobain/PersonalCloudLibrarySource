@@ -13,7 +13,16 @@ The live development version is 0.3.2. The 1.0 release candidate includes the mi
 
 PCLS migrates settings through each schema version in order and records the current schema after migration. Existing configured values are retained where possible. The old default rclone timeout of 30 seconds migrates to the safer 90-second inactivity default; a user-selected custom timeout is preserved.
 
-After upgrading, open settings in Playnite Desktop and run **Verify setup**. Confirm provider, manifest, source/content root, cache root, download permission, uninstall behavior, notification preferences, and timeout before updating the library.
+After upgrading, open settings in Playnite Desktop and run **Verify setup**. Confirm provider, manifest, source/content root, cache root, download permission, uninstall behavior, and timeout before updating the library.
+
+### Changes to review before enabling downloads
+
+- **All new cached installs must stay inside the configured `LocalCacheFolder`.** Older absolute `cachePath` / `installDirectory` values can still identify existing files, but an Install action targeting a different location is now refused. To download again, change those paths to point under your chosen cache. The separate outside-cache *uninstall* option does not authorize outside-cache downloads.
+- Incomplete transfer cleanup and staged destination verification are always enforced. The two old checkboxes had no runtime effect and are no longer displayed.
+- Five notification preferences were also removed from the UI because they did not control runtime behavior. Their serialized settings fields are retained for migration compatibility, but should not be treated as functional notification filters.
+- Extremely large catalogs now receive a clear refusal instead of consuming unbounded memory (local manifest file limit: 32 MiB; parsed input: 32 million characters; maximum 100,000 entries).
+
+If any catalog uses an absolute path outside your cache, **do not move or delete its existing content during upgrade**. First inspect that item's Play/Install availability and choose a safe migration path using a disposable test library.
 
 ## Qualification status
 

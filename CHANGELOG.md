@@ -2,6 +2,15 @@
 
 ## 1.0.0 - Unreleased
 
+**Release-hardening work in draft PR #10 (not yet merged or published):**
+
+- Restrict new install destinations to the configured cache folder, reject unsafe fallback game IDs, and retain catalog visibility for existing external paths.
+- Correct rclone transfers for empty files/directories, Windows argument quoting, and bounded cloud manifest output.
+- Apply explicit local/remote manifest limits and prevent stale verification snapshots from replacing live dashboard cached counts.
+- Remove seven nonfunctional settings controls while keeping upgrade-compatible stored fields; explain mandatory transfer-safety behavior.
+- Clarify the wizard's review step and rclone prerequisites; restore compatibility with screenshot URLs in the live Playnite listing.
+- **Compatibility note:** manifests that previously attempted an install outside the cache folder now have to use an inside-cache destination. Existing files must never be relocated or deleted automatically.
+
 - Added guided Desktop setup for `LocalFile`, `LocalFolder`, and `RcloneRemote` providers, with provider-specific validation and verification reports.
 - Centralized manifest loading, parsing, path resolution, import outcomes, and sequential settings migration.
 - Added queue-owned local and rclone transfers with cancellation, retry, progress, partial-file cleanup, and destination verification.
