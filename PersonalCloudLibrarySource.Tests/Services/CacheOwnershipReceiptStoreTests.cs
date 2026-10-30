@@ -185,6 +185,57 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void ForgedReceiptOutsideCache_IsRejectedBeforeAssessment()
+        {
+            var store = new CacheOwnershipReceiptStore(receipts);
+            store.RecordCompleted(cache, "game-id", game);
+            var file = Directory.GetFiles(receipts, "*.json")[0];
+            var original = PathBoundary.Normalize(game).Replace("\\", "\\\\");
+            var outside = PathBoundary.Normalize(Path.Combine(root, "outside")).Replace("\\", "\\\\");
+            var json = File.ReadAllText(file);
+            Assert.That(json, Does.Contain(original));
+            File.WriteAllText(file, json.Replace(original, outside));
+
+            CacheOwnershipReceipt receipt;
+            Assert.That(store.TryRead(cache, "game-id", out receipt), Is.False);
+            Assert.That(store.AssessCurrentDestination(cache, "game-id", game).MayDeleteAutomatically, Is.False);
+        }
+
+        [Test]
+        public void MalformedV2Fingerprint_IsRejectedOnRead()
+        {
+            File.WriteAllText(Path.Combine(game, "play.exe"), "game");
+            var store = new CacheOwnershipReceiptStore(receipts);
+            store.RecordCompletedWithInventory(cache, "game-id", game);
+            CacheOwnershipReceipt original;
+            Assert.That(store.TryRead(cache, "game-id", out original), Is.True);
+            var file = Directory.GetFiles(receipts, "*.json")[0];
+            var json = File.ReadAllText(file);
+            Assert.That(json, Does.Contain(original.InventoryFingerprint));
+            File.WriteAllText(file, json.Replace(original.InventoryFingerprint, "not-a-sha256"));
+
+            CacheOwnershipReceipt invalid;
+            Assert.That(store.TryRead(cache, "game-id", out invalid), Is.False);
+            bool matches;
+            Assert.That(store.TryCompareInventory(cache, "game-id", game, out matches), Is.False);
+            Assert.That(matches, Is.False);
+        }
+
+        [Test]
+        public void CacheHostedReceipt_IsRejectedEvenIfManuallyPlaced()
+        {
+            var store = new CacheOwnershipReceiptStore(receipts);
+            store.RecordCompleted(cache, "game-id", game);
+            var untrusted = Path.Combine(cache, "fake-receipts");
+            Directory.CreateDirectory(untrusted);
+            File.Copy(Directory.GetFiles(receipts, "*.json")[0],
+                Path.Combine(untrusted, Path.GetFileName(Directory.GetFiles(receipts, "*.json")[0])));
+            CacheOwnershipReceipt receipt;
+            Assert.That(new CacheOwnershipReceiptStore(untrusted)
+                .TryRead(cache, "game-id", out receipt), Is.False);
+        }
+
+        [Test]
         public void CorruptReceiptFailsClosed()
         {
             var store = new CacheOwnershipReceiptStore(receipts);
