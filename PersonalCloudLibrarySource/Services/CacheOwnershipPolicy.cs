@@ -16,7 +16,9 @@ namespace PersonalCloudLibrarySource
     public sealed class CacheOwnershipAssessment
     {
         public CacheOwnershipKind Kind { get; set; }
-        public bool MayDeleteAutomatically => Kind == CacheOwnershipKind.VerifiedReceipt;
+        // Receipt/path matching alone never authorizes deleting user content.
+        // Requires separate verified file inventory and deletion transaction.
+        public bool MayDeleteAutomatically => false;
         public string Reason { get; set; } = string.Empty;
     }
 
