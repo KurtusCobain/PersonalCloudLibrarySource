@@ -68,6 +68,7 @@ if ($PackagePath) {
         $requiredPaths = @(
             'PersonalCloudLibrarySource.dll',
             'extension.yaml',
+            'LICENSE',
             'icon.png',
             'Localization\en_US.xaml',
             'Assets\pcls-logo-wide.png'
@@ -94,6 +95,10 @@ if ($PackagePath) {
         if ($forbiddenFiles) {
             throw "Packaged extension contains forbidden file(s): $($forbiddenFiles -join ', ')"
         }
+
+        $licenseNotice = Get-Content -LiteralPath (Join-Path $expandedPath 'LICENSE') -Raw
+        Assert-Contains $licenseNotice 'MIT License' 'Package must retain the MIT license.'
+        Assert-Contains $licenseNotice 'The Bearclaw & ztwslayer' 'Package must retain the contributor copyright attribution.'
 
         $packagedVersion = Get-ManifestVersion -Path (Join-Path $expandedPath 'extension.yaml')
         if ($packagedVersion -ne $version) {
