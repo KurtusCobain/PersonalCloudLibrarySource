@@ -141,6 +141,28 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(File.Exists(Path.Combine(cache, "shared", "personal.txt")), Is.True);
         }
 
+        [Test]
+        public void Evaluate_LegacyDirectoryCache_DoesNotOfferRecursiveRemoval()
+        {
+            var directory = Path.Combine(cache, "legacy");
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(Path.Combine(directory, "personal.txt"), "keep");
+            var settings = RcloneSettings();
+            settings.UninstallBehavior = PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior;
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "legacy", Title = "Legacy", SourceType = "directory",
+                SourcePath = "legacy", InstallDirectory = "legacy"
+            };
+
+            var result = new GameWorkflowPolicyService().Evaluate(item, settings);
+
+            Assert.That(result.State.IsCached, Is.True);
+            Assert.That(result.CanUninstall, Is.False);
+            Assert.That(result.UninstallRefusalReason, Does.Contain("unverified"));
+            Assert.That(File.Exists(Path.Combine(directory, "personal.txt")), Is.True);
+        }
+
         private PersonalCloudLibrarySourceSettingsV3 RcloneSettings()
         {
             return new PersonalCloudLibrarySourceSettingsV3
