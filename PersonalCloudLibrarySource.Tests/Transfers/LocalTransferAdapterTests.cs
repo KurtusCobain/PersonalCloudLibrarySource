@@ -27,6 +27,20 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             }
         }
 
+        [TestCase(100L, 95L, true)]
+        [TestCase(100L, 100L, false)]
+        [TestCase(100L, 101L, false)]
+        [TestCase(1000L, 990L, false)]
+        [TestCase(0L, 0L, true)]
+        public void DiskSpacePreflight_UsesSmallReserveWithoutOverflow(long free, long required, bool expected)
+        {
+            var method = typeof(LocalTransferAdapter).GetMethod(
+                "HasRequiredSpace",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.That(method, Is.Not.Null);
+            Assert.That((bool)method.Invoke(null, new object[] { free, required }), Is.EqualTo(expected));
+        }
+
         [Test]
         public void CopyFile_UsesPartialFileAndMovesVerifiedResultIntoPlace()
         {

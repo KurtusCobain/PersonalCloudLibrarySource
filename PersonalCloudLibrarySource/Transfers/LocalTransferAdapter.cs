@@ -72,14 +72,15 @@ namespace PersonalCloudLibrarySource
                     return CloudTransferExecutionResult.Failure("Destination already exists: " + destinationPath);
                 }
 
+                var totalBytes = new FileInfo(sourcePath).Length;
+                var spaceError = CheckDiskSpace(destinationPath, totalBytes);
+                if (!string.IsNullOrWhiteSpace(spaceError))
+                    return CloudTransferExecutionResult.Failure(spaceError);
+
                 DeleteFileIfExists(partialPath);
                 var destinationDirectory = Path.GetDirectoryName(destinationPath);
                 if (!string.IsNullOrWhiteSpace(destinationDirectory))
-                {
                     Directory.CreateDirectory(destinationDirectory);
-                }
-
-                var totalBytes = new FileInfo(sourcePath).Length;
                 var transferred = CopyFileContents(
                     sourcePath,
                     partialPath,
@@ -183,6 +184,9 @@ namespace PersonalCloudLibrarySource
                 var directories = Directory.GetDirectories(sourceRoot, "*", SearchOption.AllDirectories);
                 var files = Directory.GetFiles(sourceRoot, "*", SearchOption.AllDirectories);
                 var totalBytes = files.Sum(file => new FileInfo(file).Length);
+                var spaceError = CheckDiskSpace(normalizedDestination, totalBytes);
+                if (!string.IsNullOrWhiteSpace(spaceError))
+                    return CloudTransferExecutionResult.Failure(spaceError);
                 var transferred = 0L;
 
                 Directory.CreateDirectory(partialDirectory);
@@ -236,6 +240,36 @@ namespace PersonalCloudLibrarySource
                 DeleteDirectoryIfExists(partialDirectory);
                 return CloudTransferExecutionResult.Failure(ex.Message, ex);
             }
+        }
+
+        // Best-effort local destination preflight. When Windows cannot report free
+        // space (some UNC providers), copy still follows normal IO failure/cleanup.
+        private static string CheckDiskSpace(string destinationPath, long requiredBytes)
+        {
+            try
+            {
+                var root = Path.GetPathRoot(Path.GetFullPath(destinationPath));
+                if (string.IsNullOrWhiteSpace(root))
+                    return string.Empty;
+                var drive = new DriveInfo(root);
+                if (!drive.IsReady)
+                    return string.Empty;
+                if (!HasRequiredSpace(drive.AvailableFreeSpace, requiredBytes))
+                    return "Not enough free space on the cache drive. Free space or select another cache folder.";
+            }
+            catch (ArgumentException) { }
+            catch (IOException) { }
+            catch (NotSupportedException) { }
+            catch (UnauthorizedAccessException) { }
+            return string.Empty;
+        }
+
+        internal static bool HasRequiredSpace(long available, long required)
+        {
+            if (available < 0 || required < 0 || available < required)
+                return false;
+            var reserve = Math.Min(64L * 1024 * 1024, required / 20);
+            return available - required >= reserve;
         }
 
         private static string NormalizeDirectoryDestination(string destinationDirectory)
