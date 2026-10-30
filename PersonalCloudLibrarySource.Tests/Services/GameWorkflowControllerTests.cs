@@ -4,6 +4,8 @@ using Playnite.SDK.Plugins;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Diagnostics;
+using System.Threading;
 
 namespace PersonalCloudLibrarySource.Tests.Services
 {
@@ -177,12 +179,106 @@ namespace PersonalCloudLibrarySource.Tests.Services
                     workflowNotifications: notifications);
 
                 controller.Install(new InstallActionArgs());
+                Assert.That(SpinWait.SpinUntil(() => sink.Messages.Count > 0, 5000), Is.True,
+                    "The completion observer should publish a failure without a UI dialog.");
             }
 
             Assert.That(game.IsInstalled, Is.False);
             Assert.That(sink.Messages, Has.Count.EqualTo(1));
             Assert.That(sink.Messages[0].Text, Does.Contain("failed"));
             Assert.That(sink.Messages[0].Text, Does.Contain("does not exist"));
+        }
+
+        [Test]
+        public void Install_SlowTransfer_ReturnsImmediatelyAndCompletesAfterRelease()
+        {
+            var source = CreateFile(Path.Combine(root, "original", "play.exe"));
+            var game = Game("slow");
+            game.IsInstalled = false;
+            var settings = FileOnlySettings();
+            settings.SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType;
+            var destination = Path.Combine(cache, "slow", "play.exe");
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "slow", Title = "Slow Game", SourcePath = source,
+                CachePath = Path.Combine("slow", "play.exe")
+            };
+            var manager = new CloudTransferManager(1);
+            var executor = new PausingTransferExecutor(manager);
+            var sink = new RecordingSink();
+            using (var queue = new TransferQueueService(manager, executor))
+            {
+                var controller = new RcloneInstallController(null, game, item, settings, queue,
+                    new GameWorkflowNotificationService(sink));
+                var stopwatch = Stopwatch.StartNew();
+                controller.Install(new InstallActionArgs());
+                stopwatch.Stop();
+                Assert.That(stopwatch.ElapsedMilliseconds, Is.LessThan(1000),
+                    "Install must enqueue and return instead of waiting for a network transfer.");
+                Assert.That(executor.Started.Wait(TimeSpan.FromSeconds(3)), Is.True);
+                Assert.That(game.IsInstalled, Is.False);
+
+                executor.Release.Set();
+                Assert.That(SpinWait.SpinUntil(() => game.IsInstalled && sink.Messages.Count > 0, 5000), Is.True);
+                Assert.That(File.Exists(destination), Is.True);
+                controller.Dispose();
+            }
+        }
+
+        [Test]
+        public void Install_DisposedController_CancelsActiveTransferAndDoesNotMarkInstalled()
+        {
+            var source = CreateFile(Path.Combine(root, "original", "play.exe"));
+            var game = Game("dispose");
+            game.IsInstalled = false;
+            var settings = FileOnlySettings();
+            settings.SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType;
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "dispose", Title = "Cancelled", SourcePath = source,
+                CachePath = Path.Combine("dispose", "play.exe")
+            };
+            var manager = new CloudTransferManager(1);
+            var executor = new PausingTransferExecutor(manager);
+            using (var queue = new TransferQueueService(manager, executor))
+            {
+                var controller = new RcloneInstallController(null, game, item, settings, queue);
+                controller.Install(new InstallActionArgs());
+                Assert.That(executor.Started.Wait(TimeSpan.FromSeconds(3)), Is.True);
+                controller.Dispose();
+                executor.Release.Set();
+                Assert.That(SpinWait.SpinUntil(() => manager.Jobs[0].IsTerminal, 5000), Is.True);
+                Assert.That(manager.Jobs[0].State, Is.EqualTo(CloudTransferState.Cancelled));
+                Assert.That(game.IsInstalled, Is.False);
+            }
+        }
+
+        private sealed class PausingTransferExecutor : ICloudTransferExecutor
+        {
+            private readonly CloudTransferManager manager;
+            public ManualResetEventSlim Started { get; } = new ManualResetEventSlim(false);
+            public ManualResetEventSlim Release { get; } = new ManualResetEventSlim(false);
+
+            public PausingTransferExecutor(CloudTransferManager manager) { this.manager = manager; }
+
+            public CloudTransferExecutionResult ExecuteLocal(Guid jobId, bool isDirectory)
+            {
+                var job = manager.GetJob(jobId);
+                manager.Transition(jobId, CloudTransferState.Transferring);
+                Started.Set();
+                if (!Release.Wait(TimeSpan.FromSeconds(8)))
+                    return CloudTransferExecutionResult.Failure("Timed out in test executor.");
+                if (job.CancellationToken.IsCancellationRequested)
+                    return CloudTransferExecutionResult.CancelledResult();
+                Directory.CreateDirectory(Path.GetDirectoryName(job.Destination));
+                File.WriteAllText(job.Destination, "test file");
+                return CloudTransferExecutionResult.Success(9, 9);
+            }
+
+            public CloudTransferExecutionResult ExecuteRclone(Guid jobId, PersonalCloudLibrarySourceSettings settings)
+            {
+                return ExecuteLocal(jobId, false);
+            }
         }
 
         private PersonalCloudLibraryUninstallController CreateUninstallController(
