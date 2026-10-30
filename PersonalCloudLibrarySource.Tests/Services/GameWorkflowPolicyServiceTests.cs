@@ -120,6 +120,27 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(result.InstallRefusalReason, Does.Contain("source"));
         }
 
+        [Test]
+        public void Evaluate_FileGameFolderRemoval_DoesNotOfferUnsafeUninstall()
+        {
+            var launch = Path.Combine(cache, "shared", "play.exe");
+            Directory.CreateDirectory(Path.GetDirectoryName(launch));
+            File.WriteAllText(launch, "stub");
+            File.WriteAllText(Path.Combine(cache, "shared", "personal.txt"), "keep");
+            var settings = RcloneSettings();
+            settings.UninstallBehavior = PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior;
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "game", Title = "Game", SourcePath = "game.exe", CachePath = "shared/play.exe"
+            };
+
+            var result = new GameWorkflowPolicyService().Evaluate(item, settings);
+
+            Assert.That(result.CanUninstall, Is.False);
+            Assert.That(result.UninstallRefusalReason, Does.Contain("File-based"));
+            Assert.That(File.Exists(Path.Combine(cache, "shared", "personal.txt")), Is.True);
+        }
+
         private PersonalCloudLibrarySourceSettingsV3 RcloneSettings()
         {
             return new PersonalCloudLibrarySourceSettingsV3
