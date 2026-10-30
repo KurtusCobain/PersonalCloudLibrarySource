@@ -103,6 +103,7 @@
     <Compile Include="Services\SafeCacheDeletionPolicy.cs" />
     <Compile Include="Services\CacheOwnershipPolicy.cs" />
     <Compile Include="Services\CacheOwnershipReceiptStore.cs" />
+    <Compile Include="Services\CacheTreeInventoryScanner.cs" />
     <Compile Include="Services\PluginNavigationService.cs" />
     <Compile Include="Services\SetupLaunchPolicyService.cs" />
     <Compile Include="Services\SetupStateService.cs" />
