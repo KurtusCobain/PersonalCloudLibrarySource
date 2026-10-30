@@ -8,6 +8,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -37,7 +38,7 @@ namespace PersonalCloudLibrarySource
                 playniteApi,
                 settings,
                 GetDefaultLocalCacheFolder,
-                PrepareSetupWizardCompletion,
+                PrepareSetupWizardCompletionAsync,
                 SetupWizardSaved,
                 settings.PersistSetupDismissed);
             navigationService = new PluginNavigationService(
@@ -310,16 +311,23 @@ namespace PersonalCloudLibrarySource
             UpdateNavigationItemState();
         }
 
-        private void PrepareSetupWizardCompletion()
+        private async Task PrepareSetupWizardCompletionAsync(CancellationToken token)
         {
+            // Capture the draft's source before scanning. Playnite settings must
+            // only be updated on the UI dispatcher after the scan completes.
+            token.ThrowIfCancellationRequested();
             var pluginSettings = settings.Settings;
-            if (string.Equals(
+            var generate = string.Equals(
                     GetProviderType(pluginSettings),
                     PersonalCloudLibrarySourceSettings.LocalFolderProviderType,
                     StringComparison.OrdinalIgnoreCase) &&
-                string.IsNullOrWhiteSpace(pluginSettings.LocalManifestPath))
+                string.IsNullOrWhiteSpace(pluginSettings.LocalManifestPath);
+            var root = generate ? pluginSettings.LocalLibraryRoot : string.Empty;
+            if (generate)
             {
-                var report = GenerateManifestFromFolder(pluginSettings.LocalLibraryRoot);
+                var report = await Task.Run(
+                    () => GenerateManifestFromFolder(root, token), token);
+                token.ThrowIfCancellationRequested();
                 pluginSettings.LocalManifestPath = report.OutputPath;
                 pluginSettings.ManifestRelativePath = string.Empty;
                 pluginSettings.LastGeneratedManifestPath = report.OutputPath;
@@ -327,7 +335,7 @@ namespace PersonalCloudLibrarySource
                 pluginSettings.LastManifestGeneratedAt = report.Manifest.GeneratedAt;
                 pluginSettings.LastManifestItemCount = report.ItemCount;
             }
-
+            token.ThrowIfCancellationRequested();
             settings.MarkSetupCompleted();
         }
 

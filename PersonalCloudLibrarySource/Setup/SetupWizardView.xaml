@@ -227,6 +227,12 @@
         </Border>
 
         <DockPanel Grid.Row="3" Margin="0,16,0,0" LastChildFill="False">
+            <TextBlock x:Name="FinishStatusText"
+                       DockPanel.Dock="Left"
+                       Width="160"
+                       TextWrapping="Wrap"
+                       VerticalAlignment="Center"
+                       Margin="0,0,14,0" />
             <Button x:Name="CancelButton"
                     Content="{DynamicResource LOCPLSSetupCancel}"
                     DockPanel.Dock="Right"

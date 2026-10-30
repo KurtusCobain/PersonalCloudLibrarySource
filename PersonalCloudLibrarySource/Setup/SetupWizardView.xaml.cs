@@ -13,14 +13,16 @@ namespace PersonalCloudLibrarySource
     public partial class SetupWizardView : UserControl
     {
         private readonly SetupWizardViewModel viewModel;
-        private readonly Func<bool> completed;
+        private readonly Func<CancellationToken, Task<bool>> completed;
+        private CancellationTokenSource finishCancellation;
+        private bool finishBusy;
         private readonly Action cancelled;
         private CancellationTokenSource previewCancellation;
         private int previewGeneration;
 
         public SetupWizardView(
             SetupWizardViewModel viewModel,
-            Func<bool> completed,
+            Func<CancellationToken, Task<bool>> completed,
             Action cancelled)
         {
             InitializeComponent();
@@ -28,7 +30,7 @@ namespace PersonalCloudLibrarySource
             this.completed = completed ?? throw new ArgumentNullException(nameof(completed));
             this.cancelled = cancelled ?? throw new ArgumentNullException(nameof(cancelled));
             DataContext = viewModel;
-            Unloaded += (sender, args) => CancelPreview();
+            Unloaded += (sender, args) => CancelPendingOperations();
             RefreshView();
         }
 
@@ -77,28 +79,76 @@ namespace PersonalCloudLibrarySource
             RefreshView();
         }
 
-        private void Finish_Click(object sender, RoutedEventArgs e)
+        private async void Finish_Click(object sender, RoutedEventArgs e)
         {
-            if (viewModel.Complete())
+            if (finishBusy) return;
+            if (!viewModel.Complete())
             {
-                if (completed())
-                {
-                    return;
-                }
-
-                viewModel.ReactivateReviewAfterSaveFailure(PclsResources.Get(
-                    "LOCPLSSetupNotSaved",
-                    "Setup was not saved. Review the values and try again."));
+                RefreshView();
+                return;
             }
 
+            CancelPreview();
+            finishBusy = true;
+            finishCancellation = new CancellationTokenSource();
+            FinishStatusText.Text = PclsResources.Get("LOCPLSSetupFinishing",
+                "Preparing your catalog and saving setup. You can stop this operation.");
             RefreshView();
+            try
+            {
+                if (await completed(finishCancellation.Token))
+                    return;
+
+                if (!IsLoaded) return;
+                viewModel.ReactivateReviewAfterSaveFailure(PclsResources.Get(
+                    "LOCPLSSetupNotSaved", "Setup was not saved. Review the values and try again."));
+            }
+            catch (OperationCanceledException)
+            {
+                if (!IsLoaded) return;
+                viewModel.ReactivateReviewAfterSaveFailure(PclsResources.Get(
+                    "LOCPLSSetupSaveCancelled", "Preparation stopped. No settings were saved."));
+            }
+            catch (Exception ex)
+            {
+                if (!IsLoaded) return;
+                viewModel.ReactivateReviewAfterSaveFailure(
+                    PclsResources.Format("LOCPLSSetupSaveFailedReason",
+                        "Setup could not be saved: {0}", ex.Message));
+            }
+            finally
+            {
+                finishBusy = false;
+                finishCancellation.Dispose();
+                finishCancellation = null;
+                if (IsLoaded)
+                {
+                    FinishStatusText.Text = string.Empty;
+                    RefreshView();
+                }
+            }
         }
 
         private void Cancel_Click(object sender, RoutedEventArgs e)
         {
-            CancelPreview();
+            if (finishBusy)
+            {
+                finishCancellation?.Cancel();
+                CancelButton.IsEnabled = false;
+                FinishStatusText.Text = PclsResources.Get("LOCPLSSetupStopping",
+                    "Stopping setup preparation...");
+                return;
+            }
+
+            CancelPendingOperations();
             viewModel.Cancel();
             cancelled();
+        }
+
+        public void CancelPendingOperations()
+        {
+            CancelPreview();
+            finishCancellation?.Cancel();
         }
 
         private void PreviewAgain_Click(object sender, RoutedEventArgs e)
@@ -320,7 +370,14 @@ namespace PersonalCloudLibrarySource
                 ? Visibility.Hidden
                 : Visibility.Visible;
             NextButton.Visibility = viewModel.CanGoNext ? Visibility.Visible : Visibility.Collapsed;
-            FinishButton.Visibility = viewModel.CanComplete ? Visibility.Visible : Visibility.Collapsed;
+            FinishButton.Visibility = viewModel.CanComplete || finishBusy ? Visibility.Visible : Visibility.Collapsed;
+            FinishButton.IsEnabled = !finishBusy && viewModel.CanComplete;
+            NextButton.IsEnabled = !finishBusy && viewModel.CanGoNext;
+            BackButton.IsEnabled = !finishBusy && viewModel.CanGoBack;
+            CancelButton.IsEnabled = finishCancellation == null || !finishCancellation.IsCancellationRequested;
+            CancelButton.Content = finishBusy
+                ? PclsResources.Get("LOCPLSSetupStopPreparing", "Stop preparing")
+                : PclsResources.Get("LOCPLSSetupCancel", "Cancel");
         }
 
         private Visibility GetVisibility(SetupWizardStep step)

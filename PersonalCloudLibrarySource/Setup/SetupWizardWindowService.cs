@@ -1,5 +1,7 @@
 using Playnite.SDK;
 using System;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace PersonalCloudLibrarySource
@@ -9,7 +11,7 @@ namespace PersonalCloudLibrarySource
         private readonly IPlayniteAPI playniteApi;
         private readonly PersonalCloudLibrarySourceSettingsV3ViewModel settingsViewModel;
         private readonly Func<string> defaultCachePathProvider;
-        private readonly Action prepareSetupCompletion;
+        private readonly Func<CancellationToken, Task> prepareSetupCompletionAsync;
         private readonly Action setupSaved;
         private readonly Action setupDismissed;
         private readonly SetupCompletionCoordinator completionCoordinator = new SetupCompletionCoordinator();
@@ -20,14 +22,14 @@ namespace PersonalCloudLibrarySource
             IPlayniteAPI playniteApi,
             PersonalCloudLibrarySourceSettingsV3ViewModel settingsViewModel,
             Func<string> defaultCachePathProvider,
-            Action prepareSetupCompletion,
+            Func<CancellationToken, Task> prepareSetupCompletionAsync,
             Action setupSaved,
             Action setupDismissed)
         {
             this.playniteApi = playniteApi ?? throw new ArgumentNullException(nameof(playniteApi));
             this.settingsViewModel = settingsViewModel ?? throw new ArgumentNullException(nameof(settingsViewModel));
             this.defaultCachePathProvider = defaultCachePathProvider ?? throw new ArgumentNullException(nameof(defaultCachePathProvider));
-            this.prepareSetupCompletion = prepareSetupCompletion ?? throw new ArgumentNullException(nameof(prepareSetupCompletion));
+            this.prepareSetupCompletionAsync = prepareSetupCompletionAsync ?? throw new ArgumentNullException(nameof(prepareSetupCompletionAsync));
             this.setupSaved = setupSaved ?? throw new ArgumentNullException(nameof(setupSaved));
             this.setupDismissed = setupDismissed ?? throw new ArgumentNullException(nameof(setupDismissed));
         }
@@ -68,7 +70,7 @@ namespace PersonalCloudLibrarySource
                 ShowMaximizeButton = true
             });
             wizardWindow.Title = ResourceProvider.GetString("LOCPLSSetupWizardTitle") ?? "Personal Cloud Library Setup";
-            wizardWindow.Content = new SetupWizardView(viewModel, HandleCompleted, HandleCancelled);
+            wizardWindow.Content = new SetupWizardView(viewModel, HandleCompletedAsync, HandleCancelled);
             wizardWindow.Owner = playniteApi.Dialogs.GetCurrentAppWindow();
             wizardWindow.WindowStartupLocation = WindowStartupLocation.CenterOwner;
             wizardWindow.Width = 780;
@@ -90,18 +92,18 @@ namespace PersonalCloudLibrarySource
             }
         }
 
-        private bool HandleCompleted()
+        private async Task<bool> HandleCompletedAsync(CancellationToken token)
         {
             try
             {
-                var completed = completionCoordinator.Complete(
-                    prepareSetupCompletion,
+                var completed = await completionCoordinator.CompleteAsync(
+                    prepareSetupCompletionAsync,
                     () =>
                     {
                         settingsViewModel.EndEdit();
                         return settingsViewModel.LastEditSavedSuccessfully;
                     },
-                    setupSaved);
+                    setupSaved, token);
                 if (!completed)
                 {
                     playniteApi.Dialogs.ShowMessage(
@@ -114,8 +116,13 @@ namespace PersonalCloudLibrarySource
                 CloseWindow();
                 return true;
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
+                token.ThrowIfCancellationRequested();
                 playniteApi.Dialogs.ShowMessage(
                     PclsResources.Format("LOCPLSSetupSaveFailedReason", "Setup could not be saved: {0}", ex.Message),
                     PclsResources.Get("LOCPLSSetupWizardTitle", "Personal Cloud Library Setup"));
@@ -150,6 +157,7 @@ namespace PersonalCloudLibrarySource
 
         private void WizardWindow_Closed(object sender, EventArgs e)
         {
+            (wizardWindow?.Content as SetupWizardView)?.CancelPendingOperations();
             if (!editCompleted)
             {
                 settingsViewModel.CancelEdit();
