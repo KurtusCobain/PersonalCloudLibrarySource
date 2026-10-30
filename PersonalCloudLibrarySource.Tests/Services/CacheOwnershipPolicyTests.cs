@@ -37,6 +37,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
         {
             var result = new CacheOwnershipPolicy().Assess(root, destination, destination, "game-id", "game-id");
             Assert.That(result.Kind, Is.EqualTo(CacheOwnershipKind.VerifiedReceipt));
+            Assert.That(result.MayDeleteAutomatically, Is.False);
         }
 
         [Test]
