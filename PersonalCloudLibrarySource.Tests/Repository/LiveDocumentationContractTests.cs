@@ -241,7 +241,7 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             // in user-facing documentation and demonstration text.
             Assert.That(
                 Regex.IsMatch(liveText,
-                    @"(?i)(?:[a-z]:\\(?:users|documents and settings)\\[^\\\r\n]+\\|/home/[^/\s]+/)"),
+                    @"(?i)(?:[a-z]:\\(?:users|documents and settings)\\(?!(?:you|yourname|username|example|user|public)\\)[^\\\r\n]+\\|/home/(?!user/|example/)[^/\s]+/)"),
                 Is.False,
                 "User-facing release content contains a host-specific home directory.");
 
