@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using System;
 using System.IO;
+using System.Threading;
 
 namespace PersonalCloudLibrarySource.Tests.Services
 {
@@ -54,6 +55,37 @@ namespace PersonalCloudLibrarySource.Tests.Services
             var scanner = new CacheTreeInventoryScanner();
             Assert.Throws<InvalidOperationException>(() => scanner.Scan(cache, cache));
             Assert.Throws<InvalidOperationException>(() => scanner.Scan(cache, root));
+        }
+
+        [Test]
+        public void CancelledInventoryNeverProducesFingerprintOrDeletesFiles()
+        {
+            var file = Path.Combine(game, "keep.bin");
+            File.WriteAllText(file, "keep");
+            using (var cancellation = new CancellationTokenSource())
+            {
+                cancellation.Cancel();
+                Assert.Throws<OperationCanceledException>(() =>
+                    new CacheTreeInventoryScanner().Scan(cache, game, cancellation.Token));
+            }
+            Assert.That(File.Exists(file), Is.True);
+            Assert.That(File.ReadAllText(file), Is.EqualTo("keep"));
+        }
+
+        [Test]
+        public void StreamingHashIsStableAcrossFilesLargerThanReadBuffer()
+        {
+            var file = Path.Combine(game, "large.bin");
+            File.WriteAllBytes(file, new byte[2 * 1024 * 1024 + 17]);
+            var scanner = new CacheTreeInventoryScanner();
+            var original = scanner.Scan(cache, game).Fingerprint;
+            Assert.That(scanner.Scan(cache, game).Fingerprint, Is.EqualTo(original));
+            using (var stream = new FileStream(file, FileMode.Open, FileAccess.Write))
+            {
+                stream.Position = 1024 * 1024 + 2;
+                stream.WriteByte(123);
+            }
+            Assert.That(scanner.Scan(cache, game).Fingerprint, Is.Not.EqualTo(original));
         }
 
         [Test]
