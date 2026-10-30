@@ -156,7 +156,11 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Directory.CreateDirectory(cached);
             File.WriteAllText(Path.Combine(cached, "one"), "1");
             File.WriteAllText(Path.Combine(cached, "two"), "2");
-            var result = SafeCacheDeletionExecutor.GetUnsafeDescendantReason(cached, maxEntries: 1);
+            var scan = typeof(SafeCacheDeletionExecutor).GetMethod(
+                "GetUnsafeDescendantReason",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.That(scan, Is.Not.Null);
+            var result = (string)scan.Invoke(null, new object[] { cached, 1 });
             Assert.That(result, Does.Contain("too large"));
             Assert.That(Directory.Exists(cached), Is.True);
         }

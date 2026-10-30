@@ -8,9 +8,9 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyTitle("PersonalCloudLibrarySource")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
+[assembly: AssemblyCompany("The Bearclaw & ztwslayer")]
 [assembly: AssemblyProduct("PersonalCloudLibrarySource")]
-[assembly: AssemblyCopyright("Copyright ©  2019")]
+[assembly: AssemblyCopyright("Copyright (c) 2026 The Bearclaw & ztwslayer")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
