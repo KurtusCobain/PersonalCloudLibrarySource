@@ -23,3 +23,8 @@ These limits apply to the 1.0 release candidate while the installed package rema
 ### Draft ownership hardening (October 30, 2026; not yet released)
 
 File-type manifest entries authorize only their own cached file, not the containing directory. If a file item is configured for folder removal (including legacy Ask each time migration), draft builds refuse the uninstall action rather than recursively deleting possible unrelated files. Choose the file-only uninstall mode for those entries. Directory-type entries still require a separately verified ownership strategy before unattended recursive deletion can be considered safe. A classification-only CacheOwnershipPolicy exists but is not a persisted receipt ledger and does **not** authorize deletion; no legacy cache has been automatically adopted. The draft remains blocked pending full ownership persistence/migration implementation and native Playnite Windows acceptance.
+
+
+### Unverified directory caches (draft safety gate)
+
+Draft builds no longer offer or perform automatic **recursive directory removal** for directory-type items without verified PCLS-created installation provenance. Existing folders remain detectable as cached and are not migrated, adopted, or deleted by this restriction. The current provenance classifier is **not** yet a durable verified receipt system, so recursive directory uninstall remains disabled even for new transfers. File-only cache removal remains separately governed by its existing path safety checks. To remove a legacy directory cache before provenance support is completed, review its contents and manage it manually outside PCLS. This is a deliberate temporary compatibility limitation, not a completed ownership-ledger rollout.
