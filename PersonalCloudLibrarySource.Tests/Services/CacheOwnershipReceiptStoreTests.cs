@@ -66,6 +66,22 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void ReceiptStoreInsideCache_IsRefused()
+        {
+            var store = new CacheOwnershipReceiptStore(Path.Combine(cache, "receipts"));
+            Assert.Throws<InvalidOperationException>(() => store.RecordCompleted(cache, "game-id", game));
+            Assert.That(Directory.Exists(Path.Combine(cache, "receipts")), Is.False);
+        }
+
+        [Test]
+        public void DifferentCaseItemId_CannotOverwriteReceipt()
+        {
+            var store = new CacheOwnershipReceiptStore(receipts);
+            store.RecordCompleted(cache, "Game-ID", game);
+            Assert.Throws<IOException>(() => store.RecordCompleted(cache, "game-id", game));
+        }
+
+        [Test]
         public void CorruptReceiptFailsClosed()
         {
             var store = new CacheOwnershipReceiptStore(receipts);
