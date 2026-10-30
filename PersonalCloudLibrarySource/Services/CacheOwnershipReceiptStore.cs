@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 using System.Web.Script.Serialization;
 
 namespace PersonalCloudLibrarySource
@@ -119,20 +120,27 @@ namespace PersonalCloudLibrarySource
         public void RecordCompletedWithInventory(string cacheRoot, string itemId,
             string destination)
         {
-            // Scan before creating the ownership record; any scan failure leaves
-            // no new receipt and never falls back to a path-only V1 record.
-            var snapshot = new CacheTreeInventoryScanner().Scan(cacheRoot, destination);
-            RecordCompletedCore(cacheRoot, itemId, destination, snapshot);
+            RecordCompletedWithInventory(cacheRoot, itemId, destination, CancellationToken.None);
+        }
+
+        public void RecordCompletedWithInventory(string cacheRoot, string itemId,
+            string destination, CancellationToken cancellationToken)
+        {
+            // A cancelled scan must not leave a new ownership record.
+            var snapshot = new CacheTreeInventoryScanner().Scan(cacheRoot, destination, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            RecordCompletedCore(cacheRoot, itemId, destination, snapshot, cancellationToken);
         }
 
         public void RecordCompleted(string cacheRoot, string itemId, string destination)
         {
-            RecordCompletedCore(cacheRoot, itemId, destination, null);
+            RecordCompletedCore(cacheRoot, itemId, destination, null, CancellationToken.None);
         }
 
         private void RecordCompletedCore(string cacheRoot, string itemId,
-            string destination, CacheTreeInventory inventory)
+            string destination, CacheTreeInventory inventory, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             if (PathBoundary.IsContained(cacheRoot, storeRoot) ||
                 PathBoundary.IsContained(storeRoot, cacheRoot))
                 throw new InvalidOperationException("Ownership receipts must be stored outside the cache tree.");
@@ -162,6 +170,7 @@ namespace PersonalCloudLibrarySource
                 using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
                     writer.Write(new JavaScriptSerializer().Serialize(receipt));
+                cancellationToken.ThrowIfCancellationRequested();
                 if (File.Exists(path))
                     throw new IOException("An ownership receipt already exists for this item.");
                 File.Move(temporary, path);
