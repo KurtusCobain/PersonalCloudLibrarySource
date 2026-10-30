@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using System;
 using System.IO;
+using System.Threading;
 
 namespace PersonalCloudLibrarySource.Tests.Services
 {
@@ -155,6 +156,22 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(matches, Is.False);
             Assert.That(store.TryCompareInventory(cache, "game-id", Path.Combine(root, "outside"), out matches), Is.False);
             Assert.That(matches, Is.False);
+        }
+
+        [Test]
+        public void CancelledDirectoryReceipt_DoesNotCreateOwnershipRecord()
+        {
+            File.WriteAllText(Path.Combine(game, "play.exe"), "original");
+            var store = new CacheOwnershipReceiptStore(receipts);
+            using (var cancellation = new CancellationTokenSource())
+            {
+                cancellation.Cancel();
+                Assert.Throws<OperationCanceledException>(() =>
+                    store.RecordCompletedWithInventory(cache, "game-id", game, cancellation.Token));
+            }
+            CacheOwnershipReceipt receipt;
+            Assert.That(store.TryRead(cache, "game-id", out receipt), Is.False);
+            Assert.That(File.Exists(Path.Combine(game, "play.exe")), Is.True);
         }
 
         [Test]
