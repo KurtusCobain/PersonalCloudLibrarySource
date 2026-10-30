@@ -36,7 +36,7 @@ After merging that exact source into `main`, build run #92 also completed succes
 
 ## Draft hardening in progress (not merged)
 
-Draft [PR #10](https://github.com/KurtusCobain/PersonalCloudLibrarySource/pull/10) addresses filesystem safety, invalid transfer cases, manifest bounds, rclone Windows quoting, dashboard counts, misleading settings, screenshot compatibility, source removal protections, and usability guidance. Its newest code also adds a real read-only preview and nonblocking install completion. Verify the latest Windows CI run on that PR before treating these additions as automated-pass.
+Draft PR #10 addresses filesystem safety, invalid transfer cases, manifest bounds, rclone Windows quoting, dashboard counts, misleading settings, screenshot compatibility, source removal protections, and usability guidance. Its newest code also adds a real read-only preview and nonblocking install completion. Verify the latest Windows CI run on that PR before treating these additions as automated-pass.
 
 This draft does not change the installed public package, `main` branch, or installer feed. A passing build and test suite cannot replace manual installed acceptance for lifecycle, cancellation, source disconnect, preservation of settings, or Fullscreen.
 
