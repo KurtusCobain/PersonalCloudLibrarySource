@@ -217,7 +217,9 @@ namespace PersonalCloudLibrarySource
 
                 var files = Directory.GetFiles(partialPath, "*", SearchOption.AllDirectories);
                 copiedBytes = files.Sum(file => new FileInfo(file).Length);
-                return files.Length > 0;
+                // An empty directory is a valid transfer. This checks presence/structure,
+                // not cryptographic integrity or remote-to-local content equality.
+                return true;
             }
 
             if (!File.Exists(partialPath))
@@ -226,7 +228,8 @@ namespace PersonalCloudLibrarySource
             }
 
             copiedBytes = new FileInfo(partialPath).Length;
-            return copiedBytes > 0;
+            // A zero-byte file is valid; successful rclone exit plus file existence is sufficient here.
+            return true;
         }
 
         private static string NormalizeDestination(string destinationPath, bool isDirectory)

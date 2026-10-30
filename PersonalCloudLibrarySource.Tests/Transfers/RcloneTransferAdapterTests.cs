@@ -80,6 +80,67 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void CopyFile_ZeroByteFile_IsCommittedSuccessfully()
+        {
+            var destination = Path.Combine(testRoot, "cache", "empty.dat");
+            var runner = new FakeRcloneProcessRunner(request =>
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(request.DestinationPath));
+                File.WriteAllBytes(request.DestinationPath, new byte[0]);
+                return RcloneProcessResult.Success("ok");
+            });
+
+            var result = new RcloneTransferAdapter(runner).Copy(
+                CreateSettings(), "library/empty.dat", destination,
+                false, CancellationToken.None, null);
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(File.Exists(destination), Is.True);
+            Assert.That(new FileInfo(destination).Length, Is.EqualTo(0));
+            Assert.That(File.Exists(destination + ".pcls-partial"), Is.False);
+        }
+
+        [Test]
+        public void CopyDirectory_EmptyDirectory_IsCommittedSuccessfully()
+        {
+            var destination = Path.Combine(testRoot, "cache", "empty-folder");
+            var runner = new FakeRcloneProcessRunner(request =>
+            {
+                Directory.CreateDirectory(request.DestinationPath);
+                return RcloneProcessResult.Success("ok");
+            });
+
+            var result = new RcloneTransferAdapter(runner).Copy(
+                CreateSettings(), "library/empty-folder", destination,
+                true, CancellationToken.None, null);
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(Directory.Exists(destination), Is.True);
+            Assert.That(Directory.GetFileSystemEntries(destination).Length, Is.EqualTo(0));
+            Assert.That(Directory.Exists(destination + ".pcls-partial"), Is.False);
+        }
+
+        [Test]
+        public void CopyDirectory_OnlyZeroByteFiles_SucceedsAndPreservesFiles()
+        {
+            var destination = Path.Combine(testRoot, "cache", "zero-byte-folder");
+            var runner = new FakeRcloneProcessRunner(request =>
+            {
+                Directory.CreateDirectory(request.DestinationPath);
+                File.WriteAllBytes(Path.Combine(request.DestinationPath, "marker.txt"), new byte[0]);
+                return RcloneProcessResult.Success("ok");
+            });
+
+            var result = new RcloneTransferAdapter(runner).Copy(
+                CreateSettings(), "library/zero-byte-folder", destination,
+                true, CancellationToken.None, null);
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(File.Exists(Path.Combine(destination, "marker.txt")), Is.True);
+            Assert.That(new FileInfo(Path.Combine(destination, "marker.txt")).Length, Is.EqualTo(0));
+        }
+
+        [Test]
         public void Copy_Cancelled_RemovesPartialDataAndLeavesFinalDestinationMissing()
         {
             var destination = Path.Combine(testRoot, "cache", "game.zip");
