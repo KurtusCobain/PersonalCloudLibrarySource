@@ -1,5 +1,7 @@
 # PCLS 1.0 Release Checklist
 
+> **2026-10-30 update:** Source hardening is active on unmerged draft PR #10. The old 2026-09-21 source-consolidation notes remain as historical evidence. The current final-polish, independent review, and genuine screenshot requirements are maintained in [Final Polish & Independent Review Gate](../../final-polish-gate.md). Do not mark manual Playnite, Fullscreen, upgrade, Toolbox or release rows complete based solely on Windows CI.
+
 > **2026-09-21 source-consolidation update:** PR #9 was intentionally merged into `main` at `12705ed2b672ae745580071a61cdf1b6cd2ecd92` after exact-head qualification and successful post-merge build run #92. This checklist now gates **public package publication**, not source integration. The Playnite installer feed remains pinned to published v0.2.0 until the remaining installed/manual gates pass.
 
 **Branch:** `main`
