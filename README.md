@@ -54,6 +54,8 @@ Catalog-only and cached games appear in the normal Desktop library. Standard Pla
 - `LocalFolder`: reads a manifest beneath a library root and copies selected files or directories into the local cache.
 - `RcloneRemote`: reads and downloads through a user-configured rclone remote.
 
+Rclone transfers require rclone 1.63 or newer (1.75.2 verified). PCLS uses `--inplace` only for its private job-owned staging path, then verifies and publishes the completed cache entry. This prevents rclone upload sidecars from surviving cancellation.
+
 Local folders can point at fixed disks, external drives, mapped drives, UNC/NAS paths, or synced cloud folders. Availability, credentials, and stable drive mappings remain the user's responsibility.
 
 ## Setup
