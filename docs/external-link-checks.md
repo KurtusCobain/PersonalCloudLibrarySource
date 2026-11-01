@@ -16,3 +16,9 @@ Checked with HTTP `HEAD` requests on 2026-07-14. All listed endpoints returned H
 | 200 | https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-settings-provider.png |
 | 200 | https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/PersonalCloudLibrarySource/icon.png |
 | 200 | https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/playnite-addon/installer.yaml |
+
+## Official v0.3.2 Toolbox validation — 2026-11-01
+
+| Result | URL |
+|---|---|
+| Successful Windows workflow (official Playnite Toolbox addon and installer checks, both exit code 0) | https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/41353669451 |
