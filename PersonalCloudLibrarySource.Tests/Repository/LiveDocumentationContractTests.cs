@@ -152,6 +152,8 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             Assert.That(extension.Mapping.ContainsKey("Links"), Is.True);
             Assert.That(addon.Mapping.ContainsKey("Screenshots"), Is.True);
             Assert.That(installer.Sequence("Packages").Count, Is.GreaterThan(0));
+            Assert.That(installer.Sequence("Packages").Any(item => item.Scalar("Version") == "0.3.2"), Is.True);
+            Assert.That(installer.Sequence("Packages").Any(item => item.Scalar("Version") == "0.2.0"), Is.True);
             Assert.That(installer.Sequence("Packages").Any(item => item.Scalar("Version") == "1.0.0"), Is.False);
         }
 
@@ -248,13 +250,14 @@ namespace PersonalCloudLibrarySource.Tests.Repository
         }
 
         [Test]
-        public void ReleaseCandidateCopy_KeepsPreReleaseIdentityAndCompleteOnePointZeroDraft()
+        public void PublicV032Copy_KeepsReleaseIdentityAndFutureOnePointZeroDraft()
         {
             var readme = File.ReadAllText(Path.Combine(Root(), "README.md"));
             var changelog = File.ReadAllText(Path.Combine(Root(), "CHANGELOG.md"));
             var notes = File.ReadAllText(Path.Combine(Root(), "docs", "playnite-release-notes.md"));
             StringAssert.Contains("1.0 release candidate", readme);
-            StringAssert.Contains("## 1.0.0 - Unreleased", changelog);
+            StringAssert.Contains("## 0.3.2 - 2026-11-01 (Public Release)", changelog);
+            StringAssert.Contains("publicly released", File.ReadAllText(Path.Combine(Root(), "docs", "release-status.md")));
             StringAssert.Contains("Release-candidate draft", notes);
             foreach (var term in new[] { "LocalFile", "LocalFolder", "RcloneRemote", "dashboard", "Fullscreen", "safe uninstall", "migration", "diagnostics" })
             {
