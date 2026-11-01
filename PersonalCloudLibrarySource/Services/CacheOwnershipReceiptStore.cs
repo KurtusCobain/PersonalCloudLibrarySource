@@ -189,7 +189,7 @@ namespace PersonalCloudLibrarySource
             Directory.CreateDirectory(storeRoot);
             // CreateNew refuses to overwrite a prior ownership claim. A unique
             // staging name and rename avoid exposing truncated receipt contents.
-            var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            var temporary = Path.Combine(storeRoot, Guid.NewGuid().ToString("N") + ".tmp");
             try
             {
                 using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
