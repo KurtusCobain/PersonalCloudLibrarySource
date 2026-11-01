@@ -31,6 +31,10 @@ Generate a manifest with `tools/generate-manifest.ps1` when you want to scan a l
 }
 ```
 
+## Catalog input limits
+
+The candidate reads manifests up to 32 MiB (local file limit) or 32 million characters (parsed input), with at most 100,000 items. Larger catalogs are refused with an error rather than loading indefinitely or exhausting memory. Split exceptionally large libraries into smaller supported catalogs as needed. These are safeguards, not suggested library sizes.
+
 ## Version 1 Compatibility
 
 Version 1 manifests remain supported. Existing fields such as `localPath`, `installDirectory`, `launchFile`, and legacy `remotePath` can still be used.
@@ -53,9 +57,9 @@ New manifests should use `sourcePath` instead of `remotePath`.
 - `sourcePath`: Provider source path used for install/download actions.
 - `sourceType`: Optional source kind. Use `file` or `directory`. Missing or blank values default to `file`.
 - `packageRole`: Optional package label such as `game`, `dlc`, or `update`.
-- `cachePath`: Preferred local cached launch file path. It can be absolute or relative to `LocalCacheFolder`.
-- `localPath`: Legacy cached launch file path. It can be absolute or relative to `LocalCacheFolder`.
-- `installDirectory`: Legacy cached install directory. It can be absolute or relative to `LocalCacheFolder`.
+- `cachePath`: Preferred local cached launch file path, usually relative to `LocalCacheFolder`. Absolute paths can describe existing files, but **new installs are permitted only inside the configured local cache folder**.
+- `localPath`: Legacy cached launch file path. Absolute paths may identify already existing files; new downloads/copies must stay inside the configured cache.
+- `installDirectory`: Legacy cached install directory. Absolute paths may be used to recognize existing content, not as new destinations outside the cache.
 - `launchFile`: Launch file name used with `installDirectory`, and useful as a clear launch-file hint with `cachePath`.
 - `remotePath`: Legacy fallback for `sourcePath`.
 - `notes`: Optional text imported as the Playnite description.
@@ -94,7 +98,7 @@ Directory packages use `sourceType = directory`:
 
 `sourcePath` points to the source provider path. In LocalFolder mode it is relative to `LocalLibraryRoot`. In RcloneRemote mode it is relative to `RcloneContentRoot` when that setting is provided.
 
-`cachePath` points to the local cache destination. It can be absolute, but relative paths are usually better because they resolve inside `LocalCacheFolder`.
+`cachePath` identifies the local cached file. Relative paths inside `LocalCacheFolder` are recommended. For safety, PCLS refuses **new installs** targeting the cache root itself or any location outside `LocalCacheFolder`. Existing absolute paths may still be catalogued; the outside-cache uninstall option is separate and does not authorize an outside-cache install.
 
 For `sourceType = directory`, `sourcePath` points to the package folder. `installDirectory` should point to the copied folder, and `cachePath` may point to the preferred launch file inside that copied folder. Wii U-style packages may leave `launchFile` blank.
 

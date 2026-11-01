@@ -2,6 +2,8 @@
 
 Personal Cloud Library Source (PCLS) is a Playnite `GameLibrary` plugin that imports a user-supplied manifest for a personal cloud, NAS, external-drive, or local library. It catalogs content; it does not provide or stream games.
 
+PCLS is the Playnite library for files you already own: catalog games from your local folder, external drive, NAS, or rclone remote; **Install** copies a selected game into this PC's cache, **Play** launches that local copy, and **Uninstall**, with the default cache-contained policy, removes an authorized cached copy while retaining the original source and catalog entry. The advanced outside-cache uninstall option can delete external data and should normally remain disabled. Source files are not provided, hosted, or streamed by PCLS.
+
 ## Current status
 
 The **published Playnite package remains v0.2.0**. The `main` branch now contains the consolidated `0.3.2` source / **1.0 release candidate** code, merged on 2026-09-21 after automated qualification. That source merge does **not** publish 0.3.2 or 1.0 to installed users: `playnite-addon/installer.yaml` remains pinned to the existing v0.2.0 release package.
@@ -52,6 +54,8 @@ Catalog-only and cached games appear in the normal Desktop library. Standard Pla
 - `LocalFolder`: reads a manifest beneath a library root and copies selected files or directories into the local cache.
 - `RcloneRemote`: reads and downloads through a user-configured rclone remote.
 
+Rclone transfers require rclone 1.63 or newer (1.75.2 verified). PCLS uses `--inplace` only for its private job-owned staging path, then verifies and publishes the completed cache entry. This prevents rclone upload sidecars from surviving cancellation.
+
 Local folders can point at fixed disks, external drives, mapped drives, UNC/NAS paths, or synced cloud folders. Availability, credentials, and stable drive mappings remain the user's responsibility.
 
 ## Setup
@@ -86,7 +90,7 @@ Detailed guides:
 
 Manifest entries import as normal Playnite games with stable IDs. A valid cached launch path is shown as installed and playable; a missing cache path can remain visible as uninstalled. Eligible entries can be copied or downloaded to the cache. Transfers are queued, can be cancelled or retried, and verify destination existence/size before completion.
 
-Cache deletion is deliberately narrow. Uninstall removes only an authorized cached file or install folder. It refuses filesystem roots, the cache root itself, paths outside the configured cache by default, and unsafe reparse-point paths. It never deletes the manifest, local source library, or rclone remote content.
+Cache deletion is deliberately narrow. With **default settings**, Uninstall removes only an authorized cached file or install folder. It refuses filesystem roots, the cache root itself, paths outside the configured cache, and unsafe reparse-point paths. A separate, advanced **allow outside-cache uninstall** setting widens permitted deletion destinations and should stay disabled for normal use. Even with that setting, the candidate refuses known local source-item paths and library roots; however, it cannot guarantee the safety of every unrelated external path. Rclone remote content is never deleted by this uninstall action. Do not direct external-cache uninstall at your source storage.
 
 ## Desktop and Fullscreen
 

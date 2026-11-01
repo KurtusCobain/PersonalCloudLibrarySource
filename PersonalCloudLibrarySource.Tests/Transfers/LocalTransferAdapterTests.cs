@@ -27,6 +27,20 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             }
         }
 
+        [TestCase(100L, 95L, true)]
+        [TestCase(100L, 100L, false)]
+        [TestCase(100L, 101L, false)]
+        [TestCase(1000L, 990L, false)]
+        [TestCase(0L, 0L, true)]
+        public void DiskSpacePreflight_UsesSmallReserveWithoutOverflow(long free, long required, bool expected)
+        {
+            var method = typeof(LocalTransferAdapter).GetMethod(
+                "HasRequiredSpace",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.That(method, Is.Not.Null);
+            Assert.That((bool)method.Invoke(null, new object[] { free, required }), Is.EqualTo(expected));
+        }
+
         [Test]
         public void CopyFile_UsesPartialFileAndMovesVerifiedResultIntoPlace()
         {
@@ -53,6 +67,39 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(File.Exists(destination + ".pcls-partial"), Is.False);
             Assert.That(lastTransferred, Is.EqualTo(new FileInfo(source).Length));
             Assert.That(lastTotal, Is.EqualTo(new FileInfo(source).Length));
+        }
+
+        [TestCase(FileAttributes.Directory, true)]
+        [TestCase(FileAttributes.Normal, true)]
+        [TestCase(FileAttributes.Directory | FileAttributes.ReparsePoint, false)]
+        [TestCase(FileAttributes.ReparsePoint, false)]
+        public void CopyDirectory_RejectsJunctionsAndLinkedSourceEntries(
+            FileAttributes attributes, bool allowed)
+        {
+            var method = typeof(LocalTransferAdapter).GetMethod(
+                "IsSafeCopyEntry",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.That(method, Is.Not.Null);
+            Assert.That((bool)method.Invoke(null, new object[] { attributes }), Is.EqualTo(allowed));
+        }
+
+        [Test]
+        public void CopyDirectory_CacheInsideSource_RefusesWithoutCreatingPartialOrCopying()
+        {
+            var source = Path.Combine(testRoot, "game-folder");
+            Directory.CreateDirectory(source);
+            var original = Path.Combine(source, "play.exe");
+            File.WriteAllText(original, "original fixture");
+            var destination = Path.Combine(source, "cache", "game-folder");
+
+            var result = new LocalTransferAdapter().CopyDirectory(
+                source, destination, CancellationToken.None, null);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.Message, Does.Contain("overlaps"));
+            Assert.That(File.ReadAllText(original), Is.EqualTo("original fixture"));
+            Assert.That(Directory.Exists(destination), Is.False);
+            Assert.That(Directory.Exists(destination + ".pcls-partial"), Is.False);
         }
 
         [Test]

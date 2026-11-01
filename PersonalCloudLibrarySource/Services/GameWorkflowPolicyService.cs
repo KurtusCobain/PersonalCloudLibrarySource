@@ -29,6 +29,12 @@ namespace PersonalCloudLibrarySource
             }
 
             result.Paths = new CachePathResolver().Resolve(item, settings);
+            if (!result.Paths.Succeeded)
+            {
+                result.InstallRefusalReason = result.Paths.Error;
+                result.UninstallRefusalReason = result.Paths.Error;
+                return result;
+            }
             result.State = new LibraryItemStateResolver().Resolve(
                 item,
                 result.Paths.LaunchPath,
@@ -59,7 +65,26 @@ namespace PersonalCloudLibrarySource
             }
             else
             {
-                result.CanInstall = true;
+                // Externally stored entries may be catalogued or played, but installs
+                // must write only inside the user-selected cache folder.
+                var destination = string.Equals(
+                    PersonalCloudLibrarySource.GetItemSourceType(item), "directory",
+                    StringComparison.OrdinalIgnoreCase)
+                    ? result.Paths.DestinationDirectory
+                    : result.Paths.DestinationFile;
+                if (string.IsNullOrWhiteSpace(destination) ||
+                    !PathBoundary.IsContained(settings.LocalCacheFolder, destination) ||
+                    string.Equals(
+                        PathBoundary.Normalize(settings.LocalCacheFolder),
+                        PathBoundary.Normalize(destination),
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    result.InstallRefusalReason = "Install destination must be inside LocalCacheFolder.";
+                }
+                else
+                {
+                    result.CanInstall = true;
+                }
             }
 
             var requestedTarget = PersonalCloudLibrarySource.ResolveUninstallTargetPath(
@@ -79,6 +104,20 @@ namespace PersonalCloudLibrarySource
             else if (!string.IsNullOrWhiteSpace(refusalReason))
             {
                 result.UninstallRefusalReason = refusalReason;
+            }
+            else if (!PersonalCloudLibrarySource.IsDirectoryItem(item) &&
+                !string.Equals(settings.UninstallBehavior,
+                    PersonalCloudLibrarySourceSettings.RemoveCachedFileOnlyUninstallBehavior,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                result.UninstallRefusalReason = "File-based items cannot authorize recursive folder removal.";
+            }
+            else if (PersonalCloudLibrarySource.IsDirectoryItem(item) &&
+                !string.Equals(settings.UninstallBehavior,
+                    PersonalCloudLibrarySourceSettings.RemoveCachedFileOnlyUninstallBehavior,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                result.UninstallRefusalReason = "Directory cache ownership is unverified; recursive removal is disabled.";
             }
             else if (!File.Exists(result.UninstallTarget) && !Directory.Exists(result.UninstallTarget))
             {

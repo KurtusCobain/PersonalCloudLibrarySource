@@ -2,6 +2,7 @@ using NUnit.Framework;
 using System;
 using System.IO;
 using System.Threading;
+using System.Diagnostics;
 
 namespace PersonalCloudLibrarySource.Tests.Transfers
 {
@@ -24,6 +25,20 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             {
                 Directory.Delete(testRoot, true);
             }
+        }
+
+        [TestCase(FileAttributes.Normal, true)]
+        [TestCase(FileAttributes.Directory, true)]
+        [TestCase(FileAttributes.ReparsePoint, false)]
+        [TestCase(FileAttributes.Directory | FileAttributes.ReparsePoint, false)]
+        public void StagedTransfers_RefuseLinkedTemporaryTargets(
+            FileAttributes attributes, bool expected)
+        {
+            var method = typeof(RcloneTransferAdapter).GetMethod(
+                "IsSafeStagedEntry",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.That(method, Is.Not.Null);
+            Assert.That((bool)method.Invoke(null, new object[] { attributes }), Is.EqualTo(expected));
         }
 
         [Test]
@@ -77,6 +92,67 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(result.Succeeded, Is.True);
             Assert.That(File.Exists(Path.Combine(destination, "nested", "game.cue")), Is.True);
             Assert.That(Directory.Exists(destination + ".pcls-partial"), Is.False);
+        }
+
+        [Test]
+        public void CopyFile_ZeroByteFile_IsCommittedSuccessfully()
+        {
+            var destination = Path.Combine(testRoot, "cache", "empty.dat");
+            var runner = new FakeRcloneProcessRunner(request =>
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(request.DestinationPath));
+                File.WriteAllBytes(request.DestinationPath, new byte[0]);
+                return RcloneProcessResult.Success("ok");
+            });
+
+            var result = new RcloneTransferAdapter(runner).Copy(
+                CreateSettings(), "library/empty.dat", destination,
+                false, CancellationToken.None, null);
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(File.Exists(destination), Is.True);
+            Assert.That(new FileInfo(destination).Length, Is.EqualTo(0));
+            Assert.That(File.Exists(destination + ".pcls-partial"), Is.False);
+        }
+
+        [Test]
+        public void CopyDirectory_EmptyDirectory_IsCommittedSuccessfully()
+        {
+            var destination = Path.Combine(testRoot, "cache", "empty-folder");
+            var runner = new FakeRcloneProcessRunner(request =>
+            {
+                Directory.CreateDirectory(request.DestinationPath);
+                return RcloneProcessResult.Success("ok");
+            });
+
+            var result = new RcloneTransferAdapter(runner).Copy(
+                CreateSettings(), "library/empty-folder", destination,
+                true, CancellationToken.None, null);
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(Directory.Exists(destination), Is.True);
+            Assert.That(Directory.GetFileSystemEntries(destination).Length, Is.EqualTo(0));
+            Assert.That(Directory.Exists(destination + ".pcls-partial"), Is.False);
+        }
+
+        [Test]
+        public void CopyDirectory_OnlyZeroByteFiles_SucceedsAndPreservesFiles()
+        {
+            var destination = Path.Combine(testRoot, "cache", "zero-byte-folder");
+            var runner = new FakeRcloneProcessRunner(request =>
+            {
+                Directory.CreateDirectory(request.DestinationPath);
+                File.WriteAllBytes(Path.Combine(request.DestinationPath, "marker.txt"), new byte[0]);
+                return RcloneProcessResult.Success("ok");
+            });
+
+            var result = new RcloneTransferAdapter(runner).Copy(
+                CreateSettings(), "library/zero-byte-folder", destination,
+                true, CancellationToken.None, null);
+
+            Assert.That(result.Succeeded, Is.True);
+            Assert.That(File.Exists(Path.Combine(destination, "marker.txt")), Is.True);
+            Assert.That(new FileInfo(Path.Combine(destination, "marker.txt")).Length, Is.EqualTo(0));
         }
 
         [Test]
@@ -221,6 +297,67 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(result.Message, Does.Contain("progress consumer failed"));
             Assert.That(File.Exists(destination), Is.False);
             Assert.That(File.Exists(TransferPartialPathPolicy.Create(destination, jobId)), Is.False);
+        }
+
+        [Test]
+        public void CopyDirectory_NestedJunctionFailsClosedWithoutDeletingExternalFiles()
+        {
+            var valuable = Path.Combine(testRoot, "valuable");
+            Directory.CreateDirectory(valuable);
+            var keep = Path.Combine(valuable, "keep.txt");
+            File.WriteAllText(keep, "untouched");
+            // Check junction support before starting the fake rclone execution.
+            var probe = Path.Combine(testRoot, "junction-probe");
+            if (!TryCreateJunction(probe, valuable))
+                Assert.Ignore("Windows directory junction creation is unavailable.");
+            Directory.Delete(probe, false);
+
+            var destination = Path.Combine(testRoot, "cache", "linked-game");
+            string staged = null;
+            string junction = null;
+            try
+            {
+                var runner = new FakeRcloneProcessRunner(request =>
+                {
+                    staged = request.DestinationPath;
+                    Directory.CreateDirectory(staged);
+                    junction = Path.Combine(staged, "unsafe-link");
+                    if (!TryCreateJunction(junction, valuable))
+                        throw new IOException("Junction became unavailable during test.");
+                    return RcloneProcessResult.Success("synthetic success with linked descendant");
+                });
+                var result = new RcloneTransferAdapter(runner).Copy(
+                    CreateSettings(), "library/linked-game", destination,
+                    true, CancellationToken.None, null);
+
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(Directory.Exists(destination), Is.False);
+                Assert.That(File.ReadAllText(keep), Is.EqualTo("untouched"));
+                Assert.That(result.Message, Does.Contain("cleanup"));
+            }
+            finally
+            {
+                // Remove only the junction object before deleting the test-owned
+                // staging folder, so fixture cleanup never traverses its target.
+                if (!string.IsNullOrWhiteSpace(junction) && Directory.Exists(junction))
+                    Directory.Delete(junction, false);
+                if (!string.IsNullOrWhiteSpace(staged) && Directory.Exists(staged))
+                    Directory.Delete(staged, true);
+            }
+        }
+
+        private static bool TryCreateJunction(string junction, string destination)
+        {
+            using (var process = Process.Start(new ProcessStartInfo(
+                "cmd.exe", "/c mklink /J \"" + junction + "\" \"" + destination + "\"")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true
+            }))
+            {
+                process.WaitForExit();
+                return process.ExitCode == 0 && Directory.Exists(junction);
+            }
         }
 
         private static PersonalCloudLibrarySourceSettingsV3 CreateSettings()

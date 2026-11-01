@@ -7,6 +7,43 @@ namespace PersonalCloudLibrarySource.Tests.Services
     [TestFixture]
     public class GameWorkflowPolicyServiceTests
     {
+        [Test]
+        public void Install_ExplicitExternalDestination_IsRefused()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "PCLS-ExternalInstall", Guid.NewGuid().ToString("N"));
+            try
+            {
+                var source = Path.Combine(root, "source");
+                var cache = Path.Combine(root, "cache");
+                Directory.CreateDirectory(source);
+                Directory.CreateDirectory(cache);
+                File.WriteAllText(Path.Combine(source, "game.exe"), "source");
+                var settings = new PersonalCloudLibrarySourceSettingsV3
+                {
+                    Enabled = true,
+                    AllowDownloads = true,
+                    SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFolderProviderType,
+                    LocalLibraryRoot = source,
+                    LocalCacheFolder = cache
+                };
+                var item = new PersonalCloudLibraryItem
+                {
+                    Id = "external", Title = "External",
+                    SourcePath = "game.exe",
+                    CachePath = Path.Combine(root, "external", "game.exe")
+                };
+
+                var result = new GameWorkflowPolicyService().Evaluate(item, settings);
+
+                Assert.That(result.CanInstall, Is.False);
+                Assert.That(result.InstallRefusalReason, Does.Contain("escapes LocalCacheFolder"));
+            }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, true);
+            }
+        }
+
         private string root;
         private string cache;
 
@@ -66,7 +103,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
             var result = new GameWorkflowPolicyService().Evaluate(item, settings);
 
             Assert.That(result.CanUninstall, Is.False);
-            Assert.That(result.UninstallRefusalReason, Does.Contain("outside"));
+            Assert.That(result.UninstallRefusalReason, Does.Contain("escapes LocalCacheFolder"));
         }
 
         [Test]
@@ -81,6 +118,49 @@ namespace PersonalCloudLibrarySource.Tests.Services
 
             Assert.That(result.CanInstall, Is.False);
             Assert.That(result.InstallRefusalReason, Does.Contain("source"));
+        }
+
+        [Test]
+        public void Evaluate_FileGameFolderRemoval_DoesNotOfferUnsafeUninstall()
+        {
+            var launch = Path.Combine(cache, "shared", "play.exe");
+            Directory.CreateDirectory(Path.GetDirectoryName(launch));
+            File.WriteAllText(launch, "stub");
+            File.WriteAllText(Path.Combine(cache, "shared", "personal.txt"), "keep");
+            var settings = RcloneSettings();
+            settings.UninstallBehavior = PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior;
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "game", Title = "Game", SourcePath = "game.exe", CachePath = "shared/play.exe"
+            };
+
+            var result = new GameWorkflowPolicyService().Evaluate(item, settings);
+
+            Assert.That(result.CanUninstall, Is.False);
+            Assert.That(result.UninstallRefusalReason, Does.Contain("File-based"));
+            Assert.That(File.Exists(Path.Combine(cache, "shared", "personal.txt")), Is.True);
+        }
+
+        [Test]
+        public void Evaluate_LegacyDirectoryCache_DoesNotOfferRecursiveRemoval()
+        {
+            var directory = Path.Combine(cache, "legacy");
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(Path.Combine(directory, "personal.txt"), "keep");
+            var settings = RcloneSettings();
+            settings.UninstallBehavior = PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior;
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "legacy", Title = "Legacy", SourceType = "directory",
+                SourcePath = "legacy", InstallDirectory = "legacy"
+            };
+
+            var result = new GameWorkflowPolicyService().Evaluate(item, settings);
+
+            Assert.That(result.State.IsCached, Is.True);
+            Assert.That(result.CanUninstall, Is.False);
+            Assert.That(result.UninstallRefusalReason, Does.Contain("unverified"));
+            Assert.That(File.Exists(Path.Combine(directory, "personal.txt")), Is.True);
         }
 
         private PersonalCloudLibrarySourceSettingsV3 RcloneSettings()

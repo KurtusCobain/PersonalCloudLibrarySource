@@ -2,6 +2,19 @@
 
 ## 1.0.0 - Unreleased
 
+**Release-hardening work in draft PR #10 (not yet merged or published):**
+
+- Restrict new install destinations to the configured cache folder, reject unsafe fallback game IDs, and retain catalog visibility for existing external paths.
+- Correct rclone transfers for empty files/directories, Windows argument quoting, and bounded cloud manifest output.
+- Apply explicit local/remote manifest limits and prevent stale verification snapshots from replacing live dashboard cached counts.
+- Reject local folder transfers that could follow junctions/symlinks outside the chosen source, and prevent folder copies into their own source tree; ensure rejected installs terminate the Playnite install lifecycle.
+- Remove seven nonfunctional settings controls while keeping upgrade-compatible stored fields; explain mandatory transfer-safety behavior.
+- Add a bounded, cancellable read-only game preview to first-run setup, with the first ten detected titles, skipped counts, and clear remote prerequisites.
+- Move local/NAS manifest generation during wizard Finish to a cancellable background task, retaining Playnite settings updates on the UI thread and preventing persistence after cancellation.
+- Observe queued install completion asynchronously and route Playnite completion/cancellation events through the host UI dispatcher; must still pass installed-host validation.
+- Restore compatibility with screenshot URLs in the live Playnite listing.
+- **Compatibility note:** manifests that previously attempted an install outside the cache folder now have to use an inside-cache destination. Existing files must never be relocated or deleted automatically.
+
 - Added guided Desktop setup for `LocalFile`, `LocalFolder`, and `RcloneRemote` providers, with provider-specific validation and verification reports.
 - Centralized manifest loading, parsing, path resolution, import outcomes, and sequential settings migration.
 - Added queue-owned local and rclone transfers with cancellation, retry, progress, partial-file cleanup, and destination verification.

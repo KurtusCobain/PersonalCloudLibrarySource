@@ -23,7 +23,7 @@ Desktop provides guided setup, verification, manifest generation, reports, diagn
 
 ## Safety and limits
 
-Cache uninstall refuses unsafe paths and never deletes source or remote content. PCLS does not stream games, auto-download an entire library, provide content, or provide cloud accounts. Users are responsible for only indexing content they own or have rights to use.
+With the default settings, cache uninstall is restricted to approved locations inside the managed cache; it refuses unsafe roots and reparse-point paths. The advanced outside-cache uninstall option widens permitted deletion destinations and remains risky for unrelated external files, so it should stay disabled for ordinary use. PCLS never issues remote deletion through rclone uninstall. PCLS does not stream games, auto-download an entire library, provide content, or provide cloud accounts. Users are responsible for indexing only content they own or have rights to use.
 
 The live development version is 0.3.2 during 1.0 release-candidate qualification. Installed provider, Fullscreen, upgrade, and final package qualification must not be inferred from this listing.
 

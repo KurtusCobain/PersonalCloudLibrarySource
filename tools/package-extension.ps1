@@ -84,6 +84,14 @@ if (-not (Test-Path -LiteralPath $assetsPath)) {
 
 Copy-Item -LiteralPath $assetsPath -Destination $packageFolder -Recurse -Force
 
+# The extension is MIT-licensed. Ship its copyright and license notice
+# alongside every redistributed package, not just in the source repository.
+$licensePath = Join-Path $repoRoot "LICENSE"
+if (-not (Test-Path -LiteralPath $licensePath)) {
+    throw "PCLS license notice is missing: $licensePath"
+}
+Copy-Item -LiteralPath $licensePath -Destination (Join-Path $packageFolder "LICENSE") -Force
+
 if (Test-Path -LiteralPath $packagePath) {
     Remove-Item -LiteralPath $packagePath -Force
 }

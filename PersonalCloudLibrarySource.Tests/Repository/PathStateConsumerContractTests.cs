@@ -16,7 +16,9 @@ namespace PersonalCloudLibrarySource.Tests.Repository
 
             StringAssert.Contains("new LibraryItemStateApplicator().Apply(Game, itemState)", install);
             StringAssert.Contains("new LibraryItemStateApplicator().Reconcile(", uninstall);
-            StringAssert.Contains("if (!postDeletionState.IsInstalled)", uninstall);
+            StringAssert.Contains("if (hasPlayniteHost)", uninstall);
+            StringAssert.Contains("InvokeOnUninstalled();", uninstall);
+            StringAssert.Contains("throw new InvalidOperationException", uninstall);
         }
 
         [Test]

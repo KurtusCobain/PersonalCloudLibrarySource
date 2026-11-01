@@ -80,6 +80,8 @@ namespace PersonalCloudLibrarySource.Tests.Repository
                 Directory.CreateDirectory(Path.Combine(packageRoot, "Assets"));
                 File.WriteAllText(Path.Combine(packageRoot, "PersonalCloudLibrarySource.dll"), "test");
                 File.WriteAllText(Path.Combine(packageRoot, "extension.yaml"), "Version: " + version);
+                File.Copy(Path.Combine(repositoryRoot, "LICENSE"),
+                    Path.Combine(packageRoot, "LICENSE"));
                 File.WriteAllText(Path.Combine(packageRoot, "icon.png"), "test");
                 File.WriteAllText(Path.Combine(packageRoot, "Localization", "en_US.xaml"), "test");
                 File.WriteAllText(Path.Combine(packageRoot, "Assets", "pcls-logo-wide.png"), "test");

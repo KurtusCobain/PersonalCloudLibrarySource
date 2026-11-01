@@ -72,14 +72,15 @@ namespace PersonalCloudLibrarySource
                     return CloudTransferExecutionResult.Failure("Destination already exists: " + destinationPath);
                 }
 
+                var totalBytes = new FileInfo(sourcePath).Length;
+                var spaceError = CheckDiskSpace(destinationPath, totalBytes);
+                if (!string.IsNullOrWhiteSpace(spaceError))
+                    return CloudTransferExecutionResult.Failure(spaceError);
+
                 DeleteFileIfExists(partialPath);
                 var destinationDirectory = Path.GetDirectoryName(destinationPath);
                 if (!string.IsNullOrWhiteSpace(destinationDirectory))
-                {
                     Directory.CreateDirectory(destinationDirectory);
-                }
-
-                var totalBytes = new FileInfo(sourcePath).Length;
                 var transferred = CopyFileContents(
                     sourcePath,
                     partialPath,
@@ -171,6 +172,16 @@ namespace PersonalCloudLibrarySource
                     return CloudTransferExecutionResult.Failure("Destination already exists: " + normalizedDestination);
                 }
 
+                // Never copy a directory into itself (or into one of its children).
+                // Otherwise enumeration can absorb a previous cache and copying
+                // can recursively consume the source library or disk space.
+                if (PathBoundary.IsContained(sourceDirectory, normalizedDestination) ||
+                    PathBoundary.IsContained(normalizedDestination, sourceDirectory))
+                {
+                    return CloudTransferExecutionResult.Failure(
+                        "Source directory overlaps the cache destination; choose a separate cache location.");
+                }
+
                 DeleteDirectoryIfExists(partialDirectory);
                 var destinationParent = Path.GetDirectoryName(normalizedDestination);
                 if (!string.IsNullOrWhiteSpace(destinationParent))
@@ -180,9 +191,15 @@ namespace PersonalCloudLibrarySource
 
                 var sourceRoot = Path.GetFullPath(sourceDirectory)
                     .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                var directories = Directory.GetDirectories(sourceRoot, "*", SearchOption.AllDirectories);
-                var files = Directory.GetFiles(sourceRoot, "*", SearchOption.AllDirectories);
+                // Never recursively follow Windows junctions/symlinks into a source
+                // outside the selected library. Enumerate top-down and reject links.
+                List<string> directories;
+                List<string> files;
+                CollectSafeSourceTree(sourceRoot, cancellationToken, out directories, out files);
                 var totalBytes = files.Sum(file => new FileInfo(file).Length);
+                var spaceError = CheckDiskSpace(normalizedDestination, totalBytes);
+                if (!string.IsNullOrWhiteSpace(spaceError))
+                    return CloudTransferExecutionResult.Failure(spaceError);
                 var transferred = 0L;
 
                 Directory.CreateDirectory(partialDirectory);
@@ -236,6 +253,82 @@ namespace PersonalCloudLibrarySource
                 DeleteDirectoryIfExists(partialDirectory);
                 return CloudTransferExecutionResult.Failure(ex.Message, ex);
             }
+        }
+
+        // Directory.GetFiles(..., AllDirectories) may traverse junctions and
+        // symbolic links. A user-selected directory must not implicitly pull
+        // arbitrary content from outside the source tree.
+        private static void CollectSafeSourceTree(
+            string root, CancellationToken token,
+            out List<string> directories, out List<string> files)
+        {
+            if (!IsSafeCopyEntry(File.GetAttributes(root)))
+                throw new IOException("Source library folder is a link or junction.");
+
+            directories = new List<string>();
+            files = new List<string>();
+            var pending = new Stack<string>();
+            pending.Push(root);
+            while (pending.Count > 0)
+            {
+                token.ThrowIfCancellationRequested();
+                var current = pending.Pop();
+                foreach (var directory in Directory.GetDirectories(current, "*", SearchOption.TopDirectoryOnly))
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (!IsSafeCopyEntry(File.GetAttributes(directory)))
+                        throw new IOException("Source directory contains a link or junction: " + directory);
+                    if (!PathBoundary.IsContained(root, directory))
+                        throw new IOException("Source directory escapes the chosen library folder.");
+                    directories.Add(directory);
+                    pending.Push(directory);
+                }
+
+                foreach (var file in Directory.GetFiles(current, "*", SearchOption.TopDirectoryOnly))
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (!IsSafeCopyEntry(File.GetAttributes(file)))
+                        throw new IOException("Source directory contains a linked file: " + file);
+                    if (!PathBoundary.IsContained(root, file))
+                        throw new IOException("Source file escapes the chosen library folder.");
+                    files.Add(file);
+                }
+            }
+        }
+
+        internal static bool IsSafeCopyEntry(FileAttributes attributes)
+        {
+            return (attributes & FileAttributes.ReparsePoint) == 0;
+        }
+
+        // Best-effort local destination preflight. When Windows cannot report free
+        // space (some UNC providers), copy still follows normal IO failure/cleanup.
+        private static string CheckDiskSpace(string destinationPath, long requiredBytes)
+        {
+            try
+            {
+                var root = Path.GetPathRoot(Path.GetFullPath(destinationPath));
+                if (string.IsNullOrWhiteSpace(root))
+                    return string.Empty;
+                var drive = new DriveInfo(root);
+                if (!drive.IsReady)
+                    return string.Empty;
+                if (!HasRequiredSpace(drive.AvailableFreeSpace, requiredBytes))
+                    return "Not enough free space on the cache drive. Free space or select another cache folder.";
+            }
+            catch (ArgumentException) { }
+            catch (IOException) { }
+            catch (NotSupportedException) { }
+            catch (UnauthorizedAccessException) { }
+            return string.Empty;
+        }
+
+        internal static bool HasRequiredSpace(long available, long required)
+        {
+            if (available < 0 || required < 0 || available < required)
+                return false;
+            var reserve = Math.Min(64L * 1024 * 1024, required / 20);
+            return available - required >= reserve;
         }
 
         private static string NormalizeDirectoryDestination(string destinationDirectory)
@@ -315,6 +408,8 @@ namespace PersonalCloudLibrarySource
         {
             if (!string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
             {
+                if (!IsSafeCopyEntry(File.GetAttributes(path)))
+                    throw new IOException("Refusing to recursively delete a linked partial directory.");
                 Directory.Delete(path, true);
             }
         }

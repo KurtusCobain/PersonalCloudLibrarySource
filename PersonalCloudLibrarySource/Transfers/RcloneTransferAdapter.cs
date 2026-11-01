@@ -100,6 +100,10 @@ namespace PersonalCloudLibrarySource
                     RemoteSourcePath = remoteSourcePath,
                     DestinationPath = partialPath,
                     IsDirectory = isDirectory,
+                    // This destination is already private job-owned staging.
+                    // Avoid rclone's second random sidecar, which survives a
+                    // killed child process and escapes exact-path cleanup.
+                    UseInPlace = true,
                     TimeoutSeconds = settings.RcloneTimeoutSeconds,
                     ConnectTimeoutSeconds = Math.Min(30, Math.Max(5, settings.RcloneTimeoutSeconds)),
                     InactivityTimeoutSeconds = settings.RcloneTimeoutSeconds
@@ -210,23 +214,32 @@ namespace PersonalCloudLibrarySource
             copiedBytes = 0;
             if (isDirectory)
             {
-                if (!Directory.Exists(partialPath))
+                if (!Directory.Exists(partialPath) ||
+                    !IsSafeStagedEntry(File.GetAttributes(partialPath)) ||
+                    !string.IsNullOrWhiteSpace(
+                        SafeCacheDeletionExecutor.GetUnsafeDescendantReason(partialPath)))
                 {
+                    // Never verify or finalize an rclone staging tree containing
+                    // junctions, symlinks, or an unbounded number of entries.
                     return false;
                 }
 
                 var files = Directory.GetFiles(partialPath, "*", SearchOption.AllDirectories);
                 copiedBytes = files.Sum(file => new FileInfo(file).Length);
-                return files.Length > 0;
+                // An empty directory is a valid transfer. This checks presence/structure,
+                // not cryptographic integrity or remote-to-local content equality.
+                return true;
             }
 
-            if (!File.Exists(partialPath))
+            if (!File.Exists(partialPath) ||
+                !IsSafeStagedEntry(File.GetAttributes(partialPath)))
             {
                 return false;
             }
 
             copiedBytes = new FileInfo(partialPath).Length;
-            return copiedBytes > 0;
+            // A zero-byte file is valid; successful rclone exit plus file existence is sufficient here.
+            return true;
         }
 
         private static string NormalizeDestination(string destinationPath, bool isDirectory)
@@ -234,6 +247,11 @@ namespace PersonalCloudLibrarySource
             return isDirectory
                 ? (destinationPath ?? string.Empty).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                 : destinationPath ?? string.Empty;
+        }
+
+        internal static bool IsSafeStagedEntry(FileAttributes attributes)
+        {
+            return (attributes & FileAttributes.ReparsePoint) == 0;
         }
 
         private static bool TryDeletePartial(string path, out string error)
@@ -246,6 +264,12 @@ namespace PersonalCloudLibrarySource
 
             try
             {
+                // Never recursively delete a junction/symlink planted at the
+                // temporary transfer destination, even on cancellation.
+                if ((File.Exists(path) || Directory.Exists(path)) &&
+                    !IsSafeStagedEntry(File.GetAttributes(path)))
+                    throw new IOException("Refusing to clean a linked partial transfer path.");
+
                 if (File.Exists(path))
                 {
                     File.Delete(path);
@@ -253,6 +277,12 @@ namespace PersonalCloudLibrarySource
 
                 if (Directory.Exists(path))
                 {
+                    // Recursive cleanup is destructive: refuse a staged tree with
+                    // linked descendants or an unbounded inventory. Leave it
+                    // intact for explicit inspection rather than following links.
+                    var unsafeReason = SafeCacheDeletionExecutor.GetUnsafeDescendantReason(path);
+                    if (!string.IsNullOrWhiteSpace(unsafeReason))
+                        throw new IOException("Refusing unsafe partial cleanup: " + unsafeReason);
                     Directory.Delete(path, true);
                 }
 

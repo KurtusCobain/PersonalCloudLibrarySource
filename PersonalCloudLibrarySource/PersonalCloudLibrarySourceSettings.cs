@@ -218,8 +218,7 @@ namespace PersonalCloudLibrarySource
         public string[] UninstallBehaviorOptions { get; } =
         {
             PersonalCloudLibrarySourceSettings.RemoveCachedFileOnlyUninstallBehavior,
-            PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior,
-            PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior
+            PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior
         };
 
         public PersonalCloudLibrarySourceSettings Settings
@@ -415,6 +414,18 @@ namespace PersonalCloudLibrarySource
                 {
                 errors.Add(PclsResources.Get("LOCPLSValidationCachePath", "The local cache folder path is invalid."));
                 }
+            }
+
+            if (Settings.AllowDownloads &&
+                string.Equals(PersonalCloudLibrarySource.GetProviderType(Settings),
+                    PersonalCloudLibrarySourceSettings.LocalFolderProviderType,
+                    StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(Settings.LocalCacheFolder) &&
+                !string.IsNullOrWhiteSpace(Settings.LocalLibraryRoot) &&
+                (PathBoundary.IsContained(Settings.LocalLibraryRoot, Settings.LocalCacheFolder) ||
+                 PathBoundary.IsContained(Settings.LocalCacheFolder, Settings.LocalLibraryRoot)))
+            {
+                errors.Add("Cache folder must be separate from the source library folder.");
             }
 
             var uninstallBehavior = string.IsNullOrWhiteSpace(Settings.UninstallBehavior)

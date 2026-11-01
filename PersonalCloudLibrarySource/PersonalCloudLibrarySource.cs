@@ -184,7 +184,9 @@ namespace PersonalCloudLibrarySource
                         args.Game,
                         item,
                         pluginSettings,
-                        GetTransferQueue()));
+                        GetTransferQueue(),
+                        ownershipReceipts: new CacheOwnershipReceiptStore(
+                            Path.Combine(GetPluginDataDirectory(), "ownership-receipts"))));
                     logger.Info($"Personal Cloud Library Source install action returned for {item.Id}.");
                     return installActions;
                 }
@@ -454,7 +456,8 @@ namespace PersonalCloudLibrarySource
 
             if (string.Equals(behavior, PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior, StringComparison.OrdinalIgnoreCase))
             {
-                return !string.IsNullOrWhiteSpace(installDirectory) ? installDirectory : launchPath;
+                // Defensive fallback for a historical settings snapshot.
+                return installDirectory;
             }
 
             return string.Empty;

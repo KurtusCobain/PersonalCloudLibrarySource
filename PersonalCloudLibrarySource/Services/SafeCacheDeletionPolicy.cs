@@ -106,12 +106,45 @@ namespace PersonalCloudLibrarySource
             this.deleteDirectory = deleteDirectory ?? throw new ArgumentNullException(nameof(deleteDirectory));
         }
 
+        internal static string GetUnsafeDescendantReason(string root, int maxEntries = 150000)
+        {
+            var stack = new System.Collections.Generic.Stack<string>();
+            stack.Push(root);
+            var entries = 0;
+            while (stack.Count > 0)
+            {
+                var current = stack.Pop();
+                if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                    return "cache tree contains a directory link or junction: " + current;
+                foreach (var entry in Directory.EnumerateFileSystemEntries(current, "*", SearchOption.TopDirectoryOnly))
+                {
+                    if (++entries > maxEntries)
+                        return "cache tree is too large to verify safely before deletion";
+                    var attributes = File.GetAttributes(entry);
+                    if ((attributes & FileAttributes.ReparsePoint) != 0)
+                        return "cache tree contains a linked file or directory: " + entry;
+                    if ((attributes & FileAttributes.Directory) != 0)
+                        stack.Push(entry);
+                }
+            }
+            return string.Empty;
+        }
+
         public CacheDeletionAuthorization Delete(string cacheRoot, string targetPath, bool allowOutsideCache)
         {
             var authorization = policy.Authorize(cacheRoot, targetPath, allowOutsideCache);
             if (!authorization.Allowed) return authorization;
-            if (File.Exists(authorization.TargetPath)) deleteFile(authorization.TargetPath);
-            else if (Directory.Exists(authorization.TargetPath)) deleteDirectory(authorization.TargetPath);
+            if (File.Exists(authorization.TargetPath))
+                deleteFile(authorization.TargetPath);
+            else if (Directory.Exists(authorization.TargetPath))
+            {
+                // File.Delete/Directory.Delete recursion is not an authorization
+                // to traverse descendants that were never inspected.
+                var refusal = GetUnsafeDescendantReason(authorization.TargetPath);
+                if (!string.IsNullOrWhiteSpace(refusal))
+                    return new CacheDeletionAuthorization { Reason = refusal };
+                deleteDirectory(authorization.TargetPath);
+            }
             else return new CacheDeletionAuthorization { Reason = "uninstall target does not exist" };
             return authorization;
         }

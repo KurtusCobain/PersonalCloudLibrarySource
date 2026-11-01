@@ -74,6 +74,7 @@
     <Compile Include="Services\GameWorkflowControllerTests.cs" />
     <Compile Include="Services\ManifestParserValidatorTests.cs" />
     <Compile Include="Services\ManifestGenerationCancellationTests.cs" />
+    <Compile Include="Services\ManifestGenerationPreviewTests.cs" />
     <Compile Include="Services\ImportNotificationServiceTests.cs" />
     <Compile Include="Services\ImportOutcomeServiceTests.cs" />
     <Compile Include="Services\ManifestLoaderTests.cs" />
@@ -82,6 +83,9 @@
     <Compile Include="Services\LibraryItemStateResolverTests.cs" />
     <Compile Include="Services\LibraryVerificationManifestDiagnosticsTests.cs" />
     <Compile Include="Services\SafeCacheDeletionPolicyTests.cs" />
+    <Compile Include="Services\CacheOwnershipPolicyTests.cs" />
+    <Compile Include="Services\CacheOwnershipReceiptStoreTests.cs" />
+    <Compile Include="Services\CacheTreeInventoryScannerTests.cs" />
     <Compile Include="Services\PluginNavigationServiceTests.cs" />
     <Compile Include="SettingsEditSessionTests.cs" />
     <Compile Include="SettingsMigrationServiceTests.cs" />
@@ -99,10 +103,13 @@
     <Compile Include="Transfers\CloudTransferQueueItemViewModelTests.cs" />
     <Compile Include="Transfers\LocalTransferAdapterTests.cs" />
     <Compile Include="Transfers\RcloneCommandBuilderTests.cs" />
+    <Compile Include="Transfers\RcloneManifestReaderBoundsTests.cs" />
     <Compile Include="Transfers\RcloneProgressParserTests.cs" />
     <Compile Include="Transfers\RcloneProcessRunnerTests.cs" />
     <Compile Include="Transfers\RcloneActivityTimeoutTests.cs" />
     <Compile Include="Transfers\RcloneTransferAdapterTests.cs" />
+    <Compile Include="Transfers\RcloneReceiptIntegrationTests.cs" />
+    <Compile Include="Transfers\RcloneLocalBinaryIntegrationTests.cs" />
     <Compile Include="Transfers\TransferActivityTrackerTests.cs" />
     <Compile Include="Transfers\TransferQueueServiceTests.cs" />
     <Compile Include="Transfers\TransferPartialPathPolicyTests.cs" />

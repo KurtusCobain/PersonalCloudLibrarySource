@@ -1,6 +1,7 @@
 using Playnite.SDK.Models;
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 namespace PersonalCloudLibrarySource
 {
@@ -13,6 +14,8 @@ namespace PersonalCloudLibrarySource
         {
             var games = new List<GameMetadata>();
             var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var destinations = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var directoryDestinations = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var item in items ?? new PersonalCloudLibraryItem[0])
             {
                 if (item == null)
@@ -32,6 +35,27 @@ namespace PersonalCloudLibrarySource
                 }
 
                 var paths = new CachePathResolver().Resolve(item, settings);
+                if (!paths.Succeeded)
+                {
+                    // Failing the entire import preserves existing Playnite games.
+                    // Silently skipping old absolute-cache entries could turn an
+                    // upgraded user's populated library into an empty result.
+                    throw new InvalidOperationException("Item '" + item.Id +
+                        "' has an invalid cache path: " + paths.Error);
+                }
+                var destination = PersonalCloudLibrarySource.IsDirectoryItem(item)
+                    ? paths.DestinationDirectory : paths.DestinationFile;
+                if (!string.IsNullOrWhiteSpace(destination))
+                {
+                    string previousId;
+                    if (destinations.TryGetValue(destination, out previousId))
+                        throw new InvalidOperationException("Games '" + previousId +
+                            "' and '" + item.Id + "' share the same cache destination.");
+                    destinations.Add(destination, item.Id);
+                    if (PersonalCloudLibrarySource.IsDirectoryItem(item))
+                        directoryDestinations.Add(destination, item.Id);
+                }
+
                 var state = new LibraryItemStateResolver().Resolve(
                     item,
                     paths.LaunchPath,
@@ -69,6 +93,24 @@ namespace PersonalCloudLibrarySource
                     "; playActionCount=" + (state.HasPlayAction ? 1 : 0) + "; playActionName=" + (state.HasPlayAction ? "Play" : string.Empty) +
                     "; playActionPath=" + state.PlayPath + "; skipReason=");
                 games.Add(game);
+            }
+            // Check ancestors after collecting every destination, independent of manifest order.
+            // A directory game cannot own a parent of another game's cache destination:
+            // uninstalling the parent would otherwise recursively delete its neighbor.
+            // Each lookup is O(1) on average; traversal is bounded by path depth.
+            foreach (var destination in destinations)
+            {
+                var parent = Path.GetDirectoryName(destination.Key);
+                while (!string.IsNullOrWhiteSpace(parent))
+                {
+                    string directoryOwner;
+                    if (directoryDestinations.TryGetValue(parent, out directoryOwner))
+                        throw new InvalidOperationException("Games '" + directoryOwner +
+                            "' and '" + destination.Value + "' have overlapping cache destinations.");
+                    var next = Path.GetDirectoryName(parent);
+                    if (string.Equals(next, parent, StringComparison.OrdinalIgnoreCase)) break;
+                    parent = next;
+                }
             }
             return games;
         }

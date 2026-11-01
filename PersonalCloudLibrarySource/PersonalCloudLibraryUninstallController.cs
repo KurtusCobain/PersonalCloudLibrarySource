@@ -14,6 +14,7 @@ namespace PersonalCloudLibrarySource
         private readonly PersonalCloudLibrarySourceSettings settings;
         private readonly SafeCacheDeletionExecutor deletionExecutor;
         private readonly GameWorkflowNotificationService workflowNotifications;
+        private readonly bool hasPlayniteHost;
 
         public PersonalCloudLibraryUninstallController(
             IPlayniteAPI playniteApi,
@@ -23,6 +24,7 @@ namespace PersonalCloudLibrarySource
             GameWorkflowNotificationService workflowNotifications = null,
             SafeCacheDeletionExecutor deletionExecutor = null) : base(game)
         {
+            hasPlayniteHost = playniteApi != null;
             this.item = item;
             this.settings = settings;
             this.workflowNotifications = workflowNotifications ?? CreateNotifications(playniteApi);
@@ -36,24 +38,29 @@ namespace PersonalCloudLibrarySource
             var installDirectory = PersonalCloudLibrarySource.ResolveInstallDirectory(item, settings, launchPath);
             var behavior = NormalizeUninstallBehavior(settings.UninstallBehavior);
 
-            if (string.Equals(behavior, PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior, StringComparison.OrdinalIgnoreCase))
-            {
-                behavior = ChooseUninstallBehavior();
-                if (string.IsNullOrWhiteSpace(behavior))
-                {
-                    workflowNotifications.Failure(
-                        "uninstall",
-                        Game.GameId,
-                        PclsResources.Get(
-                            "LOCPLSUninstallBehaviorRequired",
-                            "Remove cached copy needs a deterministic uninstall behavior. Open plugin settings in Desktop mode, choose file-only or install-folder removal, then try again."));
-                    return;
-                }
-            }
-
             var requestedTargetPath = ResolveTargetPath(behavior, launchPath, installDirectory);
             string refusalReason;
             var targetPath = PersonalCloudLibrarySource.ResolveSafeUninstallTarget(settings, requestedTargetPath, out refusalReason);
+            if (string.IsNullOrWhiteSpace(refusalReason))
+                refusalReason = GetLocalSourceProtectionRefusal(targetPath);
+            // A single-file manifest entry never proves exclusive ownership of
+            // its containing directory. Folder removal could erase unrelated
+            // user files even if the launch file itself is cache-contained.
+            if (string.IsNullOrWhiteSpace(refusalReason) &&
+                !PersonalCloudLibrarySource.IsDirectoryItem(item) &&
+                string.Equals(behavior,
+                    PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior,
+                    StringComparison.OrdinalIgnoreCase))
+                refusalReason = "File-based cache entries cannot authorize recursive folder deletion; select file-only removal.";
+            // Until durable transfer receipts are issued and verified, a manifest
+            // alone cannot establish ownership of an entire directory tree.
+            if (string.IsNullOrWhiteSpace(refusalReason) &&
+                PersonalCloudLibrarySource.IsDirectoryItem(item) &&
+                string.Equals(behavior,
+                    PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior,
+                    StringComparison.OrdinalIgnoreCase))
+                refusalReason = "Directory cache ownership is unverified; recursive removal is disabled.";
+
             var insideCache = PersonalCloudLibrarySource.IsPathInsideCacheFolder(targetPath, settings.LocalCacheFolder);
 
             logger.Info(
@@ -69,7 +76,9 @@ namespace PersonalCloudLibrarySource
                     item.Title,
                     refusalReason,
                     nameof(PersonalCloudLibrarySourceSettings.LocalCacheFolder)));
-                return;
+                // Playnite has no uninstallation-cancel event; its exception path
+                // resets IsUninstalling and disposes this controller.
+                throw new InvalidOperationException("Cached-copy deletion refused: " + refusalReason);
             }
 
             try
@@ -80,14 +89,7 @@ namespace PersonalCloudLibrarySource
                     settings.AllowUninstallOutsideCacheFolder);
                 if (!deletion.Allowed)
                 {
-                    logger.Info($"Personal Cloud Library Source uninstall skipped for {Game.GameId}: {deletion.Reason}.");
-                    workflowNotifications.Warning("uninstall", Game.GameId, PclsResources.Format(
-                        "LOCPLSUninstallSkippedNotification",
-                        "Remove cached copy was skipped.{0}{0}Item: {1}{0}Reason: {2}",
-                        Environment.NewLine,
-                        item.Title,
-                        deletion.Reason));
-                    return;
+                    throw new InvalidOperationException("Cached-copy deletion refused: " + deletion.Reason);
                 }
 
                 var postDeletionState = new LibraryItemStateApplicator().Reconcile(
@@ -96,10 +98,10 @@ namespace PersonalCloudLibrarySource
                     launchPath,
                     installDirectory,
                     settings.TreatMissingFilesAsUninstalled);
-                if (!postDeletionState.IsInstalled)
-                {
+                // A completed removal must notify the host even when the
+                // optional missing-file status preference remains enabled.
+                if (hasPlayniteHost)
                     InvokeOnUninstalled();
-                }
                 logger.Info($"Personal Cloud Library Source uninstall succeeded for {Game.GameId}: deleted {targetPath}.");
                 workflowNotifications.Success("uninstall", Game.GameId, PclsResources.Format(
                     "LOCPLSUninstallCompletedNotification",
@@ -119,12 +121,41 @@ namespace PersonalCloudLibrarySource
                     Environment.NewLine,
                     item.Title,
                     ex.Message));
+                throw;
             }
         }
 
-        private string ChooseUninstallBehavior()
+        // Even the explicit outside-cache option must never authorize deletion
+        // of the source item, an ancestor of it, or the managed local library root.
+        private string GetLocalSourceProtectionRefusal(string targetPath)
         {
-            logger.Warn("Personal Cloud Library Source AskEachTime uninstall is unavailable in a standard controller. Select a deterministic uninstall behavior in plugin settings.");
+            if (string.IsNullOrWhiteSpace(targetPath))
+                return "uninstall target could not be verified";
+
+            var provider = PersonalCloudLibrarySource.GetProviderType(settings);
+            if (string.Equals(provider, PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
+                StringComparison.OrdinalIgnoreCase))
+                return string.Empty;
+
+            var itemSource = PersonalCloudLibrarySource.GetItemSourcePath(item);
+            var resolved = new SourcePathResolver().ResolveLocal(settings, itemSource);
+            if (!resolved.Succeeded)
+            {
+                return settings.AllowUninstallOutsideCacheFolder &&
+                       !PathBoundary.IsContained(settings.LocalCacheFolder, targetPath)
+                    ? "cannot verify the original local source path for outside-cache uninstall"
+                    : string.Empty;
+            }
+
+            if (PathBoundary.IsContained(resolved.Path, targetPath) ||
+                PathBoundary.IsContained(targetPath, resolved.Path))
+                return "uninstall target overlaps the original source item";
+
+            if (string.Equals(provider, PersonalCloudLibrarySourceSettings.LocalFolderProviderType,
+                StringComparison.OrdinalIgnoreCase) &&
+                PathBoundary.IsContained(settings.LocalLibraryRoot, targetPath))
+                return "uninstall target is within the original library source folder";
+
             return string.Empty;
         }
 
@@ -145,7 +176,9 @@ namespace PersonalCloudLibrarySource
 
         private static string NormalizeUninstallBehavior(string behavior)
         {
-            return string.IsNullOrWhiteSpace(behavior)
+            return string.IsNullOrWhiteSpace(behavior) ||
+                   string.Equals(behavior, PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior,
+                       StringComparison.OrdinalIgnoreCase)
                 ? PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior
                 : behavior;
         }

@@ -28,7 +28,7 @@ namespace PersonalCloudLibrarySource.Tests
             Assert.That(result.Settings.RcloneTimeoutSeconds, Is.EqualTo(75));
             Assert.That(result.Settings.AllowDownloads, Is.False);
             Assert.That(result.Settings.TreatMissingFilesAsUninstalled, Is.False);
-            Assert.That(result.Settings.UninstallBehavior, Is.EqualTo(PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior));
+            Assert.That(result.Settings.UninstallBehavior, Is.EqualTo(PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior));
             Assert.That(result.Settings.AllowUninstallOutsideCacheFolder, Is.True);
         }
 
@@ -142,6 +142,22 @@ namespace PersonalCloudLibrarySource.Tests
         }
 
         [Test]
+        public void Migrate_CurrentVersionAskEachTime_NormalizesOnceWithoutDroppingPaths()
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                SettingsVersion = PersonalCloudLibrarySourceSettingsV3.CurrentSettingsVersion,
+                UninstallBehavior = PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior,
+                LocalCacheFolder = @"D:\ExistingCache"
+            };
+            Assert.That(SettingsMigrationService.Migrate(settings).WasMigrated, Is.True);
+            Assert.That(settings.UninstallBehavior,
+                Is.EqualTo(PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior));
+            Assert.That(settings.LocalCacheFolder, Is.EqualTo(@"D:\ExistingCache"));
+            Assert.That(SettingsMigrationService.Migrate(settings).WasMigrated, Is.False);
+        }
+
+        [Test]
         public void LoadLegacyOrDefault_LoaderThrows_ReturnsSafeLegacyDefaults()
         {
             var settings = SettingsMigrationService.LoadLegacyOrDefault(
@@ -183,7 +199,7 @@ namespace PersonalCloudLibrarySource.Tests
             Assert.That(settings.LocalCacheFolder, Is.EqualTo(@"D:\PlayniteCache"));
             Assert.That(settings.AllowDownloads, Is.False);
             Assert.That(settings.AllowUninstallOutsideCacheFolder, Is.True);
-            Assert.That(settings.UninstallBehavior, Is.EqualTo(PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior));
+            Assert.That(settings.UninstallBehavior, Is.EqualTo(PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior));
             Assert.That(settings.ShowTopPanelButton, Is.True);
             Assert.That(settings.ShowSidebarDashboard, Is.True);
             Assert.That(settings.ShowSetupReminders, Is.True);
@@ -207,7 +223,7 @@ namespace PersonalCloudLibrarySource.Tests
                 LocalCacheFolder = @"E:\PlayniteCache",
                 TreatMissingFilesAsUninstalled = false,
                 RcloneExecutablePath = @"C:\Tools\rclone.exe",
-                RcloneRemoteName = "romcade_drive",
+                RcloneRemoteName = "sample_drive",
                 RcloneManifestPath = "PersonalLibrary/library.json",
                 RcloneContentRoot = "PersonalLibrary",
                 RcloneTimeoutSeconds = 75,
@@ -238,13 +254,13 @@ namespace PersonalCloudLibrarySource.Tests
             Assert.That(result.Settings.LocalCacheFolder, Is.EqualTo(@"E:\PlayniteCache"));
             Assert.That(result.Settings.TreatMissingFilesAsUninstalled, Is.False);
             Assert.That(result.Settings.RcloneExecutablePath, Is.EqualTo(@"C:\Tools\rclone.exe"));
-            Assert.That(result.Settings.RcloneRemoteName, Is.EqualTo("romcade_drive"));
+            Assert.That(result.Settings.RcloneRemoteName, Is.EqualTo("sample_drive"));
             Assert.That(result.Settings.RcloneManifestPath, Is.EqualTo("PersonalLibrary/library.json"));
             Assert.That(result.Settings.RcloneContentRoot, Is.EqualTo("PersonalLibrary"));
             Assert.That(result.Settings.RcloneTimeoutSeconds, Is.EqualTo(75));
             Assert.That(result.Settings.AllowDownloads, Is.False);
             Assert.That(result.Settings.EnableDiagnostics, Is.False);
-            Assert.That(result.Settings.UninstallBehavior, Is.EqualTo(PersonalCloudLibrarySourceSettings.AskEachTimeUninstallBehavior));
+            Assert.That(result.Settings.UninstallBehavior, Is.EqualTo(PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior));
             Assert.That(result.Settings.AllowUninstallOutsideCacheFolder, Is.True);
             Assert.That(result.Settings.AutoRefreshOnApplicationStart, Is.True);
             Assert.That(result.Settings.AutoGenerateManifestOnApplicationStart, Is.True);
@@ -261,7 +277,7 @@ namespace PersonalCloudLibrarySource.Tests
             {
                 SettingsVersion = PersonalCloudLibrarySourceSettingsV3.CurrentSettingsVersion,
                 SourceProviderType = PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
-                RcloneRemoteName = "romcade_drive",
+                RcloneRemoteName = "sample_drive",
                 ShowTopPanelButton = false,
                 ShowSidebarDashboard = false,
                 OpenDashboardAtStartup = true,
@@ -274,7 +290,7 @@ namespace PersonalCloudLibrarySource.Tests
             Assert.That(v3Clone, Is.Not.Null);
             Assert.That(v3Clone, Is.Not.SameAs(settings));
             Assert.That(v3Clone.SettingsVersion, Is.EqualTo(PersonalCloudLibrarySourceSettingsV3.CurrentSettingsVersion));
-            Assert.That(v3Clone.RcloneRemoteName, Is.EqualTo("romcade_drive"));
+            Assert.That(v3Clone.RcloneRemoteName, Is.EqualTo("sample_drive"));
             Assert.That(v3Clone.ShowTopPanelButton, Is.False);
             Assert.That(v3Clone.ShowSidebarDashboard, Is.False);
             Assert.That(v3Clone.OpenDashboardAtStartup, Is.True);

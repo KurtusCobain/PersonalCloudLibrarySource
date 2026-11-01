@@ -278,28 +278,12 @@
                         </Grid>
                         <CheckBox Content="{DynamicResource LOCPLSSettingsAllowDownloads}" IsChecked="{Binding Settings.AllowDownloads}" Margin="0,0,0,8" />
                         <CheckBox Content="{DynamicResource LOCPLSSetupMissingFiles}" IsChecked="{Binding Settings.TreatMissingFilesAsUninstalled}" Margin="0,0,0,8" />
-                        <CheckBox Content="{DynamicResource LOCPLSSettingsVerifyTransfers}" IsChecked="{Binding Settings.VerifyAfterTransfer}" Margin="0,0,0,8" />
-                        <CheckBox Content="{DynamicResource LOCPLSSettingsRemoveIncomplete}" IsChecked="{Binding Settings.RemoveIncompleteTransferFiles}" Margin="0,0,0,14" />
+                        <TextBlock Text="{DynamicResource LOCPLSCacheSafetyAlwaysOn}" TextWrapping="Wrap" Margin="0,0,0,14" />
                         <TextBlock Text="{DynamicResource LOCPLSSettingsConcurrency}" FontWeight="SemiBold" />
                         <TextBox Text="{Binding Settings.TransferConcurrency, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" Width="120" Margin="0,5,0,14" />
                         <TextBlock Text="{DynamicResource LOCPLSSettingsUninstallBehavior}" FontWeight="SemiBold" />
                         <ComboBox ItemsSource="{Binding UninstallBehaviorOptions}" SelectedItem="{Binding Settings.UninstallBehavior, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Left" MinWidth="280" Margin="0,5,0,14" />
                         <Button Content="{DynamicResource LOCPLSOpenCacheFolder}" Click="OpenCacheFolder_Click" HorizontalAlignment="Left" Padding="10,5" />
-                    </StackPanel>
-                </ScrollViewer>
-            </TabItem>
-
-            <TabItem Header="{DynamicResource LOCPLSSettingsNotificationsTab}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel Margin="14">
-                        <TextBlock Text="{DynamicResource LOCPLSSettingsNotificationsDescription}"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,14" />
-                        <CheckBox Content="{DynamicResource LOCPLSSettingsNotifyLibraryUpdates}" IsChecked="{Binding Settings.NotifyLibraryUpdates}" Margin="0,0,0,9" />
-                        <CheckBox Content="{DynamicResource LOCPLSSettingsNotifyTransferCompleted}" IsChecked="{Binding Settings.NotifyTransferCompleted}" Margin="0,0,0,9" />
-                        <CheckBox Content="{DynamicResource LOCPLSSettingsNotifyTransferFailed}" IsChecked="{Binding Settings.NotifyTransferFailed}" Margin="0,0,0,9" />
-                        <CheckBox Content="{DynamicResource LOCPLSSettingsNotifySourceUnavailable}" IsChecked="{Binding Settings.NotifySourceUnavailable}" Margin="0,0,0,9" />
-                        <CheckBox Content="{DynamicResource LOCPLSSettingsNotifyVerificationWarnings}" IsChecked="{Binding Settings.NotifyVerificationWarnings}" />
                     </StackPanel>
                 </ScrollViewer>
             </TabItem>

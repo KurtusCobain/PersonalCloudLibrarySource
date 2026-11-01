@@ -69,6 +69,87 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Import_UnsafeRootedCacheEntry_FailsWholeImportInsteadOfDroppingGames()
+        {
+            var json = "{\"version\":3,\"items\":[{\"id\":\"unsafe\",\"title\":\"Unsafe\"," +
+                "\"sourcePath\":\"game.exe\",\"cachePath\":\"../outside.exe\"}]}";
+            var settings = LocalFileSettings(WriteManifest(json));
+            settings.LocalCacheFolder = Path.Combine(testRoot, "cache");
+            var outcome = new ImportOutcomeService().Import(settings, null);
+            Assert.That(outcome.Succeeded, Is.False);
+            Assert.That(outcome.FailureKind, Is.EqualTo(ImportFailureKind.InvalidManifest));
+            Assert.That(outcome.Error, Does.Contain("unsafe"));
+            Assert.Throws<ImportOutcomeException>(() => ImportExecutionPolicy.Complete(outcome));
+        }
+
+        [Test]
+        public void Import_DuplicateResolvedCacheDestination_FailsBeforeReturningAnyGames()
+        {
+            var json = "{\"version\":3,\"items\":[" +
+                "{\"id\":\"first\",\"title\":\"First\",\"sourcePath\":\"first.exe\",\"cachePath\":\"same/play.exe\"}," +
+                "{\"id\":\"second\",\"title\":\"Second\",\"sourcePath\":\"second.exe\",\"cachePath\":\"same/play.exe\"}]}";
+            var settings = LocalFileSettings(WriteManifest(json));
+            settings.LocalCacheFolder = Path.Combine(testRoot, "cache");
+            var outcome = new ImportOutcomeService().Import(settings, null);
+            Assert.That(outcome.Succeeded, Is.False);
+            Assert.That(outcome.FailureKind, Is.EqualTo(ImportFailureKind.InvalidManifest));
+            Assert.That(outcome.Error, Does.Contain("first"));
+            Assert.That(outcome.Error, Does.Contain("second"));
+            Assert.That(outcome.Games, Is.Empty);
+            Assert.Throws<ImportOutcomeException>(() => ImportExecutionPolicy.Complete(outcome));
+        }
+
+        [Test]
+        public void Import_TemporarilyMissingManifest_ReturnsFailureThenRecoversOnReconnect()
+        {
+            var path = WriteManifest("{\"version\":3,\"items\":[]}");
+            var unavailablePath = path + ".offline";
+            var settings = LocalFileSettings(path);
+            var service = new ImportOutcomeService();
+
+            Assert.That(service.Import(settings, null).Succeeded, Is.True);
+            File.Move(path, unavailablePath);
+            try
+            {
+                var unavailable = service.Import(settings, null);
+                Assert.That(unavailable.Succeeded, Is.False);
+                Assert.That(unavailable.FailureKind, Is.EqualTo(ImportFailureKind.SourceUnavailable));
+                Assert.That(() => ImportExecutionPolicy.Complete(unavailable),
+                    Throws.TypeOf<ImportOutcomeException>());
+                Assert.That(unavailable.Error, Does.Contain("not found"));
+            }
+            finally
+            {
+                File.Move(unavailablePath, path);
+            }
+
+            var restored = service.Import(settings, null);
+            Assert.That(restored.Succeeded, Is.True, restored.Error);
+            Assert.That(restored.Games, Is.Empty);
+        }
+
+        [Test]
+        public void Import_RcloneDisconnectThenReconnect_RecoversWithoutChangingConfiguration()
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                SourceProviderType = PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
+                RcloneRemoteName = "sample-remote",
+                RcloneManifestPath = "catalog.json"
+            };
+            var service = new ImportOutcomeService();
+            var unavailable = service.Import(settings,
+                ignored => { throw new IOException("remote unreachable"); });
+            Assert.That(unavailable.Succeeded, Is.False);
+            Assert.That(unavailable.FailureKind, Is.EqualTo(ImportFailureKind.SourceUnavailable));
+
+            var recovered = service.Import(settings,
+                ignored => "{\"version\":3,\"items\":[]}");
+            Assert.That(recovered.Succeeded, Is.True, recovered.Error);
+            Assert.That(recovered.Source, Is.EqualTo("sample-remote:catalog.json"));
+        }
+
+        [Test]
         public void Import_ValidEmptyManifest_IsSuccessfulEmptyLibrary()
         {
             var path = WriteManifest("{\"version\":3,\"items\":[]}");

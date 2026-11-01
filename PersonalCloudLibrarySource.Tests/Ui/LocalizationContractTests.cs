@@ -15,6 +15,73 @@ namespace PersonalCloudLibrarySource.Tests.Ui
             { "Content", "Header", "Text", "Title", "ToolTip" };
 
         [Test]
+        public void Settings_DoesNotExposeControlsWithoutRuntimeEffect()
+        {
+            var xaml = File.ReadAllText(FindRepositoryFile(
+                "PersonalCloudLibrarySource", "PersonalCloudLibrarySourceSettingsView.xaml"));
+            foreach (var property in new[]
+            {
+                "VerifyAfterTransfer", "RemoveIncompleteTransferFiles",
+                "NotifyLibraryUpdates", "NotifyTransferCompleted",
+                "NotifyTransferFailed", "NotifySourceUnavailable",
+                "NotifyVerificationWarnings"
+            })
+            {
+                Assert.That(xaml, Does.Not.Contain("Settings." + property), property);
+            }
+
+            Assert.That(xaml, Does.Contain("LOCPLSCacheSafetyAlwaysOn"));
+        }
+
+        [Test]
+        public void SetupWizard_ExplainsCacheLifecycleInApp()
+        {
+            var wizard = File.ReadAllText(FindRepositoryFile(
+                "PersonalCloudLibrarySource", "Setup", "SetupWizardView.xaml"));
+            var resources = ReadResources().ToDictionary(entry => entry.Key, entry => entry.Value);
+
+            Assert.That(wizard, Does.Contain("LOCPLSSetupCacheWorkflow"));
+            Assert.That(resources.ContainsKey("LOCPLSSetupCacheWorkflow"), Is.True);
+            var description = resources["LOCPLSSetupCacheWorkflow"];
+            Assert.That(description, Does.Contain("Install"));
+            Assert.That(description, Does.Contain("Play"));
+            Assert.That(description, Does.Contain("original source files"));
+            Assert.That(description, Does.Contain("catalog entry"));
+        }
+
+        [Test]
+        public void SetupWizard_PreviewUsesReadOnlyBoundedGeneratorAndCancellation()
+        {
+            var ui = File.ReadAllText(FindRepositoryFile("PersonalCloudLibrarySource", "Setup", "SetupWizardView.xaml.cs"));
+            var generator = File.ReadAllText(FindRepositoryFile("PersonalCloudLibrarySource", "ManifestGenerationService.cs"));
+
+            Assert.That(ui, Does.Contain("Task.Run"));
+            Assert.That(ui, Does.Contain("CancelPreview();"));
+            Assert.That(ui, Does.Contain("ManifestGenerationService().Preview"));
+            Assert.That(generator, Does.Contain("previewOnly ? 10000 : 150000"));
+            Assert.That(generator, Does.Contain("if (previewOnly)"));
+        }
+
+        [Test]
+        public void SetupWizard_RescansWhenReturningAndShowsSkippedReasons()
+        {
+            var ui = File.ReadAllText(FindRepositoryFile(
+                "PersonalCloudLibrarySource", "Setup", "SetupWizardView.xaml.cs"));
+            var view = File.ReadAllText(FindRepositoryFile(
+                "PersonalCloudLibrarySource", "Setup", "SetupWizardView.xaml"));
+            var strings = ReadResources().ToDictionary(resource => resource.Key, resource => resource.Value);
+
+            Assert.That(ui, Does.Contain("if (viewModel.Back() && viewModel.CurrentStep == SetupWizardStep.ScanPreview)"));
+            Assert.That(ui, Does.Contain("if (previousStep == SetupWizardStep.ScanPreview)"));
+            Assert.That(ui, Does.Contain("ScanSkippedText.Text"));
+            Assert.That(ui, Does.Contain("report.SkippedEntries.Take(5)"));
+            Assert.That(view, Does.Contain("x:Name=\"ScanSkippedText\""));
+            Assert.That(strings.ContainsKey("LOCPLSSetupPreviewSkippedHeader"), Is.True);
+            Assert.That(strings["LOCPLSSetupSaved"], Does.Contain("Verify Setup"));
+            Assert.That(strings["LOCPLSSetupSaved"], Does.Contain("Update Game Library"));
+        }
+
+        [Test]
         public void LocalizationKeys_AreUnique()
         {
             var keys = ReadResources().Select(resource => resource.Key).ToList();

@@ -31,10 +31,21 @@ namespace PersonalCloudLibrarySource
     {
         public const int MinimumSupportedVersion = 1;
         public const int MaximumSupportedVersion = 3;
+        // Conservative caps for user-supplied catalogs; do not deserialize unbounded input.
+        public const int MaxManifestCharacters = 32 * 1024 * 1024;
+        public const int MaxManifestItems = 100000;
 
         public ManifestParseResult Parse(string json)
         {
             var result = new ManifestParseResult();
+            // Enforce the size limit before scanning or deserializing the input,
+            // including inputs consisting entirely of whitespace.
+            if (json != null && json.Length > MaxManifestCharacters)
+            {
+                result.Error = "Manifest is too large (maximum 32 million characters).";
+                return result;
+            }
+
             if (string.IsNullOrWhiteSpace(json))
             {
                 result.Error = "Manifest JSON was empty.";
@@ -44,7 +55,11 @@ namespace PersonalCloudLibrarySource
             try
             {
                 json = json.TrimStart('\uFEFF', '\u00EF', '\u00BB', '\u00BF');
-                result.Manifest = new JavaScriptSerializer().Deserialize<PersonalCloudLibraryManifest>(json);
+                var serializer = new JavaScriptSerializer
+                {
+                    MaxJsonLength = MaxManifestCharacters
+                };
+                result.Manifest = serializer.Deserialize<PersonalCloudLibraryManifest>(json);
             }
             catch (Exception ex)
             {
@@ -61,6 +76,12 @@ namespace PersonalCloudLibrarySource
             if (result.Manifest.Version < MinimumSupportedVersion || result.Manifest.Version > MaximumSupportedVersion)
             {
                 result.Error = "Manifest version " + result.Manifest.Version + " is unsupported.";
+                return result;
+            }
+
+            if (result.Manifest.Items.Count > MaxManifestItems)
+            {
+                result.Error = "Manifest has too many games (maximum " + MaxManifestItems + ").";
                 return result;
             }
 

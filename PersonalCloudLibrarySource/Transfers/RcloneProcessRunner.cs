@@ -166,7 +166,7 @@ namespace PersonalCloudLibrarySource
 
             lock (syncRoot)
             {
-                target.AppendLine(line);
+                AppendLineBounded(target, line, 16 * 1024);
             }
 
             activity?.Invoke();
@@ -177,6 +177,30 @@ namespace PersonalCloudLibrarySource
             {
                 progress?.Invoke(transferred, total);
             }
+        }
+
+        // Retain a bounded diagnostic tail; progress parsing still receives
+        // each original line and does not depend on the retained text.
+        internal static void AppendLineBounded(StringBuilder target, string line, int limit)
+        {
+            if (limit <= Environment.NewLine.Length)
+            {
+                target.Clear();
+                return;
+            }
+            var keep = limit - Environment.NewLine.Length;
+            if (line.Length > keep)
+            {
+                target.Clear();
+                target.Append(line, line.Length - keep, keep);
+                target.AppendLine();
+                return;
+            }
+            var added = line.Length + Environment.NewLine.Length;
+            var excess = target.Length + added - limit;
+            if (excess > 0)
+                target.Remove(0, Math.Min(target.Length, excess));
+            target.AppendLine(line);
         }
 
         private static int NormalizeTimeout(int value, int fallback)

@@ -1,6 +1,9 @@
 using Microsoft.Win32;
 using System;
 using System.IO;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using Forms = System.Windows.Forms;
@@ -10,12 +13,16 @@ namespace PersonalCloudLibrarySource
     public partial class SetupWizardView : UserControl
     {
         private readonly SetupWizardViewModel viewModel;
-        private readonly Func<bool> completed;
+        private readonly Func<CancellationToken, Task<bool>> completed;
+        private CancellationTokenSource finishCancellation;
+        private bool finishBusy;
         private readonly Action cancelled;
+        private CancellationTokenSource previewCancellation;
+        private int previewGeneration;
 
         public SetupWizardView(
             SetupWizardViewModel viewModel,
-            Func<bool> completed,
+            Func<CancellationToken, Task<bool>> completed,
             Action cancelled)
         {
             InitializeComponent();
@@ -23,6 +30,7 @@ namespace PersonalCloudLibrarySource
             this.completed = completed ?? throw new ArgumentNullException(nameof(completed));
             this.cancelled = cancelled ?? throw new ArgumentNullException(nameof(cancelled));
             DataContext = viewModel;
+            Unloaded += (sender, args) => CancelPendingOperations();
             RefreshView();
         }
 
@@ -52,37 +60,217 @@ namespace PersonalCloudLibrarySource
 
         private void Next_Click(object sender, RoutedEventArgs e)
         {
-            viewModel.Next();
+            var previousStep = viewModel.CurrentStep;
+            if (viewModel.Next())
+            {
+                if (previousStep == SetupWizardStep.ScanPreview)
+                    CancelPreview();
+                if (viewModel.CurrentStep == SetupWizardStep.ScanPreview)
+                    BeginPreview();
+            }
             RefreshView();
         }
 
         private void Back_Click(object sender, RoutedEventArgs e)
         {
-            viewModel.Back();
+            CancelPreview();
+            if (viewModel.Back() && viewModel.CurrentStep == SetupWizardStep.ScanPreview)
+                BeginPreview();
             RefreshView();
         }
 
-        private void Finish_Click(object sender, RoutedEventArgs e)
+        private async void Finish_Click(object sender, RoutedEventArgs e)
         {
-            if (viewModel.Complete())
+            if (finishBusy) return;
+            if (!viewModel.Complete())
             {
-                if (completed())
-                {
-                    return;
-                }
-
-                viewModel.ReactivateReviewAfterSaveFailure(PclsResources.Get(
-                    "LOCPLSSetupNotSaved",
-                    "Setup was not saved. Review the values and try again."));
+                RefreshView();
+                return;
             }
 
+            CancelPreview();
+            finishBusy = true;
+            finishCancellation = new CancellationTokenSource();
+            FinishStatusText.Text = PclsResources.Get("LOCPLSSetupFinishing",
+                "Preparing your catalog and saving setup. You can stop this operation.");
             RefreshView();
+            try
+            {
+                if (await completed(finishCancellation.Token))
+                    return;
+
+                if (!IsLoaded) return;
+                viewModel.ReactivateReviewAfterSaveFailure(PclsResources.Get(
+                    "LOCPLSSetupNotSaved", "Setup was not saved. Review the values and try again."));
+            }
+            catch (OperationCanceledException)
+            {
+                if (!IsLoaded) return;
+                viewModel.ReactivateReviewAfterSaveFailure(PclsResources.Get(
+                    "LOCPLSSetupSaveCancelled", "Preparation stopped. No settings were saved."));
+            }
+            catch (Exception ex)
+            {
+                if (!IsLoaded) return;
+                viewModel.ReactivateReviewAfterSaveFailure(
+                    PclsResources.Format("LOCPLSSetupSaveFailedReason",
+                        "Setup could not be saved: {0}", ex.Message));
+            }
+            finally
+            {
+                finishBusy = false;
+                finishCancellation.Dispose();
+                finishCancellation = null;
+                if (IsLoaded)
+                {
+                    FinishStatusText.Text = string.Empty;
+                    RefreshView();
+                }
+            }
         }
 
         private void Cancel_Click(object sender, RoutedEventArgs e)
         {
+            if (finishBusy)
+            {
+                finishCancellation?.Cancel();
+                CancelButton.IsEnabled = false;
+                FinishStatusText.Text = PclsResources.Get("LOCPLSSetupStopping",
+                    "Stopping setup preparation...");
+                return;
+            }
+
+            CancelPendingOperations();
             viewModel.Cancel();
             cancelled();
+        }
+
+        public void CancelPendingOperations()
+        {
+            CancelPreview();
+            finishCancellation?.Cancel();
+        }
+
+        private void PreviewAgain_Click(object sender, RoutedEventArgs e)
+        {
+            BeginPreview();
+        }
+
+        private void CancelPreview_Click(object sender, RoutedEventArgs e)
+        {
+            CancelPreview();
+            ScanResultText.Text = PclsResources.Get("LOCPLSSetupPreviewCancelled",
+                "Preview cancelled. Nothing was changed.");
+            ScanRetryButton.IsEnabled = true;
+            ScanCancelButton.IsEnabled = false;
+        }
+
+        private void CancelPreview()
+        {
+            previewGeneration++;
+            previewCancellation?.Cancel();
+        }
+
+        private async void BeginPreview()
+        {
+            CancelPreview();
+            ScanResultText.Text = string.Empty;
+            ScanSampleText.Text = string.Empty;
+            ScanSkippedText.Text = string.Empty;
+            var source = viewModel.Draft.SelectedSource;
+            if (source == SetupSourceKind.RcloneRemote)
+            {
+                ScanResultText.Text = PclsResources.Get("LOCPLSSetupPreviewCloud",
+                    "Cloud preview is unavailable until rclone is configured. Finish setup, then use Test rclone connection and Verify setup.");
+                ScanRetryButton.IsEnabled = false;
+                ScanCancelButton.IsEnabled = false;
+                return;
+            }
+
+            var localRoot = viewModel.Draft.LocalLibraryRoot;
+            var manifestFile = viewModel.Draft.LocalManifestPath;
+            var generation = previewGeneration;
+            var tokenSource = new CancellationTokenSource();
+            previewCancellation = tokenSource;
+            ScanResultText.Text = PclsResources.Get("LOCPLSSetupPreviewScanning",
+                "Reading your library without changing any files...");
+            ScanRetryButton.IsEnabled = false;
+            ScanCancelButton.IsEnabled = true;
+
+            try
+            {
+                // Snapshot user inputs before scheduling any work off the UI thread.
+                var report = await Task.Run(() =>
+                {
+                    tokenSource.Token.ThrowIfCancellationRequested();
+                    if (source == SetupSourceKind.LocalFolder || source == SetupSourceKind.NetworkFolder)
+                        return new ManifestGenerationService().Preview(
+                            new ManifestGenerationOptions { SourceRoot = localRoot, NoReport = true },
+                            tokenSource.Token);
+
+                    var settingsSnapshot = new PersonalCloudLibrarySourceSettingsV3
+                    {
+                        SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType,
+                        LocalManifestPath = manifestFile
+                    };
+                    var loaded = new ManifestLoader().Load(settingsSnapshot, null);
+                    if (!loaded.Succeeded)
+                        throw new InvalidOperationException(loaded.Error);
+                    tokenSource.Token.ThrowIfCancellationRequested();
+                    var parsed = new ManifestParserValidator().Parse(loaded.Json);
+                    if (!parsed.Succeeded)
+                        throw new InvalidOperationException(parsed.Error);
+                    return new ManifestGenerationReport
+                    {
+                        Manifest = parsed.CreateValidatedManifest(),
+                        ItemCount = parsed.ValidItems.Count,
+                        ScannedEntryCount = parsed.Manifest.Items.Count,
+                        Warnings = new System.Collections.Generic.List<string>(),
+                        SkippedEntries = parsed.Issues.ToList()
+                    };
+                }, tokenSource.Token);
+                if (generation != previewGeneration || viewModel.CurrentStep != SetupWizardStep.ScanPreview)
+                    return;
+
+                ScanResultText.Text = PclsResources.Format(
+                    "LOCPLSSetupPreviewFound",
+                    "Found {0} games. Scanned {1} entries; {2} skipped; {3} warnings.",
+                    report.ItemCount, report.ScannedEntryCount, report.SkippedEntries.Count, report.Warnings.Count);
+                ScanSampleText.Text = report.ItemCount == 0
+                    ? string.Empty
+                    : PclsResources.Get("LOCPLSSetupPreviewSampleHeader", "Detected games (first 10):") +
+                      Environment.NewLine +
+                      string.Join(Environment.NewLine, report.Manifest.Items.Take(10).Select(item => item.Title));
+                ScanSkippedText.Text = report.SkippedEntries.Count == 0
+                    ? string.Empty
+                    : PclsResources.Get("LOCPLSSetupPreviewSkippedHeader", "Skipped entries (first 5):") +
+                      Environment.NewLine +
+                      string.Join(Environment.NewLine, report.SkippedEntries.Take(5));
+            }
+            catch (OperationCanceledException)
+            {
+                if (generation == previewGeneration)
+                    ScanResultText.Text = PclsResources.Get("LOCPLSSetupPreviewCancelled",
+                        "Preview cancelled. Nothing was changed.");
+            }
+            catch (Exception ex)
+            {
+                if (generation == previewGeneration)
+                    ScanResultText.Text = PclsResources.Format(
+                        "LOCPLSSetupPreviewFailed",
+                        "Could not preview: {0}. You can still finish setup, or choose a smaller source.",
+                        ex.Message);
+            }
+            finally
+            {
+                if (generation == previewGeneration)
+                {
+                    ScanRetryButton.IsEnabled = true;
+                    ScanCancelButton.IsEnabled = false;
+                    previewCancellation = null;
+                }
+                tokenSource.Dispose();
+            }
         }
 
         private void BrowseManifest_Click(object sender, RoutedEventArgs e)
@@ -182,7 +370,14 @@ namespace PersonalCloudLibrarySource
                 ? Visibility.Hidden
                 : Visibility.Visible;
             NextButton.Visibility = viewModel.CanGoNext ? Visibility.Visible : Visibility.Collapsed;
-            FinishButton.Visibility = viewModel.CanComplete ? Visibility.Visible : Visibility.Collapsed;
+            FinishButton.Visibility = viewModel.CanComplete || finishBusy ? Visibility.Visible : Visibility.Collapsed;
+            FinishButton.IsEnabled = !finishBusy && viewModel.CanComplete;
+            NextButton.IsEnabled = !finishBusy && viewModel.CanGoNext;
+            BackButton.IsEnabled = !finishBusy && viewModel.CanGoBack;
+            CancelButton.IsEnabled = finishCancellation == null || !finishCancellation.IsCancellationRequested;
+            CancelButton.Content = finishBusy
+                ? PclsResources.Get("LOCPLSSetupStopPreparing", "Stop preparing")
+                : PclsResources.Get("LOCPLSSetupCancel", "Cancel");
         }
 
         private Visibility GetVisibility(SetupWizardStep step)

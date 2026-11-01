@@ -36,7 +36,7 @@
 
     <sys:String x:Key="LOCPLSSetupWizardTitle">Personal Cloud Library Setup</sys:String>
     <sys:String x:Key="LOCPLSSetupChooseSourceTitle">Choose where your library is stored</sys:String>
-    <sys:String x:Key="LOCPLSSetupChooseSourceDescription">Select the option that best matches where your game files or manifest are stored.</sys:String>
+    <sys:String x:Key="LOCPLSSetupChooseSourceDescription">For a folder on this PC, external drive, or NAS, select its location and PCLS will build a catalog. Choose an existing manifest only if you already have a JSON catalog. Cloud accounts require a separately configured rclone remote.</sys:String>
     <sys:String x:Key="LOCPLSSetupExistingManifest">I already have a manifest file</sys:String>
     <sys:String x:Key="LOCPLSSetupLocalFolder">On this computer or an external drive</sys:String>
     <sys:String x:Key="LOCPLSSetupNetworkFolder">On a NAS or network location</sys:String>
@@ -48,13 +48,24 @@
     <sys:String x:Key="LOCPLSSetupRcloneRemoteName">Configured remote name</sys:String>
     <sys:String x:Key="LOCPLSSetupRcloneManifestPath">Remote manifest path</sys:String>
     <sys:String x:Key="LOCPLSSetupRcloneContentRoot">Remote content root</sys:String>
-    <sys:String x:Key="LOCPLSSetupRcloneTimeout">Connection timeout in seconds</sys:String>
+    <sys:String x:Key="LOCPLSSetupRcloneTimeout">rclone timeout in seconds</sys:String>
+    <sys:String x:Key="LOCPLSSetupRclonePrerequisites">Advanced cloud setup: install rclone and configure your own remote first. If your cloud files are already synced to a folder, use the local-folder option instead. PCLS never asks for your cloud password.</sys:String>
     <sys:String x:Key="LOCPLSSetupBrowse">Browse</sys:String>
     <sys:String x:Key="LOCPLSSetupScanTitle">Review the selected source</sys:String>
-    <sys:String x:Key="LOCPLSSetupScanDescription">The selected source is ready. Finishing setup will use the chosen manifest or generate one from the selected folder before you update the Playnite library.</sys:String>
+    <sys:String x:Key="LOCPLSSetupScanDescription">For a local or network folder, PCLS previews up to 10,000 filesystem entries without saving changes. For a local manifest, it previews valid entries. Cloud accounts require a separate rclone connection check. Finishing the wizard saves configuration; use Verify Setup and Update Game Library to import.</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewAgain">Scan again</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewStop">Stop scan</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewCancelled">Preview cancelled. Nothing was changed.</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewCloud">Cloud preview is unavailable until rclone is configured. Finish setup, then use Test rclone connection and Verify setup.</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewScanning">Reading your library without changing any files...</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewFound">Found {0} games. Scanned {1} entries; {2} skipped; {3} warnings.</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewSampleHeader">Detected games (first 10):</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewSkippedHeader">Skipped entries (first 5):</sys:String>
+    <sys:String x:Key="LOCPLSSetupPreviewFailed">Could not preview: {0}. You can still finish setup, or choose a smaller source.</sys:String>
     <sys:String x:Key="LOCPLSSetupCacheTitle">Choose cache and install behavior</sys:String>
     <sys:String x:Key="LOCPLSSetupAllowDownloads">Download or copy games when Install is selected</sys:String>
     <sys:String x:Key="LOCPLSSetupCatalogOnly">Leave this off for catalog-only mode.</sys:String>
+    <sys:String x:Key="LOCPLSSetupCacheWorkflow">Install copies or downloads selected games into this PC's cache folder. Play uses the local copy. By default, removing a cached copy preserves your original source files and catalog entry. Keep advanced outside-cache removal disabled for ordinary use.</sys:String>
     <sys:String x:Key="LOCPLSSetupMissingFiles">Mark games uninstalled when cached files are missing</sys:String>
     <sys:String x:Key="LOCPLSSetupReviewTitle">Review your setup</sys:String>
     <sys:String x:Key="LOCPLSSetupReviewDescription">Confirm the source and cache settings before saving them.</sys:String>
@@ -135,17 +146,9 @@
     <sys:String x:Key="LOCPLSSettingsDownloadsTab">Downloads &amp; Cache</sys:String>
     <sys:String x:Key="LOCPLSSettingsLocalCache">Local cache folder</sys:String>
     <sys:String x:Key="LOCPLSSettingsAllowDownloads">Allow Install to download or copy games into the local cache</sys:String>
-    <sys:String x:Key="LOCPLSSettingsVerifyTransfers">Verify transferred files before marking a game installed</sys:String>
-    <sys:String x:Key="LOCPLSSettingsRemoveIncomplete">Remove incomplete temporary files after failed or cancelled transfers</sys:String>
+    <sys:String x:Key="LOCPLSCacheSafetyAlwaysOn">Transfers are checked before completion and incomplete temporary copies are removed automatically. These safety protections cannot be turned off.</sys:String>
     <sys:String x:Key="LOCPLSSettingsConcurrency">Maximum concurrent transfers (1–4)</sys:String>
     <sys:String x:Key="LOCPLSSettingsUninstallBehavior">Uninstall behavior</sys:String>
-    <sys:String x:Key="LOCPLSSettingsNotificationsTab">Notifications</sys:String>
-    <sys:String x:Key="LOCPLSSettingsNotificationsDescription">Choose which meaningful events create Playnite notifications. Transfer progress stays inside the dashboard to avoid notification spam.</sys:String>
-    <sys:String x:Key="LOCPLSSettingsNotifyLibraryUpdates">Library update results</sys:String>
-    <sys:String x:Key="LOCPLSSettingsNotifyTransferCompleted">Transfer completed</sys:String>
-    <sys:String x:Key="LOCPLSSettingsNotifyTransferFailed">Transfer failed</sys:String>
-    <sys:String x:Key="LOCPLSSettingsNotifySourceUnavailable">Source unavailable</sys:String>
-    <sys:String x:Key="LOCPLSSettingsNotifyVerificationWarnings">Verification warnings</sys:String>
     <sys:String x:Key="LOCPLSSettingsDiagnosticsTab">Diagnostics</sys:String>
     <sys:String x:Key="LOCPLSSettingsEnableDiagnostics">Enable detailed import diagnostics</sys:String>
     <sys:String x:Key="LOCPLSSettingsVerifySetup">Verify setup and generate report</sys:String>
@@ -156,7 +159,7 @@
     <sys:String x:Key="LOCPLSSettingsRcloneTimeout">rclone timeout in seconds (5–300)</sys:String>
     <sys:String x:Key="LOCPLSSettingsDangerousRemoval">Dangerous file removal option</sys:String>
     <sys:String x:Key="LOCPLSSettingsAllowOutsideCache">Allow uninstall outside the managed cache folder</sys:String>
-    <sys:String x:Key="LOCPLSSettingsOutsideCacheWarning">Keep this disabled unless you fully understand the configured paths. Normal uninstall only removes plugin-managed cached copies and never removes cloud, NAS, or source-library files.</sys:String>
+    <sys:String x:Key="LOCPLSSettingsOutsideCacheWarning">Advanced and risky: enabling this allows deletion outside the managed cache. PCLS now refuses known source-item paths and library roots, but cannot guarantee unrelated external files are safe. Keep it disabled unless you understand the exact deletion target.</sys:String>
     <sys:String x:Key="LOCPLSSettingsLegalBoundary">Legal-use boundary</sys:String>
     <sys:String x:Key="LOCPLSSettingsLegalDescription">This plugin does not provide games, ROMs, BIOS files, cracks, keys, artwork, storefront access, or download sources. It only imports and manages entries from manifests and storage locations supplied by the user.</sys:String>
 
@@ -228,7 +231,11 @@
     <sys:String x:Key="LOCPLSUninstallOtherContentRemains">other cached content remains.</sys:String>
     <sys:String x:Key="LOCPLSUninstallNoContentRemains">no cached content remains.</sys:String>
     <sys:String x:Key="LOCPLSUninstallFailedNotification">Remove cached copy failed.{0}{0}Item: {1}{0}Reason: {2}</sys:String>
-    <sys:String x:Key="LOCPLSSetupSaved">Setup was saved successfully. Run Update Game Library in Playnite to import or refresh the catalog.</sys:String>
+    <sys:String x:Key="LOCPLSSetupFinishing">Preparing your catalog and saving setup. You can stop this operation.</sys:String>
+    <sys:String x:Key="LOCPLSSetupStopping">Stopping setup preparation...</sys:String>
+    <sys:String x:Key="LOCPLSSetupStopPreparing">Stop preparing</sys:String>
+    <sys:String x:Key="LOCPLSSetupSaveCancelled">Setup preparation stopped. No settings were saved.</sys:String>
+    <sys:String x:Key="LOCPLSSetupSaved">Setup saved. Next: (1) In the PCLS Dashboard, run Verify Setup to check the catalog. (2) In Playnite Desktop, run Update Game Library to import your games. (3) Select an imported game and choose Install to cache it locally. Your original library stays in its source location.</sys:String>
     <sys:String x:Key="LOCPLSRcloneSourceInstructions">This cloud source is accessed through rclone. Open the dashboard or plugin settings to review the configured remote and content root.</sys:String>
     <sys:String x:Key="LOCPLSConfiguredSourceUnavailable">The configured source location is missing or unavailable.</sys:String>
     <sys:String x:Key="LOCPLSSourcePathCopied">Source path copied.</sys:String>

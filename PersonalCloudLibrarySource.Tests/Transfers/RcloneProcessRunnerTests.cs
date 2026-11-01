@@ -10,6 +10,22 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
     public class RcloneProcessRunnerTests
     {
         [Test]
+        public void DiagnosticOutput_RetainsOnlyBoundedTailForHugeSingleLine()
+        {
+            var append = typeof(RcloneProcessRunner).GetMethod(
+                "AppendLineBounded",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.That(append, Is.Not.Null);
+            var tail = new System.Text.StringBuilder();
+            append.Invoke(null, new object[] { tail, new string('X', 300000), 1024 });
+            Assert.That(tail.Length, Is.LessThanOrEqualTo(1024));
+            Assert.That(tail.ToString(), Does.Contain("XXX"));
+            append.Invoke(null, new object[] { tail, "FINAL ERROR", 1024 });
+            Assert.That(tail.Length, Is.LessThanOrEqualTo(1024));
+            Assert.That(tail.ToString(), Does.Contain("FINAL ERROR"));
+        }
+
+        [Test]
         public void Run_CancellationKillsAndWaitsForChildProcess()
         {
             var process = new FakeProcessHandle();

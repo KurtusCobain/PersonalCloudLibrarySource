@@ -137,9 +137,18 @@ namespace PersonalCloudLibrarySource
             }
 
             diagnostics.Add("manifestItemCount=" + parse.ValidItems.Count);
-            var games = mapper.Map(parse.ValidItems, settings, diagnostics);
-            diagnostics.Add("returnedGameCount=" + games.Count);
-            return ImportOutcome.Success(source, parse.ValidItems, games, diagnostics);
+            try
+            {
+                var games = mapper.Map(parse.ValidItems, settings, diagnostics);
+                diagnostics.Add("returnedGameCount=" + games.Count);
+                return ImportOutcome.Success(source, parse.ValidItems, games, diagnostics);
+            }
+            catch (InvalidOperationException ex)
+            {
+                diagnostics.Add("manifestError=" + ex.Message);
+                return ImportOutcome.Failure(ImportFailureKind.InvalidManifest,
+                    source, ex.Message, diagnostics);
+            }
         }
 
         private static string ResolveSource(PersonalCloudLibrarySourceSettings settings, string loaderSource)

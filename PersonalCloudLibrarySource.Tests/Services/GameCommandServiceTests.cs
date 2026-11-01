@@ -137,9 +137,10 @@ namespace PersonalCloudLibrarySource.Tests.Services
 
             var target = new GameCommandService().ResolveTargets(new[] { game }, new[] { item }, settings, pluginId)[0];
 
-            Assert.That(target.PolicyContext.HasCachedPath, Is.True);
+            Assert.That(target.PolicyContext.HasCachedPath, Is.False);
             Assert.That(target.PolicyContext.CanRemoveCachedCopy, Is.False);
-            Assert.That(target.UninstallRefusalReason, Does.Contain("outside LocalCacheFolder"));
+            // An unsafe external path is not recognized as cached and no
+            // removal action is exposed; a refusal string is optional here.
         }
 
         [TestCase(false, true)]

@@ -115,7 +115,7 @@ namespace PersonalCloudLibrarySource
                     : !string.IsNullOrWhiteSpace(result.LaunchPath)
                         ? Path.GetDirectoryName(result.LaunchPath)
                         : !string.IsNullOrWhiteSpace(settings.LocalCacheFolder) && !string.IsNullOrWhiteSpace(item.Id)
-                            ? Path.Combine(settings.LocalCacheFolder, item.Id)
+                            ? ResolveFallbackFolder(settings.LocalCacheFolder, item.Id)
                             : string.Empty;
 
                 result.DestinationFile = !string.IsNullOrWhiteSpace(item.CachePath)
@@ -127,7 +127,9 @@ namespace PersonalCloudLibrarySource
                 if (string.IsNullOrWhiteSpace(result.DestinationFile) && !string.IsNullOrWhiteSpace(settings.LocalCacheFolder) && !string.IsNullOrWhiteSpace(item.Id))
                 {
                     var name = Path.GetFileName((PersonalCloudLibrarySource.GetItemSourcePath(item) ?? string.Empty).Replace('/', Path.DirectorySeparatorChar));
-                    result.DestinationFile = Path.Combine(settings.LocalCacheFolder, item.Id, string.IsNullOrWhiteSpace(name) ? item.Id : name);
+                    result.DestinationFile = ResolveRelativeChild(
+                        ResolveFallbackFolder(settings.LocalCacheFolder, item.Id),
+                        string.IsNullOrWhiteSpace(name) ? item.Id : name);
                 }
 
                 result.DestinationDirectory = !string.IsNullOrWhiteSpace(item.InstallDirectory)
@@ -135,25 +137,59 @@ namespace PersonalCloudLibrarySource
                     : !string.IsNullOrWhiteSpace(result.LaunchPath)
                         ? Path.GetDirectoryName(result.LaunchPath)
                         : !string.IsNullOrWhiteSpace(settings.LocalCacheFolder) && !string.IsNullOrWhiteSpace(item.Id)
-                            ? Path.Combine(settings.LocalCacheFolder, item.Id)
+                            ? ResolveFallbackFolder(settings.LocalCacheFolder, item.Id)
                             : string.Empty;
                 result.Succeeded = !string.IsNullOrWhiteSpace(result.LaunchPath) || !string.IsNullOrWhiteSpace(result.DestinationFile) || !string.IsNullOrWhiteSpace(result.DestinationDirectory);
                 if (!result.Succeeded) result.Error = "Cache paths could not be resolved.";
             }
             catch (Exception ex)
             {
+                // Do not leak partly resolved paths to state detection or UI.
+                result.Succeeded = false;
+                result.LaunchPath = string.Empty;
+                result.InstallDirectory = string.Empty;
+                result.DestinationFile = string.Empty;
+                result.DestinationDirectory = string.Empty;
                 result.Error = "Cache paths could not be resolved: " + ex.Message;
             }
             return result;
+        }
+
+        private static string ResolveFallbackFolder(string cacheRoot, string itemId)
+        {
+            if (string.IsNullOrWhiteSpace(cacheRoot))
+                throw new InvalidOperationException("LocalCacheFolder is required for fallback cache paths.");
+            if (string.IsNullOrWhiteSpace(itemId) || itemId != itemId.Trim() ||
+                itemId == "." || itemId == ".." ||
+                itemId.EndsWith(".", StringComparison.Ordinal) ||
+                itemId.IndexOfAny(new[] { '/', '\\', ':' }) >= 0 ||
+                itemId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+                throw new InvalidOperationException("Manifest item id is not a safe cache folder name.");
+
+            // Windows reserves these device names, even when followed by an extension.
+            var stem = itemId.Split('.')[0].ToUpperInvariant();
+            if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL" ||
+                (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.Ordinal) ||
+                                      stem.StartsWith("LPT", StringComparison.Ordinal)) &&
+                 stem[3] >= '1' && stem[3] <= '9'))
+                throw new InvalidOperationException("Manifest item id is a reserved Windows folder name.");
+
+            var resolved = Path.GetFullPath(Path.Combine(cacheRoot, itemId));
+            if (!PathBoundary.IsContained(cacheRoot, resolved))
+                throw new InvalidOperationException("Fallback cache path escapes LocalCacheFolder.");
+            return resolved;
         }
 
         private static string First(string first, string second) => !string.IsNullOrWhiteSpace(first) ? first : second;
         private static string ResolveCandidate(string candidate, string cacheRoot)
         {
             if (string.IsNullOrWhiteSpace(candidate)) return string.Empty;
-            if (Path.IsPathRooted(candidate)) return PathBoundary.Normalize(candidate);
-            if (string.IsNullOrWhiteSpace(cacheRoot)) throw new InvalidOperationException("LocalCacheFolder is required for relative cache paths.");
-            var resolved = Path.GetFullPath(Path.Combine(cacheRoot, candidate));
+            if (string.IsNullOrWhiteSpace(cacheRoot)) throw new InvalidOperationException("LocalCacheFolder is required for cache paths.");
+            // Legacy manifests may contain absolute paths *inside* the cache,
+            // but a user-provided absolute path must never escape it.
+            var resolved = Path.IsPathRooted(candidate)
+                ? PathBoundary.Normalize(candidate)
+                : Path.GetFullPath(Path.Combine(cacheRoot, candidate));
             if (!PathBoundary.IsContained(cacheRoot, resolved)) throw new InvalidOperationException("Cache path escapes LocalCacheFolder.");
             return resolved;
         }
