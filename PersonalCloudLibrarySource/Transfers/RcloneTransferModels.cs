@@ -9,6 +9,7 @@ namespace PersonalCloudLibrarySource
         public string RemoteSourcePath { get; set; } = string.Empty;
         public string DestinationPath { get; set; } = string.Empty;
         public bool IsDirectory { get; set; }
+        public bool UseInPlace { get; set; }
         public int TimeoutSeconds { get; set; } = 30;
         public int ConnectTimeoutSeconds { get; set; } = 30;
         public int InactivityTimeoutSeconds { get; set; } = 30;
