@@ -1,0 +1,94 @@
+name: Publish PCLS v0.3.2
+
+# Intentionally NOT triggered by a generic main-branch push.
+# The one-time release is requested only by the explicit request marker.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - release-control/v0.3.2.request
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pcls-release-v0.3.2
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'KurtusCobain/PersonalCloudLibrarySource'
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Verify exact release identity
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Test-Path '.\release-control\v0.3.2.request')) {
+            throw 'Explicit release request marker is absent.'
+          }
+          $manifest = Get-Content '.\PersonalCloudLibrarySource\extension.yaml' -Raw
+          if ($manifest -notmatch '(?m)^Version:\s*0\.3\.2\s*$') {
+            throw 'Refusing to release a package with a different version.'
+          }
+          & .\tools\test-release-baseline.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Release baseline validation failed.' }
+
+      - name: Restore dependencies and build Debug
+        shell: pwsh
+        run: |
+          nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln
+          if ($LASTEXITCODE -ne 0) { throw 'NuGet restore failed.' }
+          msbuild .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln /t:Build /p:Configuration=Debug /p:Platform="Any CPU"
+          if ($LASTEXITCODE -ne 0) { throw 'Debug build failed.' }
+
+      - name: Run Windows unit and integration fixtures
+        shell: pwsh
+        run: |
+          & .\PersonalCloudLibrarySource.Tests\bin\Debug\PersonalCloudLibrarySource.Tests.exe --noheader '--result=TestResult.xml;format=nunit2'
+          if ($LASTEXITCODE -ne 0) { throw 'Windows tests failed.' }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcls-v0.3.2-release-tests
+          path: TestResult.xml
+          if-no-files-found: warn
+
+      - name: Build and inspect final v0.3.2 package
+        shell: pwsh
+        run: |
+          & .\tools\package-extension.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Release packaging failed.' }
+          $package = '.\dist\PersonalCloudLibrarySource-0.3.2.pext'
+          if (-not (Test-Path $package)) { throw 'Expected release package missing.' }
+          & .\tools\test-release-baseline.ps1 -PackagePath $package
+          if ($LASTEXITCODE -ne 0) { throw 'Package contract failed.' }
+          Get-FileHash -LiteralPath $package -Algorithm SHA256 | Format-List
+
+      - name: Upload reproducible release package evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcls-v0.3.2-release-package
+          path: dist/PersonalCloudLibrarySource-0.3.2.pext
+          if-no-files-found: error
+
+      - name: Publish GitHub v0.3.2 release and package
+        shell: pwsh
+        env:
+          GH_TOKEN: \${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $existing = & gh release list --repo $env:GITHUB_REPOSITORY --limit 100 --json tagName --jq '.[].tagName'
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to check existing GitHub releases.' }
+          if ($existing -contains 'v0.3.2') { throw 'v0.3.2 release already exists; refusing to overwrite.' }
+          & gh release create v0.3.2 '.\dist\PersonalCloudLibrarySource-0.3.2.pext' --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --title 'Personal Cloud Library Source v0.3.2' --notes-file '.\docs\releases\v0.3.2.md' --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Public GitHub release creation failed.' }
+          & gh release view v0.3.2 --repo $env:GITHUB_REPOSITORY --json tagName,isDraft,isPrerelease,assets,url
+          if ($LASTEXITCODE -ne 0) { throw 'Release postflight verification failed.' }
