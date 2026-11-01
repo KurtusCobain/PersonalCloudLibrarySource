@@ -36,6 +36,14 @@ The result reports one of:
 8. Missing game directory does not affect a sibling file.
 9. Pre-cancelled review leaves game and V2 receipt intact.
 
+## Additional read-only per-file observations
+
+The optional `CacheTreeInventoryScanner.ScanDetailed(cacheRoot, directory, token)` now returns bounded, sorted **relative** file and subdirectory entries with per-file length and SHA-256. The ordinary `Scan` method and the existing V2 receipt fingerprint format remain unchanged, without the extra in-memory entry list.
+
+`CacheDirectoryInventoryDiffService.Compare(earlierDetailedScan, currentDetailedScan)` describes added, missing, modified and unchanged observed entries. A simple use case is to notice that a personal save appeared since an earlier in-memory snapshot. Both observations are **unauthenticated** and remain subject to filesystem races; neither establishes which files PCLS owns. The diff service's `CanDeleteAutomatically` is permanently false.
+
+No per-file baseline is persisted yet, and a legacy V2 receipt contains only the aggregate fingerprint, not the per-file history needed for a historical diff. Scans with missing details are rejected rather than silently treated as an empty file list.
+
 ## Explicitly excluded
 
 - No recursive or file-by-file directory deletion.
