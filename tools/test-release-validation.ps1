@@ -93,7 +93,7 @@ Packages:
 }
 
 function New-TestPackage {
-    param([string]$Root, [string]$PackagePath, [switch]$MissingIcon, [switch]$ExtraSource)
+    param([string]$Root, [string]$PackagePath, [switch]$MissingIcon, [switch]$MissingLicense, [switch]$ExtraSource)
     $stage = Join-Path $Root ('stage-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path (Join-Path $stage 'Localization') -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $stage 'Assets') -Force | Out-Null
@@ -102,6 +102,7 @@ function New-TestPackage {
     if (-not $MissingIcon) { Set-Content (Join-Path $stage 'icon.png') 'test' }
     Set-Content (Join-Path $stage 'Localization\en_US.xaml') 'test'
     Set-Content (Join-Path $stage 'Assets\pcls-logo-wide.png') 'test'
+    if (-not $MissingLicense) { Copy-Item (Join-Path $repoRoot 'LICENSE') (Join-Path $stage 'LICENSE') }
     if ($ExtraSource) { Set-Content (Join-Path $stage 'Leaked.cs') 'test' }
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [System.IO.Compression.ZipFile]::CreateFromDirectory($stage, $PackagePath)
@@ -187,6 +188,11 @@ try {
         New-TestPackage $root $missing -MissingIcon
         Assert-ThrowsLike { Test-ReleasePackage -PackagePath $missing -ExtensionPath (Join-Path $root 'PersonalCloudLibrarySource\extension.yaml') } 'missing.*icon.png'
 
+        $missingLicense = Join-Path $root 'missing-license\PersonalCloudLibrarySource-0.3.2.pext'
+        New-Item (Split-Path $missingLicense) -ItemType Directory -Force | Out-Null
+        New-TestPackage $root $missingLicense -MissingLicense
+        Assert-ThrowsLike { Test-ReleasePackage -PackagePath $missingLicense -ExtensionPath (Join-Path $root 'PersonalCloudLibrarySource\extension.yaml') } 'missing.*LICENSE'
+
         $extra = Join-Path $root 'extra\PersonalCloudLibrarySource-0.3.2.pext'
         New-Item (Split-Path $extra) -ItemType Directory -Force | Out-Null
         New-TestPackage $root $extra -ExtraSource
@@ -218,8 +224,22 @@ try {
         $validator = Join-Path $PSScriptRoot 'validate-release.ps1'
         $oldPreference = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
-        $output = & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $validator -RepositoryRoot $root -ToolboxPath (Join-Path $root 'absent\Toolbox.exe') 2>&1
-        $exit = $LASTEXITCODE
+        # Isolate all discovery fallbacks from any installed Playnite copy.
+        $discoveryVariables = @('LOCALAPPDATA', 'ProgramFiles', 'ProgramFiles(x86)', 'PLAYNITE_TOOLBOX')
+        $previous = @{}
+        foreach ($name in $discoveryVariables) {
+            $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+            [Environment]::SetEnvironmentVariable($name, $root, 'Process')
+        }
+        try {
+            $output = & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $validator -RepositoryRoot $root -ToolboxPath (Join-Path $root 'absent\Toolbox.exe') 2>&1
+            $exit = $LASTEXITCODE
+        }
+        finally {
+            foreach ($name in $discoveryVariables) {
+                [Environment]::SetEnvironmentVariable($name, $previous[$name], 'Process')
+            }
+        }
         $ErrorActionPreference = $oldPreference
         Assert-True ($exit -ne 0) 'Missing Toolbox must fail the release gate.'
         Assert-True (($output -join "`n") -match 'PREREQUISITE_MISSING.*Toolbox.exe') 'Missing Toolbox result was not explicit.'
