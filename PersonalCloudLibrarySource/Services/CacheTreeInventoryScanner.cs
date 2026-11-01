@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -7,12 +8,28 @@ using System.Threading;
 
 namespace PersonalCloudLibrarySource
 {
+    // Read-only description of one observed filesystem entry, not ownership proof.
+    // Relative paths never expose the absolute cache root.
+    public sealed class CacheTreeInventoryEntry
+    {
+        public string RelativePath { get; internal set; } = string.Empty;
+        public bool IsDirectory { get; internal set; }
+        public long FileBytes { get; internal set; }
+        public string Sha256 { get; internal set; } = string.Empty;
+    }
+
     // Read-only snapshot for future provenance comparisons. Never authorizes deletion.
     public sealed class CacheTreeInventory
     {
         public int FileCount { get; set; }
         public int DirectoryCount { get; set; }
         public string Fingerprint { get; set; } = string.Empty;
+
+        // Only populated by ScanDetailed; ordinary V2 receipt scans keep their
+        // existing bounded memory and exact fingerprint format unchanged.
+        // These observations must never be interpreted as deletion permission.
+        public IReadOnlyList<CacheTreeInventoryEntry> DetailedEntries { get; internal set; }
+            = new CacheTreeInventoryEntry[0];
     }
 
     public sealed class CacheTreeInventoryScanner
@@ -26,6 +43,20 @@ namespace PersonalCloudLibrarySource
         }
 
         public CacheTreeInventory Scan(string cacheRoot, string target, CancellationToken cancellationToken)
+        {
+            return ScanCore(cacheRoot, target, cancellationToken, false);
+        }
+
+        // On-demand per-file snapshot for planning and review only. Does not
+        // record which files PCLS owns, nor pin open filesystem handles.
+        public CacheTreeInventory ScanDetailed(
+            string cacheRoot, string target, CancellationToken cancellationToken)
+        {
+            return ScanCore(cacheRoot, target, cancellationToken, true);
+        }
+
+        private CacheTreeInventory ScanCore(string cacheRoot, string target,
+            CancellationToken cancellationToken, bool includeDetails)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(cacheRoot) ||
@@ -44,6 +75,7 @@ namespace PersonalCloudLibrarySource
             var root = PathBoundary.Normalize(target);
             var result = new CacheTreeInventory();
             var entries = new List<string>();
+            var details = includeDetails ? new List<CacheTreeInventoryEntry>() : null;
             var pending = new Stack<string>();
             pending.Push(root);
             while (pending.Count > 0)
@@ -65,6 +97,11 @@ namespace PersonalCloudLibrarySource
                     {
                         result.DirectoryCount++;
                         entries.Add("D:" + relative);
+                        if (includeDetails)
+                            details.Add(new CacheTreeInventoryEntry
+                            {
+                                RelativePath = relative, IsDirectory = true
+                            });
                         pending.Push(entry);
                     }
                     else
@@ -87,11 +124,23 @@ namespace PersonalCloudLibrarySource
                             sha.TransformFinalBlock(new byte[0], 0, 0);
                             var digest = BitConverter.ToString(sha.Hash).Replace("-", "");
                             entries.Add("F:" + relative + ":" + info.Length + ":" + digest);
+                            if (includeDetails)
+                                details.Add(new CacheTreeInventoryEntry
+                                {
+                                    RelativePath = relative, IsDirectory = false,
+                                    FileBytes = info.Length, Sha256 = digest
+                                });
                         }
                     }
                 }
             }
             entries.Sort(StringComparer.Ordinal);
+            if (includeDetails)
+            {
+                details.Sort((a, b) => StringComparer.Ordinal.Compare(
+                    a.RelativePath, b.RelativePath));
+                result.DetailedEntries = new ReadOnlyCollection<CacheTreeInventoryEntry>(details);
+            }
             using (var sha = SHA256.Create())
             {
                 var bytes = Encoding.UTF8.GetBytes(string.Join("\n", entries));
