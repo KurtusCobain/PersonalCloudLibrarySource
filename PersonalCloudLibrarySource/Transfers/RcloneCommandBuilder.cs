@@ -24,6 +24,11 @@ namespace PersonalCloudLibrarySource
                             QuoteArgument(destinationPath) +
                             " --stats=1s --stats-one-line --progress";
 
+            if (request.UseInPlace)
+            {
+                arguments += " --inplace";
+            }
+
             if (request.IsDirectory)
             {
                 arguments += " --create-empty-src-dirs";
