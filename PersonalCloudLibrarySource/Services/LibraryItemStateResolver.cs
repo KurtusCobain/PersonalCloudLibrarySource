@@ -12,6 +12,9 @@ namespace PersonalCloudLibrarySource
         public bool HasPlayAction { get; set; }
         public string PlayPath { get; set; } = string.Empty;
         public string WorkingDirectory { get; set; } = string.Empty;
+        // Do not confuse the working directory with Playnite's scanned install folder.
+        public string PlayniteInstallDirectory { get; set; } = string.Empty;
+        public ulong? OwnedFileSize { get; set; }
     }
 
     public sealed class LibraryItemStateResolver
@@ -28,6 +31,8 @@ namespace PersonalCloudLibrarySource
             bool treatMissingFilesAsUninstalled)
         {
             var launchExists = !string.IsNullOrWhiteSpace(launchPath) && File.Exists(launchPath);
+            var implicitSingleFile = item != null && !PersonalCloudLibrarySource.IsDirectoryItem(item) &&
+                string.IsNullOrWhiteSpace(item.InstallDirectory);
             var directoryExists = item != null && PersonalCloudLibrarySource.IsDirectoryItem(item) &&
                 !string.IsNullOrWhiteSpace(installDirectory) && Directory.Exists(installDirectory);
             return new LibraryItemState
@@ -36,7 +41,12 @@ namespace PersonalCloudLibrarySource
                 IsInstalled = launchExists || directoryExists || !treatMissingFilesAsUninstalled,
                 HasPlayAction = launchExists,
                 PlayPath = launchExists ? launchPath : string.Empty,
-                WorkingDirectory = launchExists || directoryExists ? installDirectory ?? string.Empty : string.Empty
+                WorkingDirectory = launchExists || directoryExists ? installDirectory ?? string.Empty : string.Empty,
+                // Playnite scans InstallDirectory recursively to compute InstallSize.
+                // For an implicit file-type install, its parent can be a shared cache folder.
+                // Keep the real parent only in the launch action's WorkingDir.
+                PlayniteInstallDirectory = implicitSingleFile ? string.Empty : installDirectory ?? string.Empty,
+                OwnedFileSize = implicitSingleFile && launchExists ? TryGetFileLength(launchPath) : null
             };
         }
 
@@ -52,8 +62,26 @@ namespace PersonalCloudLibrarySource
                 IsInstalled = launchExists || !treatMissingFilesAsUninstalled,
                 HasPlayAction = launchExists,
                 PlayPath = launchExists ? launchPath : string.Empty,
-                WorkingDirectory = launchExists ? game.InstallDirectory ?? string.Empty : string.Empty
+                WorkingDirectory = launchExists ? game.InstallDirectory ?? string.Empty : string.Empty,
+                PlayniteInstallDirectory = game.InstallDirectory ?? string.Empty,
+                OwnedFileSize = game.InstallSize
             };
+        }
+
+        private static ulong? TryGetFileLength(string path)
+        {
+            try
+            {
+                return File.Exists(path) ? (ulong?)new FileInfo(path).Length : null;
+            }
+            catch (IOException)
+            {
+                return null;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return null;
+            }
         }
     }
 
@@ -79,7 +107,11 @@ namespace PersonalCloudLibrarySource
         {
             if (game == null || state == null) return;
             game.IsInstalled = state.IsInstalled;
-            game.InstallDirectory = state.IsCached ? state.WorkingDirectory : string.Empty;
+            game.InstallDirectory = state.IsCached ? state.PlayniteInstallDirectory : string.Empty;
+            if (state.IsCached && state.OwnedFileSize.HasValue)
+                game.InstallSize = state.OwnedFileSize.Value;
+            else if (!state.IsCached)
+                game.InstallSize = null;
             var actions = new ObservableCollection<GameAction>(
                 game.GameActions?.Where(action => action != null && !action.IsPlayAction) ?? Enumerable.Empty<GameAction>());
             if (state.HasPlayAction)
@@ -101,6 +133,7 @@ namespace PersonalCloudLibrarySource
             if (game == null) return;
             game.IsInstalled = false;
             game.InstallDirectory = string.Empty;
+            game.InstallSize = null;
             game.GameActions = new ObservableCollection<GameAction>(
                 game.GameActions?.Where(action => action != null && !action.IsPlayAction) ?? Enumerable.Empty<GameAction>());
         }
