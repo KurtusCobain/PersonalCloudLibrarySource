@@ -100,6 +100,10 @@ namespace PersonalCloudLibrarySource
                     RemoteSourcePath = remoteSourcePath,
                     DestinationPath = partialPath,
                     IsDirectory = isDirectory,
+                    // This destination is already private job-owned staging.
+                    // Avoid rclone's second random sidecar, which survives a
+                    // killed child process and escapes exact-path cleanup.
+                    UseInPlace = true,
                     TimeoutSeconds = settings.RcloneTimeoutSeconds,
                     ConnectTimeoutSeconds = Math.Min(30, Math.Max(5, settings.RcloneTimeoutSeconds)),
                     InactivityTimeoutSeconds = settings.RcloneTimeoutSeconds
