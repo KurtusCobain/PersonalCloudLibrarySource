@@ -1,8 +1,8 @@
 # Changelog
 
-## 1.0.0 - Unreleased
+## 0.3.2 - 2026-11-01 (Public Release)
 
-**Release-hardening work in draft PR #10 (not yet merged or published):**
+**Published release — includes the hardening and Windows QA fixes merged from PR #10:**
 
 - Restrict new install destinations to the configured cache folder, reject unsafe fallback game IDs, and retain catalog visibility for existing external paths.
 - Correct rclone transfers for empty files/directories, Windows argument quoting, and bounded cloud manifest output.
@@ -11,8 +11,8 @@
 - Remove seven nonfunctional settings controls while keeping upgrade-compatible stored fields; explain mandatory transfer-safety behavior.
 - Add a bounded, cancellable read-only game preview to first-run setup, with the first ten detected titles, skipped counts, and clear remote prerequisites.
 - Move local/NAS manifest generation during wizard Finish to a cancellable background task, retaining Playnite settings updates on the UI thread and preventing persistence after cancellation.
-- Observe queued install completion asynchronously and route Playnite completion/cancellation events through the host UI dispatcher; must still pass installed-host validation.
-- Restore compatibility with screenshot URLs in the live Playnite listing.
+- Observe queued install completion asynchronously and route Playnite completion/cancellation events through the host UI dispatcher; confirmed in isolated Windows Playnite acceptance.
+- Restore compatibility with screenshot URLs in the live Playnite listing and preserve genuine Windows QA capture evidence.
 - **Compatibility note:** manifests that previously attempted an install outside the cache folder now have to use an inside-cache destination. Existing files must never be relocated or deleted automatically.
 
 - Added guided Desktop setup for `LocalFile`, `LocalFolder`, and `RcloneRemote` providers, with provider-specific validation and verification reports.
@@ -22,13 +22,11 @@
 - Kept imported games compatible with standard Playnite metadata plus play/install/uninstall controls in Desktop and Fullscreen.
 - Added guarded cache removal and safe uninstall rules that reject roots, the cache root, outside-cache targets by default, and unsafe reparse-point paths.
 - Added clearer notifications, public-safe diagnostics, upgrade guidance, and a seven-image release-candidate documentation set.
-- Installed provider, Fullscreen, upgrade, and package qualification remain pending; this section is a release-candidate record, not a 1.0 release declaration.
+- Windows QA completed core installed Desktop/Fullscreen workflows, upgrade preservation, local-only rclone cancellation/retry and package validation. Broader cloud/NAS scenarios and some keyboard/DPI checks remain documented limitations, and this is not a 1.0 release.
 
-## 0.3.2
+### Earlier 0.3.2 development milestones
 
-Feature-branch test pass prepared 7/12/2026
-
-This remains the current development version while 1.0 qualification is in progress.
+Feature-branch test pass prepared 7/12/2026. These improvements are included in the published 0.3.2 update.
 
 - Added the approved PCLS cloud-controller icon, wide wordmark, and full dark logo artwork.
 - Generate true-alpha PNG branding during builds instead of using checkerboard-backed source images.
@@ -38,6 +36,15 @@ This remains the current development version while 1.0 qualification is in progr
 - Include actionable manifest and rclone timeout details in verification messages.
 - Increased the default rclone timeout to 90 seconds and safely migrated the previous 30-second default while preserving custom values.
 - Include generated branding assets in extension packages.
+
+### Final Windows QA and release qualification
+
+- Fixed deep Windows ownership-receipt staging paths and required LICENSE validation.
+- Corrected the game Details dark-theme text resource binding.
+- Prevented rclone cancellation sidecar leftovers using private staged transfers and a local-only real-rclone regression.
+- Verified v0.2.0 → v0.3.2 migration preserved tested game IDs, settings and file hashes.
+- Published the v0.3.2 package to GitHub and retained the prior 0.2.0 version in the Playnite installer manifest.
+- Recursive directory cache uninstall remains disabled; shared-cache install-size display can include unrelated files.
 
 ## 0.2.0
 
