@@ -1,6 +1,18 @@
 AddonId: 'PersonalCloudLibrarySource_61993828-67a8-4468-93a2-293442e36328'
-# Historical published package; keep until the qualified release entry is added.
+# Published packages: retain v0.2.0 for existing users and rollback availability.
 Packages:
+  - Version: '0.3.2'
+    RequiredApiVersion: '6.16.0'
+    ReleaseDate: '2026-11-01'
+    PackageUrl: https://github.com/KurtusCobain/PersonalCloudLibrarySource/releases/download/v0.3.2/PersonalCloudLibrarySource-0.3.2.pext
+    Changelog:
+      - Added bounded, cancellable setup preview and background local/NAS catalog generation.
+      - Improved on-demand local and rclone transfers, queue progress, cancellation and retry.
+      - Restricted new installs to the configured cache and improved filesystem and ownership safety.
+      - Fixed Windows receipt staging paths and rclone cancellation temporary-file cleanup.
+      - Improved source-health diagnostics, dashboard state and dark-theme Details readability.
+      - Preserved v0.2.0 settings and game identities during upgrade; migrated the default rclone timeout to 90 seconds.
+      - Recursive directory cache uninstall remains disabled pending further qualification.
   - Version: '0.2.0'
     RequiredApiVersion: '6.16.0'
     ReleaseDate: '2026-06-15'
