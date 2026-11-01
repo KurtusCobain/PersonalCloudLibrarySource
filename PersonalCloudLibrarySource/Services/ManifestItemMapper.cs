@@ -69,7 +69,10 @@ namespace PersonalCloudLibrarySource
                     GameId = item.Id,
                     Name = item.Title,
                     IsInstalled = state.IsInstalled,
-                    InstallDirectory = paths.InstallDirectory
+                    // Playnite scans this path for a game's total size. An implicit
+                    // file entry may share its parent directory with other entries.
+                    InstallDirectory = state.PlayniteInstallDirectory,
+                    InstallSize = state.OwnedFileSize
                 };
                 if (!string.IsNullOrWhiteSpace(item.Notes)) game.Description = item.Notes;
                 if (state.HasPlayAction)
