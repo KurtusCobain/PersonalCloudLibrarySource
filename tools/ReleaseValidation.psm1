@@ -236,7 +236,7 @@ function Test-ReleasePackage {
     try {
         Add-Type -AssemblyName System.IO.Compression.FileSystem
         [IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path $PackagePath).Path, $temp)
-        $required = @('PersonalCloudLibrarySource.dll','extension.yaml','icon.png','Localization/en_US.xaml','Assets/pcls-logo-wide.png')
+        $required = @('PersonalCloudLibrarySource.dll','extension.yaml','LICENSE','icon.png','Localization/en_US.xaml','Assets/pcls-logo-wide.png')
         $actual = @(Get-ChildItem -LiteralPath $temp -File -Recurse | ForEach-Object { $_.FullName.Substring($temp.Length).TrimStart('\','/').Replace('\','/') })
         foreach ($path in $required) { if ($actual -notcontains $path) { throw "Package is missing required file: $path" } }
         $extra = @($actual | Where-Object { $required -notcontains $_ })
