@@ -95,9 +95,10 @@ namespace PersonalCloudLibrarySource
                     entry.RelativePath.StartsWith("..", StringComparison.Ordinal) ||
                     entry.RelativePath[0] == '/' || entry.RelativePath[0] == '\\' ||
                     entry.RelativePath.IndexOf(':') >= 0 ||
-                    !map.TryAdd(entry.RelativePath, entry))
+                    map.ContainsKey(entry.RelativePath))
                     throw new InvalidOperationException(
                         "Detailed snapshot has invalid or duplicate relative paths.");
+                map.Add(entry.RelativePath, entry);
             }
             return map;
         }
