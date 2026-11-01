@@ -254,7 +254,10 @@ namespace PersonalCloudLibrarySource
             {
                 InvokeOnInstalled(new GameInstalledEventArgs(new GameInstallationData
                 {
-                    InstallDirectory = installDirectory
+                    // Playnite calculates install size by scanning this directory.
+                    // A file item without an explicit install root must not claim
+                    // unrelated files in a shared cache directory.
+                    InstallDirectory = itemState.PlayniteInstallDirectory
                 }));
             }
 
