@@ -1,0 +1,49 @@
+AddonId: 'PersonalCloudLibrarySource_61993828-67a8-4468-93a2-293442e36328'
+Type: GameLibrary
+Name: 'Personal Cloud Library Source'
+Author: 'The Bearclaw & ztwslayer'
+ShortDescription: 'Catalog your local, NAS, external-drive, or rclone library in Playnite and cache selected games.'
+InstallerManifestUrl: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/playnite-addon/installer.yaml
+SourceUrl: https://github.com/KurtusCobain/PersonalCloudLibrarySource
+IconUrl: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/PersonalCloudLibrarySource/icon.png
+
+Description: |
+  Latest public release: v0.3.2 (November 1, 2026).
+
+  Personal Cloud Library Source (PCLS) imports user-supplied game catalogs into Playnite. Games can appear in the library before their files are cached locally. Users can keep Playnite metadata, install a selected cached copy, launch it through standard Playnite actions, and remove an eligible cached file while retaining the catalog entry.
+
+  Source modes are LocalFile, LocalFolder, and RcloneRemote. Local folders can use ordinary disks, external drives, mapped storage, and accessible NAS/UNC shares. Cloud services require a separate rclone installation and user-configured remote; PCLS does not supply cloud accounts or credentials.
+
+  v0.3.2 adds bounded first-run preview, background local/NAS manifest generation, clearer source verification and transfer diagnostics, a Desktop transfer queue with cancellation and retry, safer cache ownership and path checks, dark-theme Details text, and improved Windows rclone cancellation cleanup. An isolated Windows QA upgrade from v0.2.0 preserved the tested settings and game identities.
+
+  Setup, source verification, the dashboard, and custom details management are available in Playnite Desktop. Standard game install/play actions work in Fullscreen; there is no dedicated Fullscreen setup wizard or dashboard.
+
+  Downloads are on demand rather than automatic library-wide downloads. New installs must remain inside the configured cache. Automatic recursive directory-cache uninstall is intentionally disabled; the advanced outside-cache uninstall option should remain off. Actual NAS and cloud behavior depends on provider access and network conditions.
+
+  PCLS is not a game store, streaming service, emulator manager, ROM or BIOS source, credential provider, scraper, or source of copyrighted content. Users provide and control their own legally accessible files.
+
+Tags:
+  - library
+  - cloud
+  - rclone
+  - local
+  - nas
+  - manifest
+  - external drive
+  - metadata
+
+Links:
+  GitHub: https://github.com/KurtusCobain/PersonalCloudLibrarySource
+  Documentation: https://github.com/KurtusCobain/PersonalCloudLibrarySource/tree/main/docs
+  Issues: https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues
+  Changelog: https://github.com/KurtusCobain/PersonalCloudLibrarySource/blob/main/CHANGELOG.md
+
+# Existing public URLs are retained until the genuine QA screenshots are
+# uploaded as stable repository files and approved for the live listing.
+Screenshots:
+  - Thumbnail: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-workflow.png
+    Image: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-workflow.png
+  - Thumbnail: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-settings-provider.png
+    Image: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-settings-provider.png
+  - Thumbnail: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-settings-cache-uninstall.png
+    Image: https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-settings-cache-uninstall.png
