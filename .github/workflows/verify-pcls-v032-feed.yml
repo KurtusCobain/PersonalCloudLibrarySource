@@ -1,0 +1,50 @@
+name: Verify published PCLS v0.3.2 Playnite feed
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - release-control/v0.3.2-verify.request
+
+permissions:
+  contents: read
+
+jobs:
+  toolbox:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get official Playnite 10.63 portable Toolbox
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://github.com/JosefNemec/Playnite/releases/download/10.63/10.63.7z'
+          $archive = Join-Path $env:RUNNER_TEMP 'Playnite-10.63.7z'
+          $target = Join-Path $env:RUNNER_TEMP 'pcls-playnite-toolbox'
+          New-Item -ItemType Directory -Path $target -Force | Out-Null
+          & curl.exe -fL --retry 3 --retry-delay 3 -o $archive $url
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to download official Playnite portable release.' }
+          $sevenZip = (Get-Command '7z.exe' -ErrorAction SilentlyContinue).Source
+          if (-not $sevenZip) { $sevenZip = 'C:\Program Files\7-Zip\7z.exe' }
+          if (-not (Test-Path -LiteralPath $sevenZip)) { throw '7-Zip executable is absent from Windows runner.' }
+          & $sevenZip x $archive "-o$target" -y | Select-Object -Last 6
+          if ($LASTEXITCODE -ne 0) { throw 'Official Playnite archive extraction failed.' }
+          $toolbox = Get-ChildItem -Path $target -Filter 'Toolbox.exe' -File -Recurse | Select-Object -First 1
+          if (-not $toolbox) { throw 'Official Playnite Toolbox.exe was not found in archive.' }
+          "PCLS_TOOLBOX=$($toolbox.FullName)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Verify published installer and addon manifests with official Toolbox
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = (Resolve-Path '.\playnite-addon\installer.yaml').Path
+          $addon = (Resolve-Path '.\playnite-addon\addon-database.yaml').Path
+          $manifest = Get-Content -Raw -LiteralPath $installer
+          if ($manifest -notmatch '(?m)^\s+- Version:\s+[''"]?0\.3\.2') { throw 'v0.3.2 installer entry missing.' }
+          if ($manifest -notmatch 'releases/download/v0\.3\.2/PersonalCloudLibrarySource-0\.3\.2\.pext') {
+            throw 'Published release asset URL absent from installer manifest.'
+          }
+          & $env:PCLS_TOOLBOX verify addon $addon
+          if ($LASTEXITCODE -ne 0) { throw "Official Toolbox addon verification failed: $LASTEXITCODE" }
+          & $env:PCLS_TOOLBOX verify installer $installer
+          if ($LASTEXITCODE -ne 0) { throw "Official Toolbox installer verification failed: $LASTEXITCODE" }
+          Write-Host 'OFFICIAL_TOOLBOX_V032_FEED_PASSED'
