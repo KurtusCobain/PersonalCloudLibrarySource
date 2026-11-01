@@ -51,6 +51,20 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void CompletedDestination_DeepReceiptStoreWithinMaxPath_CreatesReadableReceipt()
+        {
+            // The final SHA-256 filename fits MAX_PATH; staging must fit too.
+            if (root.Length >= 179)
+                Assert.Ignore("Use a shorter disposable TEMP root for the MAX_PATH boundary fixture.");
+            var deepStore = Path.Combine(root, new string('r', 180 - root.Length - 1));
+            var store = new CacheOwnershipReceiptStore(deepStore);
+            store.RecordCompleted(cache, "deep-game", game);
+            CacheOwnershipReceipt receipt;
+            Assert.That(store.TryRead(cache, "deep-game", out receipt), Is.True);
+            Assert.That(receipt.Destination, Is.EqualTo(PathBoundary.Normalize(game)));
+        }
+
+        [Test]
         public void RecordingSameItemAgainRefusesOverwrite()
         {
             var store = new CacheOwnershipReceiptStore(receipts);
