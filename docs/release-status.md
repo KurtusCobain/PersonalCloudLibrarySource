@@ -1,70 +1,36 @@
 # PCLS Current Release Status
 
-Last updated: 2026-10-30
+Updated 2026-11-01.
 
-## Public package
+## Public release
 
-- Current published release: **v0.2.0**
-- Current Playnite installer-feed package: **0.2.0**
-- Existing v0.2.0 GitHub Release and `.pext` remain unchanged.
-- No 0.3.2 or 1.0 package is currently advertised to installed users.
+**Personal Cloud Library Source v0.3.2 is publicly released.**
 
-## Source state
+- Release: https://github.com/KurtusCobain/PersonalCloudLibrarySource/releases/tag/v0.3.2
+- Package: https://github.com/KurtusCobain/PersonalCloudLibrarySource/releases/download/v0.3.2/PersonalCloudLibrarySource-0.3.2.pext
+- Published package SHA-256: `1781fe630fad9398b8e810e3cf843309acc68a8a3dcfba720873042da41b2ed7`
+- Extension ID: `PersonalCloudLibrarySource_61993828-67a8-4468-93a2-293442e36328`
+- Release notes: [v0.3.2](releases/v0.3.2.md)
+- Public installer manifest: [playnite-addon/installer.yaml](../playnite-addon/installer.yaml), which retains both v0.3.2 and prior v0.2.0.
 
-- Default branch: `main`
-- Consolidated source merge: `12705ed2b672ae745580071a61cdf1b6cd2ecd92`
-- Merged RC source head: `1c59e0f4e344fc419c5fc7bb913ec09989d0632c`
-- Source manifest version: **0.3.2**
-- Intended release-candidate scope: eventual **1.0**, subject to explicit version-promotion approval
-- PR #9: merged for source consolidation
-- Post-merge GitHub Actions build run #92: **passed**
+PR #10 was merged to main on 2026-11-01. The public package was built, tested and published through the separately gated Windows release workflow, not copied from a draft CI artifact.
 
-The source merge and public package release are intentionally separate. A developer reading `main` sees the current release-candidate implementation; an installed Playnite user remains on the published v0.2.0 package until the release gate below is completed.
+The official Playnite add-on database already has a PCLS listing pointing to this repository's public installer manifest. It may take time for the listing or installed application to refresh its cached installer data.
 
-## Automated qualification already recorded
+## Verified acceptance evidence
 
-The reviewed RC head recorded:
+- Windows QA handoff: **435/435** tests passed with opt-in local-only real-rclone tests, including a cancellation/sidecar regression and safe retry.
+- Installed disposable Playnite profiles exercised Desktop workflows, Fullscreen game actions, file-only uninstall/reinstall, settings migration, and an in-place v0.2.0 → v0.3.2 upgrade with recorded IDs and hashes preserved.
+- Hosted GitHub Actions build on merged main succeeded, as did the one-time Windows release workflow.
+- Official Toolbox addon and installer verification **passed against the previous public manifest** in an interactive Windows session. Reverification after the public v0.3.2 installer entry is a separate postpublication check and must not be represented as already completed.
 
-- 86/86 tests passing in GitHub Actions run #91;
-- successful Debug build;
-- successful Release/package build;
-- package-content inspection;
-- validated branding dimensions/assets;
-- a retained 0.3.2 test artifact and recorded SHA-256 evidence.
+## Known boundaries
 
-After merging that exact source into `main`, build run #92 also completed successfully.
+- Recursive directory cache uninstall is intentionally disabled.
+- Actual third-party cloud accounts and NAS environments were not used in the isolated Windows acceptance; real-world availability and permissions may differ.
+- Playnite Fullscreen has game actions, but no separate PCLS setup wizard or dashboard.
+- Some keyboard and alternate-DPI visual acceptance cases remain unverified.
+- Cached-size display can overcount a single game when multiple games share the same cache directory.
+- Three genuine privacy-safe Windows QA screenshots were selected for the public gallery, but the independent screenshot asset update requires a separate publication check; existing listing screenshot URLs remain unchanged.
 
-## Draft hardening in progress (not merged)
-
-Draft PR #10 addresses filesystem safety, invalid transfer cases, manifest bounds, rclone Windows quoting, dashboard counts, misleading settings, screenshot compatibility, source removal protections, and usability guidance. Its newest code also adds a real read-only preview and nonblocking install completion. Verify the latest Windows CI run on that PR before treating these additions as automated-pass.
-
-This draft does not change the installed public package, `main` branch, or installer feed. A passing build and test suite cannot replace manual installed acceptance for lifecycle, cancellation, source disconnect, preservation of settings, or Fullscreen.
-
-## Remaining public-release gate
-
-Do not add a 0.3.2/1.0 entry to `playnite-addon/installer.yaml`, create a new GitHub Release, move/replace the v0.2.0 release, or publish a new package until real Windows/Playnite acceptance covers:
-
-- clean installed-provider behavior;
-- Desktop visual smoke test;
-- Fullscreen play/install/uninstall workflow;
-- upgrade from v0.2.0 with settings/data preserved;
-- final packaged `.pext` install and smoke test;
-- high-DPI presentation;
-- any remaining provider/environment rows required by the release checklist.
-
-See:
-
-- [1.0 release checklist](superpowers/verification/pcls-1.0-release-checklist.md)
-- [Known limits](known-limits.md)
-- [Release-candidate notes](playnite-release-notes.md)
-
-## Version decision at release time
-
-The repository currently keeps the implementation identity at **0.3.2** while the broader 1.0 qualification is incomplete.
-
-When manual acceptance is complete, make an explicit release decision:
-
-1. publish the qualified build as **0.3.2**, preserving 1.0 for a later milestone; or
-2. complete the remaining 1.0 synchronization gates and promote the same qualified scope to **1.0.0**.
-
-Do not change this version identity merely as repository cleanup.
+Do not confuse this v0.3.2 public release with the future 1.0 milestone.
