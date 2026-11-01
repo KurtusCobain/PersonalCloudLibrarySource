@@ -22,7 +22,7 @@ The official Playnite add-on database already has a PCLS listing pointing to thi
 - Windows QA handoff: **435/435** tests passed with opt-in local-only real-rclone tests, including a cancellation/sidecar regression and safe retry.
 - Installed disposable Playnite profiles exercised Desktop workflows, Fullscreen game actions, file-only uninstall/reinstall, settings migration, and an in-place v0.2.0 → v0.3.2 upgrade with recorded IDs and hashes preserved.
 - Hosted GitHub Actions build on merged main succeeded, as did the one-time Windows release workflow.
-- Official Toolbox addon and installer verification **passed against the previous public manifest** in an interactive Windows session. Reverification after the public v0.3.2 installer entry is a separate postpublication check and must not be represented as already completed.
+- Official **Playnite 10.63 Toolbox** addon and installer verification both **passed against the published v0.3.2 feed**, including retrieval and verification of the linked installer manifest. Evidence: [GitHub Actions run #41353669451](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/41353669451).
 
 ## Known boundaries
 
