@@ -102,6 +102,8 @@
     <Compile Include="Services\LibraryItemStateResolver.cs" />
     <Compile Include="Services\SafeCacheDeletionPolicy.cs" />
     <Compile Include="Services\CacheOwnershipPolicy.cs" />
+    <Compile Include="Services\CacheDirectoryCleanupReadinessService.cs" />
+    <Compile Include="Services\CacheDirectoryInventoryDiffService.cs" />
     <Compile Include="Services\CacheOwnershipReceiptStore.cs" />
     <Compile Include="Services\CacheTreeInventoryScanner.cs" />
     <Compile Include="Services\PluginNavigationService.cs" />
