@@ -107,15 +107,64 @@ namespace PersonalCloudLibrarySource.Tests.Services
 
             applicator.Apply(game, state);
             Assert.That(game.IsInstalled, Is.True);
-            Assert.That(game.InstallDirectory, Is.EqualTo(install));
+            Assert.That(game.InstallDirectory, Is.Empty,
+                "Playnite must not recursively count the shared parent folder for an implicit file entry.");
+            Assert.That(game.InstallSize, Is.EqualTo((ulong)4));
             Assert.That(game.GameActions, Has.Count.EqualTo(2));
             Assert.That(game.GameActions, Has.Exactly(1).Matches<GameAction>(action => action.IsPlayAction));
+            Assert.That(game.GameActions[1].WorkingDir, Is.EqualTo(install),
+                "Launch action still uses the real file parent directory.");
 
             applicator.ApplyUninstalled(game);
             Assert.That(game.IsInstalled, Is.False);
             Assert.That(game.InstallDirectory, Is.Null.Or.Empty);
+            Assert.That(game.InstallSize, Is.Null);
             Assert.That(game.GameActions, Has.Count.EqualTo(1));
             Assert.That(game.GameActions[0].Name, Is.EqualTo("Manual"));
+        }
+
+        [Test]
+        public void Resolve_ExplicitFileInstallDirectory_RetainsPlayniteDirectory()
+        {
+            var install = Path.Combine(testRoot, "explicit");
+            var launch = Path.Combine(install, "one.exe");
+            Directory.CreateDirectory(install);
+            File.WriteAllText(launch, "file");
+            var item = new PersonalCloudLibraryItem
+            {
+                SourceType = "file", InstallDirectory = "explicit"
+            };
+
+            var state = new LibraryItemStateResolver().Resolve(item, launch, install);
+
+            Assert.That(state.WorkingDirectory, Is.EqualTo(install));
+            Assert.That(state.PlayniteInstallDirectory, Is.EqualTo(install),
+                "Do not discard a manifest author's explicit game directory.");
+            Assert.That(state.OwnedFileSize, Is.Null,
+                "Explicit directory footprints remain under Playnite's normal directory scanner.");
+        }
+
+        [Test]
+        public void Resolve_ImplicitFileSize_DoesNotCountSharedCacheSiblings()
+        {
+            var first = Path.Combine(testRoot, "first.exe");
+            var second = Path.Combine(testRoot, "second.exe");
+            var unrelated = Path.Combine(testRoot, "unrelated.bin");
+            File.WriteAllText(first, "one");
+            File.WriteAllText(second, "twotwo");
+            File.WriteAllBytes(unrelated, new byte[512 * 1024]);
+            var item = new PersonalCloudLibraryItem { SourceType = "file" };
+
+            var firstState = new LibraryItemStateResolver().Resolve(item, first, testRoot);
+            var secondState = new LibraryItemStateResolver().Resolve(item, second, testRoot);
+
+            Assert.That(firstState.PlayniteInstallDirectory, Is.Empty);
+            Assert.That(secondState.PlayniteInstallDirectory, Is.Empty);
+            Assert.That(firstState.OwnedFileSize, Is.EqualTo((ulong)3));
+            Assert.That(secondState.OwnedFileSize, Is.EqualTo((ulong)6));
+            Assert.That(firstState.WorkingDirectory, Is.EqualTo(testRoot));
+            Assert.That(secondState.WorkingDirectory, Is.EqualTo(testRoot));
+            Assert.That(File.Exists(unrelated), Is.True);
         }
 
         [Test]

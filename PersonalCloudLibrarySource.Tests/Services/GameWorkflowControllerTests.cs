@@ -317,6 +317,16 @@ namespace PersonalCloudLibrarySource.Tests.Services
                 CacheOwnershipReceipt receipt = null;
                 Assert.That(SpinWait.SpinUntil(() => receipts.TryRead(cache, item.Id, out receipt), 5000), Is.True);
                 Assert.That(receipt.Destination, Is.EqualTo(Path.Combine(cache, "receipt-game", "play.exe")));
+                Assert.That(SpinWait.SpinUntil(() => game.InstallSize.HasValue, 5000), Is.True);
+                Assert.That(game.InstallSize, Is.EqualTo((ulong)new FileInfo(source).Length),
+                    "Completed install must report only the owned file, not sibling cache contents.");
+                Assert.That(game.InstallDirectory, Is.Empty,
+                    "Playnite must not scan an implicit file's shared parent as installation data.");
+                Assert.That(game.GameActions, Has.Exactly(1).Matches<GameAction>(action =>
+                    action.IsPlayAction &&
+                    action.Path == Path.Combine(cache, "receipt-game", "play.exe") &&
+                    action.WorkingDir == Path.Combine(cache, "receipt-game")),
+                    "The real launcher path and working directory must remain intact.");
                 controller.Dispose();
             }
         }
