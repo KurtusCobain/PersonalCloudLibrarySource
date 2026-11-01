@@ -34,6 +34,7 @@ try {
     try {
         Copy-Item (Join-Path $releaseOutput 'PersonalCloudLibrarySource.dll') $stage
         Copy-Item $extensionPath $stage
+        Copy-Item (Join-Path $root 'LICENSE') $stage
         Copy-Item (Join-Path $root 'PersonalCloudLibrarySource\icon.png') $stage
         Copy-Item (Join-Path $root 'PersonalCloudLibrarySource\Localization\en_US.xaml') (Join-Path $stage 'Localization')
         Copy-Item (Join-Path $root 'PersonalCloudLibrarySource\Assets\pcls-logo-wide.png') (Join-Path $stage 'Assets')
