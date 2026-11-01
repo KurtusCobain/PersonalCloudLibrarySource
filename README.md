@@ -6,9 +6,9 @@ PCLS is the Playnite library for files you already own: catalog games from your 
 
 ## Current status
 
-The **published Playnite package remains v0.2.0**. The `main` branch now contains the consolidated `0.3.2` source / **1.0 release candidate** code, merged on 2026-09-21 after automated qualification. That source merge does **not** publish 0.3.2 or 1.0 to installed users: `playnite-addon/installer.yaml` remains pinned to the existing v0.2.0 release package.
+**PCLS v0.3.2 was publicly released on November 1, 2026.** Install or update it through the existing Playnite add-on entry or get the verified [v0.3.2 GitHub release](https://github.com/KurtusCobain/PersonalCloudLibrarySource/releases/tag/v0.3.2). The public installer manifest retains v0.2.0 as an earlier package. The GitHub package and both published installer/add-on manifests have passed Windows release qualification, including official Playnite Toolbox verification.
 
-Installed-provider, Desktop/Fullscreen, upgrade, final package, and high-DPI acceptance remain public-release gates. See [Current release status](docs/release-status.md) and [Known limits](docs/known-limits.md).
+Windows acceptance covered the Desktop and Fullscreen game workflow, an isolated v0.2.0 upgrade and local-only rclone cancellation/retry. Recursive directory cache uninstall remains disabled, third-party cloud/NAS cases vary by provider, and some keyboard/high-DPI scenarios remain untested. The future **1.0 release candidate** is a separate milestone. See [Current release status](docs/release-status.md) and [Known limits](docs/known-limits.md).
 
 ## Release-candidate tour
 
