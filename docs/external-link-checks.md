@@ -8,6 +8,8 @@ Checked with HTTP `HEAD` requests on 2026-07-14. All listed endpoints returned H
 | 200 | https://github.com/KurtusCobain/PersonalCloudLibrarySource/blob/main/CHANGELOG.md |
 | 200 | https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues |
 | 200 | https://github.com/KurtusCobain/PersonalCloudLibrarySource/releases/download/v0.2.0/PersonalCloudLibrarySource-0.2.0.pext |
+| Published (2026-11-01; GitHub Releases API, non-draft, asset uploaded) | https://github.com/KurtusCobain/PersonalCloudLibrarySource/releases/tag/v0.3.2 |
+| Uploaded (2026-11-01; SHA-256 1781fe630fad9398b8e810e3cf843309acc68a8a3dcfba720873042da41b2ed7) | https://github.com/KurtusCobain/PersonalCloudLibrarySource/releases/download/v0.3.2/PersonalCloudLibrarySource-0.3.2.pext |
 | 200 | https://github.com/KurtusCobain/PersonalCloudLibrarySource/tree/main/docs |
 | 200 | https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-dashboard-overview.png |
 | 200 | https://raw.githubusercontent.com/KurtusCobain/PersonalCloudLibrarySource/main/docs/images/pcls-library-example-games.png |
