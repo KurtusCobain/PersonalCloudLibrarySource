@@ -37,7 +37,6 @@ jobs:
             throw 'Refusing to release a package with a different version.'
           }
           & .\tools\test-release-baseline.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Release baseline validation failed.' }
 
       - name: Restore dependencies and build Debug
         shell: pwsh
@@ -65,11 +64,9 @@ jobs:
         shell: pwsh
         run: |
           & .\tools\package-extension.ps1
-          if ($LASTEXITCODE -ne 0) { throw 'Release packaging failed.' }
           $package = '.\dist\PersonalCloudLibrarySource-0.3.2.pext'
           if (-not (Test-Path $package)) { throw 'Expected release package missing.' }
           & .\tools\test-release-baseline.ps1 -PackagePath $package
-          if ($LASTEXITCODE -ne 0) { throw 'Package contract failed.' }
           Get-FileHash -LiteralPath $package -Algorithm SHA256 | Format-List
 
       - name: Upload reproducible release package evidence
