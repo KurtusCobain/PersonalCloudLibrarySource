@@ -132,7 +132,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(after.Fingerprint, Is.Not.EqualTo(before.Fingerprint));
             Assert.That(before.DetailedEntries, Has.Count.EqualTo(1));
             Assert.That(after.DetailedEntries, Has.Count.EqualTo(2));
-            Assert.That(after.DetailedEntries[1].RelativePath, Is.EqualTo("personal.sav"));
+            Assert.That(after.DetailedEntries[0].RelativePath, Is.EqualTo("personal.sav"));
             Assert.That(File.ReadAllText(save), Is.EqualTo("personal changes"));
         }
 
