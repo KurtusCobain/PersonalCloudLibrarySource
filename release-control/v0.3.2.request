@@ -1,3 +1,5 @@
 PCLS v0.3.2 full public release authorized on 2026-11-01.
 Merged release source: PR #10, verified Windows CI and completed Windows QA handoff.
 This marker requests release publication only after fresh Windows build, tests and package validation.
+
+Retry 1: corrected the Windows PowerShell wrapper's unset LASTEXITCODE check; no previous release was created.
