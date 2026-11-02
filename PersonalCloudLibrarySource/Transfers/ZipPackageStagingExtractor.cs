@@ -62,21 +62,34 @@ namespace PersonalCloudLibrarySource
 
                 using (var source = new FileStream(archivePath, FileMode.Open,
                     FileAccess.Read, FileShare.Read))
-                using (var archive = new ZipArchive(source, ZipArchiveMode.Read, false))
                 {
-                    var records = archive.Entries.Select(entry =>
+                    // .NET Framework 4.6.2 ZipArchiveEntry does not expose
+                    // external attributes. Read and validate ZIP32 metadata
+                    // separately so Unix links cannot be disguised as files.
+                    var central = ZipCentralDirectoryInspector.Read(source);
+                    source.Position = 0;
+                    using (var archive = new ZipArchive(source, ZipArchiveMode.Read, true))
                     {
+                    if (archive.Entries.Count != central.Count)
+                        throw new InvalidDataException("ZIP entry count differs from central metadata.");
+                    var records = new List<ArchiveEntryObservation>();
+                    for (var index = 0; index < archive.Entries.Count; index++)
+                    {
+                        var entry = archive.Entries[index];
+                        var header = central[index];
+                        if (!string.Equals(entry.FullName, header.Name, StringComparison.Ordinal))
+                            throw new InvalidDataException("ZIP entry name differs from central metadata.");
                         var isDirectory = entry.FullName.EndsWith("/", StringComparison.Ordinal) ||
                             entry.FullName.EndsWith("\\", StringComparison.Ordinal);
-                        return new ArchiveEntryObservation
+                        records.Add(new ArchiveEntryObservation
                         {
                             EntryPath = entry.FullName,
                             IsDirectory = isDirectory,
-                            IsLink = HasUnsafeExternalAttributes(entry, isDirectory),
+                            IsLink = header.IsUnsafeLinkOrSpecialFile,
                             CompressedBytes = entry.CompressedLength,
                             UncompressedBytes = entry.Length
-                        };
-                    }).ToList();
+                        });
+                    }
                     var inspected = new ArchiveInspectionPolicy().Inspect(records);
                     if (!inspected.AllowedForStagedExtraction)
                         return CloudTransferExecutionResult.Failure(
@@ -147,6 +160,7 @@ namespace PersonalCloudLibrarySource
                     Directory.Move(staging, destination);
                     return CloudTransferExecutionResult.Success(copiedTotal,
                         inspected.TotalUncompressedBytes);
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -166,17 +180,6 @@ namespace PersonalCloudLibrarySource
                     "ZIP extraction failed: " + ex.Message +
                     (cleaned ? "" : " Private staging needs manual inspection."), ex);
             }
-        }
-
-        private static bool HasUnsafeExternalAttributes(
-            ZipArchiveEntry entry, bool isDirectory)
-        {
-            var unixType = (entry.ExternalAttributes >> 16) & 0xF000;
-            // Link, device, FIFO and other special Unix entries are refused.
-            if (unixType != 0 && unixType != (isDirectory ? 0x4000 : 0x8000))
-                return true;
-            // DOS/Windows reparse point attribute (if represented).
-            return (entry.ExternalAttributes & (int)FileAttributes.ReparsePoint) != 0;
         }
 
         private static void EnsurePrivateDirectory(string staging, string directory,
