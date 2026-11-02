@@ -81,6 +81,7 @@
     <Compile Include="Services\ManifestItemMapperTests.cs" />
     <Compile Include="Services\ArchiveInspectionPolicyTests.cs" />
     <Compile Include="Services\GameLauncherCandidatePolicyTests.cs" />
+    <Compile Include="Services\ZipGameReviewTargetPolicyTests.cs" />
     <Compile Include="Transfers\ZipPackageStagingExtractorTests.cs" />
     <Compile Include="Transfers\ZipPackageReviewServiceTests.cs" />
     <Compile Include="Services\PathResolverTests.cs" />
