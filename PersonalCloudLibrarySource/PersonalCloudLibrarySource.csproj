@@ -103,6 +103,7 @@
     <Compile Include="Services\MultiSourceRuntimeCoordinator.cs" />
     <Compile Include="Services\SourceProfilesConfigurationCodec.cs" />
     <Compile Include="Services\SourceProfilesFileStore.cs" />
+    <Compile Include="Services\MultiSourceControllerFactory.cs" />
     <Compile Include="Services\ManifestParserValidator.cs" />
     <Compile Include="Services\PathResolvers.cs" />
     <Compile Include="Services\LibraryItemStateResolver.cs" />
