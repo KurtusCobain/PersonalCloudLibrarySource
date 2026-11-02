@@ -14,7 +14,7 @@ namespace PersonalCloudLibrarySource
             IReadOnlyList<PclsSourceProfileDefinition> profiles,
             PersonalCloudLibrarySourceSettingsV3 shared)
         {
-            if (shared == null || !shared.Enabled || !shared.EnableMultiSourceProfiles ||
+            if (shared == null || !shared.Enabled ||
                 shared.AllowUninstallOutsideCacheFolder)
                 throw new InvalidOperationException("Unsafe or disabled multi-source settings.");
             // Codec enforces bounded, valid profile identities and providers;
@@ -39,7 +39,8 @@ namespace PersonalCloudLibrarySource
             IReadOnlyList<PclsSourceProfileDefinition> currentProfiles,
             PersonalCloudLibrarySourceSettingsV3 currentShared)
         {
-            if (plan == null || !plan.CanPublish ||
+            if (plan == null || !plan.CanPublish || currentShared == null ||
+                !currentShared.EnableMultiSourceProfiles ||
                 string.IsNullOrWhiteSpace(plan.ConfigurationFingerprint))
                 return false;
             try
