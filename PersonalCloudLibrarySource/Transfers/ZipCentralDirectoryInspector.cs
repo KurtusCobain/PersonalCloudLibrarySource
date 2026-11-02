@@ -9,6 +9,7 @@ namespace PersonalCloudLibrarySource
     {
         public string Name { get; set; } = string.Empty;
         public bool IsUnsafeLinkOrSpecialFile { get; set; }
+        public uint ExpectedCrc32 { get; set; }
     }
 
     // Strict ZIP32 central-directory inspection for the .NET Framework 4.6.2
@@ -78,7 +79,7 @@ namespace PersonalCloudLibrarySource
                     var compression = reader.ReadUInt16();
                     reader.ReadUInt16(); // modification time
                     reader.ReadUInt16(); // modification date
-                    reader.ReadUInt32(); // CRC32
+                    var crc32 = reader.ReadUInt32();
                     var compressed = reader.ReadUInt32();
                     var uncompressed = reader.ReadUInt32();
                     var nameLength = reader.ReadUInt16();
@@ -126,7 +127,8 @@ namespace PersonalCloudLibrarySource
                     entries.Add(new ZipCentralEntry
                     {
                         Name = name,
-                        IsUnsafeLinkOrSpecialFile = unsafeType
+                        IsUnsafeLinkOrSpecialFile = unsafeType,
+                        ExpectedCrc32 = crc32
                     });
                 }
             }
