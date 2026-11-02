@@ -113,6 +113,79 @@ namespace PersonalCloudLibrarySource
             return store.Save(pluginDataDirectory, proposed);
         }
 
+        // A backup is previewed and checked against the current set of
+        // source identities before the user is allowed to restore it.
+        // Never silently remove sources added after a backup was made.
+        public List<PclsSourceProfileDefinition> PreviewBackupForRestore(
+            string pluginDataDirectory, string backupFileName,
+            IReadOnlyList<PclsSourceProfileDefinition> baseline,
+            PersonalCloudLibrarySourceSettingsV3 shared)
+        {
+            if (baseline == null || shared == null)
+                throw new InvalidOperationException(
+                    "Load current source profiles before inspecting a backup.");
+
+            var active = store.Load(pluginDataDirectory);
+            if (!active.Succeeded ||
+                !string.Equals(codec.Serialize(baseline),
+                    codec.Serialize(active.Profiles), StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "Current profiles changed or are invalid; reload before restore.");
+
+            var backup = store.InspectBackup(pluginDataDirectory, backupFileName);
+            if (!backup.Succeeded)
+                throw new InvalidOperationException(
+                    "The selected backup is missing or invalid.");
+
+            var currentIds = new HashSet<string>(
+                baseline.Select(p => p.ProfileId), StringComparer.OrdinalIgnoreCase);
+            var backupIds = new HashSet<string>(
+                backup.Profiles.Select(p => p.ProfileId),
+                StringComparer.OrdinalIgnoreCase);
+            if (!currentIds.SetEquals(backupIds))
+                throw new InvalidOperationException(
+                    "Restoring this backup would add or remove source identities; refuse.");
+            foreach (var prior in baseline)
+            {
+                var restored = backup.Profiles.Single(p =>
+                    string.Equals(p.ProfileId, prior.ProfileId,
+                        StringComparison.OrdinalIgnoreCase));
+                if (prior.IsLegacySingleSource != restored.IsLegacySingleSource)
+                    throw new InvalidOperationException(
+                        "Restoring this backup would change a source's legacy identity.");
+            }
+            if (backup.Profiles.Count(p => p.IsLegacySingleSource) != 1 ||
+                backup.Profiles.Any(p => !p.Enabled))
+                throw new InvalidOperationException(
+                    "The backup cannot restore a missing or disabled original source.");
+            var projector = new SourceProfileSettingsProjector();
+            foreach (var profile in backup.Profiles)
+                projector.Project(profile, shared);
+
+            return Clone(backup.Profiles);
+        }
+
+        // Restore is an explicit, separately confirmed action in the UI.
+        // Re-check active state and backup contents at commit time; Save()
+        // retains a *new* backup of the version being replaced.
+        public string RestoreBackupWithoutActivation(
+            string pluginDataDirectory, string backupFileName,
+            IReadOnlyList<PclsSourceProfileDefinition> baseline,
+            IReadOnlyList<PclsSourceProfileDefinition> previewedBackup,
+            PersonalCloudLibrarySourceSettingsV3 shared)
+        {
+            if (previewedBackup == null)
+                throw new InvalidOperationException("Preview a backup before restoring.");
+            var fresh = PreviewBackupForRestore(
+                pluginDataDirectory, backupFileName, baseline, shared);
+            if (!string.Equals(codec.Serialize(previewedBackup),
+                codec.Serialize(fresh), StringComparison.Ordinal))
+                throw new InvalidOperationException(
+                    "The backup changed since it was previewed; inspect again.");
+            return SaveWithoutActivation(
+                pluginDataDirectory, baseline, fresh, shared);
+        }
+
         public List<PclsSourceProfileDefinition> Clone(
             IReadOnlyList<PclsSourceProfileDefinition> profiles)
         {
