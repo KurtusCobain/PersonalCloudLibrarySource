@@ -107,6 +107,7 @@
     <Compile Include="Services\SourceProfilesManagementService.cs" />
     <Compile Include="Services\SourceProfileHealthProbe.cs" />
     <Compile Include="Services\SourceCatalogContinuityPolicy.cs" />
+    <Compile Include="Services\SourceCatalogSnapshotStore.cs" />
     <Compile Include="Services\ManifestParserValidator.cs" />
     <Compile Include="Services\PathResolvers.cs" />
     <Compile Include="Services\LibraryItemStateResolver.cs" />
