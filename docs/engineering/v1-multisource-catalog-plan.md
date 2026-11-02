@@ -1,38 +1,32 @@
-# PCLS v1 multi-source catalog safety contract
+# PCLS v1.0 multi-source runtime — coding checkpoint
 
-**Status: draft pure planning code, not yet active multi-source loading or settings.** See [PR #22](https://github.com/KurtusCobain/PersonalCloudLibrarySource/pull/22) and [issue #19](https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/19). Public v0.3.2 is unchanged.
+**Status:** Experimental, default-off draft implementation in [PR #22](https://github.com/KurtusCobain/PersonalCloudLibrarySource/pull/22). **Not approved for use, merge or public release.** Public v0.3.2 remains unchanged. This is not a native Playnite acceptance result.
 
-## Implemented foundations
+## What has been coded
 
-- `SourceProfileIdentityPolicy`: profile IDs are persistent, nonempty GUIDs; source names and locations do not define a game's identity. Legacy single-source GameIds remain byte-for-byte identical; games from new profiles are namespaced deterministically to prevent collisions. Duplicate IDs and multiple legacy profiles fail validation.
-- `MultiSourceCatalogPlanner.Build`: takes already validated independent single-source `ImportOutcome` batches, verifies their source IDs and manifest provenance, copies PCLS-managed Playnite metadata without changing input games, assigns stable namespaced IDs and produces GameId → ProfileId + OriginalItemId routing records.
-- `SourceProfileSettingsProjector` converts a disposable copy of a v0.3.2 single-source configuration into one *legacy* profile using a caller-provided persistent GUID. It preserves custom rclone timeout, paths, manifest settings and legacy GameIds. Separate profiles project into separate read-only runtime settings snapshots with a shared cache policy; any pre-existing outside-cache uninstall option causes a **refusal**, not a silent safety-policy rewrite. No settings persistence or Playnite action is performed here.
-- If **any** enabled source is inaccessible, invalid, or missing, the plan refuses to publish a partial successful catalog. This is a deliberate guard against Playnite removing games that disappear from the returned `GetGames` result when a NAS/cloud scan fails. Likewise, disabling a source without an explicit keep/retire policy cannot silently remove its titles.
-- Tests cover same original game ID in legacy and new sources, name/order/provider changes, source failure, disabled source, duplicate IDs, mismatched source item metadata, and nonmutation of input game objects.
+- **Stable source identity:** `SourceProfileIdentityPolicy` retains all legacy single-source GameIds, assigns source-namespaced IDs to added profiles, refuses duplicate profile IDs and prevents game-ID collisions.
+- **Versioned source settings:** `SourceProfilesConfigurationCodec` serializes/deserializes a bounded version-1 profile document, rejects absent/unsupported schema and malformed IDs, and previews legacy migration without writing live settings.
+- **Atomic file storage:** `SourceProfilesFileStore` saves that separate document into a preexisting plugin-owned directory using a unique temporary file, atomic replace/move and a unique backup of the prior valid configuration. It refuses overwriting corrupt/unsupported existing configurations, follows no known reparse-point paths and provides explicit backup **inspection**, not automatic rollback. The store is not yet connected to the settings UI.
+- **Source-local runtime snapshots:** `SourceProfileSettingsProjector` preserves legacy remote timeout and configuration and produces source-scoped settings without changing active user settings. Outside-cache uninstall permission is refused for multi-source.
+- **All-or-nothing catalog planning:** `MultiSourceRuntimeCoordinator` reads independently validated manifests and checks complete mapping, disabled/offline sources and exact/ancestor-overlapping cache destinations before publishing anything. A partial success must not cause Playnite to discard offline games.
+- **Source-bound action routing:** `MultiSourceControllerFactory` checks expected Playnite plugin ownership and the matching plan route, then supplies source-specific item/settings copies to install and uninstall controllers. The new-profile install passes its **namespaced** GameId as the receipt key. Legacy receipt keys remain the exact original item ID. This has isolated Windows fixtures with real disposable file transfers.
+- **Guarded Playnite integration:** `PersonalCloudLibrarySource.GetGames`, `GetInstallActions` and `GetUninstallActions` now have an experimental path gated by `EnableMultiSourceProfiles`. This setting defaults **false** and is copied correctly through the settings edit/rollback path. Normal single-source imports/actions retain their existing path. The experimental path requires a valid independent profile file; it fails closed with an exception rather than returning a successful partial catalog. Failed preparations invalidate the old action plan.
 
-## Multi-source coordinator and source routing (next coding increment)
+## Verified boundaries
 
-`MultiSourceRuntimeCoordinator.Prepare(profiles, sharedSettings, rcloneReader)` now loads **real independently validated manifests**, projects each source's settings, refuses unavailable/disabled sources, checks duplicate and ancestor-overlapping cache destinations across **all** sources, and only then assembles a combined atomic catalog. It never publishes partial results to Playnite.
+- The legacy settings schema/version remains unchanged until the final v1 migration design and review.
+- This branch does not enable a GUI toggle, auto-create a profile file, silently adopt missing sources, or issue delete permissions for game directories.
+- No active cloud credentials, real NAS or private game archives are used in the automated fixtures.
+- A matching V2 ownership receipt is informational, not authorization for recursive deletion. Cached-file uninstall continues to rely on the original safe deletion policy.
 
-For each combined game ID, `MultiSourceRuntimePlan.TryResolveAction` returns a `SourceScopedGameAction` whose original manifest item and source-specific runtime settings were captured at import time. Returned item/settings snapshots are copies, so an accidental settings-panel edit or caller mutation cannot silently switch the source for a previously staged action. This prepares *safe* install/uninstall routing; the live controller dispatch must still be connected in a separately reviewed change.
+## Outstanding v1.0 release gates
 
-`SourceProfilesConfigurationCodec` now provides a bounded **versioned (schema v1) JSON preview** for source profiles, including one legacy-source migration using an explicitly stable GUID. It refuses missing/unknown schema versions, invalid duplicate IDs and oversized documents. The codec is pure: it **does not save a file** or rewrite v0.3.2 settings. Secure and atomic persistence, source retirement UX and rollback must be designed before enabling the new settings.
+1. **Native Playnite host acceptance:** experimental `GetGames`/action routing, stable IDs during updates, keyboard/Desktop/Fullscreen behavior and source reconnect; currently automated tests cannot establish host parity.
+2. **Profile-management UI:** add/edit/disable/retire sources, explain offline status, conflict resolution and explicit restore/rollback workflow. A disabled source must not silently remove catalog entries.
+3. **Last-known-good snapshots:** decide whether to preserve offline games while healthy sources refresh, with provenance and schema rules; current strict strategy fails the entire import on any failed source.
+4. **Settings migration and lifecycle:** complete source-profile save/restore, supported upgrade from v0.2.0/v0.3.2 and refusal of corrupt profiles. The default-off experimental bit is not a finished migration or supported user setting.
+5. **Filesystem threat review:** path/link races and file-replacement atomicity need independent adversarial Windows review. No directory-delete expansion without a separate safety decision.
+6. **Other 1.0 pillars:** ZIP staging to live Install UI, safe 7z/RAR implementations, executable confirmation, size-reporting compatibility, accessibility and diagnostics.
+7. **Freeze and review:** consolidate all draft PRs, run full Windows CI on exact integrated SHA, obtain Claude/Grok/Nova independent reviews, fix their blockers, then one consolidated disposable Windows acceptance and explicit owner release authorization.
 
-New deterministic tests cover two local manifests with identical original game IDs, source-specific action routing, changes to input profile settings after publication, offline source reconnect, identical/overlapping cache destinations across profiles, legacy settings preservation and JSON schema failures. This is **not native Playnite acceptance** or a test of actual connected NAS/cloud environments.
-
-## Not yet implemented / release blockers
-
-1. No multi-profile settings persistence, migration from v0.3.2 single-source settings, or Source Profiles UI.
-2. `PersonalCloudLibrarySource.GetGames` still loads **one source**; this planner is not wired to runtime import.
-3. Install/Uninstall controllers still load a single manifest from active settings. Routing GameIds to the correct source-specific settings and source item is essential before enabling multi-source import.
-4. Cross-profile cache collisions are now refused in the read-only coordinator, including exact and ancestor-overlapping destinations. Disconnected source last-known-good snapshots, source removal/retirement decisions and duplicate-content hints still need a coherent lifecycle design.
-5. **Critical receipt-key migration:** `RcloneInstallController` currently writes V1/V2 ownership receipts under `item.Id`, not `Game.GameId`. Two new profiles may have the same original item ID while their Playnite GameIds differ. Before activation, install and uninstall ownership checks must use a stable, source-namespaced receipt identity for *new* profiles, while retaining the exact existing receipt key for the legacy source. Never simply rewrite `item.Id` to the namespaced ID, because manifest paths and transfer fallback semantics depend on the original item ID. Add explicit regression tests for two profiles with identical original IDs and separate cache roots/receipts.
-6. Source-specific install/uninstall controller dispatch must route from the original combined GameId to the correct source-specific item and settings snapshot. The currently active single-source manifest must not be consulted for a new-profile game.
-5. This baseline chooses **fail the entire import on any source error** instead of publishing partial data. A future persisted last-known-good per-source snapshot may allow healthy sources to update while retaining offline entries, but only with provenance/recency and user-controlled retirement.
-6. Provider credentials, sync status, settings UI, migration and release qualification require separate coding, review and disposable Windows provider tests.
-
-## Safety and rollout policy
-
-Do not combine and publish namespaced IDs until install/uninstall routing is fully compatible. A wrong profile mapping could attach a game action to the wrong source or cache file. Persist source settings in a versioned new schema and write legacy migration tests before enabling new-source profiles. Never delete/rename Playnite games merely because a provider is temporarily offline.
-
-Windows CI stays on every coding PR, then exact integrated SHA → independent Claude/Grok/Nova reviews → one consolidated native Playnite acceptance. This document is not approval to merge, release, or modify public installer metadata.
+This branch must remain **draft/unmerged**. CI success proves the automated fixture contract, **not** full multi-source production readiness.
