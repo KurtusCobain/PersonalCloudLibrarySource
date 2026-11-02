@@ -4,6 +4,15 @@
     <sys:String x:Key="LOCPLSDashboardTitle">Personal Cloud Library</sys:String>
     <sys:String x:Key="LOCPLSSidebarTitle">Cloud Library</sys:String>
     <sys:String x:Key="LOCPLSMenuSection">Personal Cloud Library</sys:String>
+    <sys:String x:Key="LOCPLSGameReviewZip">Review ZIP Package Contents</sys:String>
+    <sys:String x:Key="LOCPLSZipReviewUnavailable">A matching local ZIP is no longer available. No files were changed.</sys:String>
+    <sys:String x:Key="LOCPLSZipReviewRejected">ZIP review was refused: {0}{1}No files were changed.</sys:String>
+    <sys:String x:Key="LOCPLSZipReviewKeep">This may be an emulator-ready ZIP; keep or extract requires review.</sys:String>
+    <sys:String x:Key="LOCPLSZipReviewExtract">Possible game launcher found; extraction requires separate approval.</sys:String>
+    <sys:String x:Key="LOCPLSZipReviewAmbiguous">Archive contents are ambiguous; review the package manually.</sys:String>
+    <sys:String x:Key="LOCPLSZipReviewLauncher">Possible launcher (not approved): {0}{1}</sys:String>
+    <sys:String x:Key="LOCPLSZipReviewCompleted">Read-only ZIP inspection complete.{0}Files: {1}{0}Uncompressed bytes: {2}{0}{3}{0}{4}Contents:{0}{5}{0}{0}No files were extracted, executed, installed or removed. The extraction/install workflow still requires an explicit choice.</sys:String>
+    <sys:String x:Key="LOCPLSZipReviewFailed">ZIP review could not be completed. No files were changed.</sys:String>
     <sys:String x:Key="LOCPLSOpenDashboard">Open Dashboard</sys:String>
     <sys:String x:Key="LOCPLSOpenSettings">Settings</sys:String>
     <sys:String x:Key="LOCPLSVerifyLibrary">Verify Library</sys:String>
