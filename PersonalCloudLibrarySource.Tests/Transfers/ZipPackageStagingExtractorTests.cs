@@ -210,6 +210,42 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void CorruptedStoredZipMember_FailsCrcAndLeavesNoPublishedGame()
+        {
+            WriteArchive(zip =>
+            {
+                var entry = zip.CreateEntry("payload.txt", CompressionLevel.NoCompression);
+                using (var stream = entry.Open())
+                {
+                    var payload = Encoding.ASCII.GetBytes("correct fixture content");
+                    stream.Write(payload, 0, payload.Length);
+                }
+            });
+            var bytes = File.ReadAllBytes(source);
+            Assert.That(bytes[0], Is.EqualTo(0x50));
+            Assert.That(bytes[1], Is.EqualTo(0x4b));
+            Assert.That(bytes[2], Is.EqualTo(0x03));
+            Assert.That(bytes[3], Is.EqualTo(0x04));
+            var nameLength = bytes[26] | (bytes[27] << 8);
+            var extraLength = bytes[28] | (bytes[29] << 8);
+            var dataStart = 30 + nameLength + extraLength;
+            Assert.That(dataStart + 2, Is.LessThan(bytes.Length));
+            bytes[dataStart + 2] ^= 0x01;
+            File.WriteAllBytes(source, bytes);
+
+            var job = Guid.NewGuid();
+            var result = new ZipPackageStagingExtractor().ExtractApprovedZip(
+                source, cache, destination, job, CancellationToken.None);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(Directory.Exists(destination), Is.False);
+            Assert.That(Directory.Exists(TransferPartialPathPolicy.Create(destination, job)),
+                Is.False);
+            Assert.That(File.Exists(source), Is.True,
+                "A corrupt user-supplied ZIP source must never be deleted.");
+        }
+
+        [Test]
         public void PreexistingPartialStageIsNeverAdoptedOrDeleted()
         {
             WriteArchive(zip => AddFile(zip, "game.exe", "sample"));
