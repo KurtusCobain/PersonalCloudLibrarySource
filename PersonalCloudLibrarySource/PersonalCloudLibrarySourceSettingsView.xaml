@@ -315,6 +315,42 @@
                                          Width="100" HorizontalAlignment="Left" Margin="0,4,0,8"/>
                             </StackPanel>
                         </GroupBox>
+                        <GroupBox Header="{DynamicResource LOCPLSProfilesBackupGroup}" Margin="0,0,0,12">
+                            <StackPanel Margin="12">
+                                <TextBlock Text="{DynamicResource LOCPLSProfilesBackupGuidance}"
+                                           TextWrapping="Wrap" Margin="0,0,0,8"/>
+                                <ComboBox ItemsSource="{Binding ProfileBackupNames}"
+                                          SelectedItem="{Binding SelectedProfileBackupName, Mode=TwoWay}"
+                                          AutomationProperties.Name="{DynamicResource LOCPLSProfilesBackupPickerAutomation}"
+                                          Margin="0,0,0,8"/>
+                                <WrapPanel Margin="0,0,0,8">
+                                    <Button Content="{DynamicResource LOCPLSProfilesBackupInspectButton}"
+                                            Click="PreviewSelectedSourceBackup_Click"
+                                            AutomationProperties.Name="{DynamicResource LOCPLSProfilesBackupInspectAutomation}"
+                                            Padding="10,5" Margin="0,0,8,8"/>
+                                    <Button Content="{DynamicResource LOCPLSProfilesBackupRestoreButton}"
+                                            Click="RestoreSelectedSourceBackup_Click"
+                                            IsEnabled="{Binding HasRestorableBackupPreview}"
+                                            AutomationProperties.Name="{DynamicResource LOCPLSProfilesBackupRestoreAutomation}"
+                                            Padding="10,5" Margin="0,0,8,8"/>
+                                </WrapPanel>
+                                <TextBlock Text="{Binding BackupPreviewStatus}"
+                                           TextWrapping="Wrap"
+                                           AutomationProperties.Name="{DynamicResource LOCPLSProfilesBackupStatusAutomation}"
+                                           Margin="0,0,0,8"/>
+                                <DataGrid ItemsSource="{Binding BackupProfilePreview}"
+                                          IsReadOnly="True" AutoGenerateColumns="False"
+                                          CanUserAddRows="False" CanUserDeleteRows="False"
+                                          Height="120"
+                                          AutomationProperties.Name="{DynamicResource LOCPLSProfilesBackupGridAutomation}">
+                                    <DataGrid.Columns>
+                                        <DataGridTextColumn Header="{DynamicResource LOCPLSProfilesSourceColumn}" Binding="{Binding DisplayName}" Width="2*"/>
+                                        <DataGridTextColumn Header="{DynamicResource LOCPLSProfilesProviderColumn}" Binding="{Binding ProviderType}" Width="*"/>
+                                        <DataGridCheckBoxColumn Header="{DynamicResource LOCPLSProfilesOriginalColumn}" Binding="{Binding IsLegacySingleSource}" Width="Auto"/>
+                                    </DataGrid.Columns>
+                                </DataGrid>
+                            </StackPanel>
+                        </GroupBox>
                         <TextBlock TextWrapping="Wrap"
                                    Text="{DynamicResource LOCPLSProfilesRestrictions}"/>
                     </StackPanel>
