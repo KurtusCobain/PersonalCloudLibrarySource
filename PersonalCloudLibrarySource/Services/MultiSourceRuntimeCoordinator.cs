@@ -86,15 +86,24 @@ namespace PersonalCloudLibrarySource
 
         internal MultiSourceRuntimePlan(bool canPublish, string refusal,
             IReadOnlyList<GameMetadata> games,
-            IReadOnlyDictionary<string, SourceScopedGameAction> routes)
+            IReadOnlyDictionary<string, SourceScopedGameAction> routes,
+            string configurationFingerprint = null)
         {
             CanPublish = canPublish;
             RefusalReason = refusal ?? string.Empty;
             Games = games;
             this.routes = routes;
+            ConfigurationFingerprint = configurationFingerprint ?? string.Empty;
         }
 
         public bool CanPublish { get; }
+        internal string ConfigurationFingerprint { get; }
+
+        // A prepared route is never authority after source settings change.
+        public bool MatchesConfiguration(
+            IReadOnlyList<PclsSourceProfileDefinition> profiles,
+            PersonalCloudLibrarySourceSettingsV3 shared)
+            => MultiSourceActionConfigurationGuard.Matches(this, profiles, shared);
         public string RefusalReason { get; }
         public IReadOnlyList<GameMetadata> Games { get; }
 
@@ -144,6 +153,18 @@ namespace PersonalCloudLibrarySource
             if (profiles.Any(profile => !profile.Enabled))
                 return Refuse("A disabled source cannot silently retire catalog entries.");
 
+            string configurationAtStart;
+            try
+            {
+                configurationAtStart = MultiSourceActionConfigurationGuard.Fingerprint(
+                    profiles, shared);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException ||
+                                       ex is ArgumentException)
+            {
+                return Refuse("Multi-source configuration cannot be verified.");
+            }
+
             var batches = new List<PclsSourceCatalogBatch>();
             var settingsByProfile = new Dictionary<string, PersonalCloudLibrarySourceSettingsV3>(
                 StringComparer.OrdinalIgnoreCase);
@@ -192,9 +213,18 @@ namespace PersonalCloudLibrarySource
                 if (routes.Count != planned.Games.Count)
                     return Refuse("A game could not be associated with one verified source.");
 
+                // Re-fingerprint after processing: changed settings during a
+                // long remote import must not produce active action authority.
+                var configurationNow = MultiSourceActionConfigurationGuard.Fingerprint(
+                    profiles, shared);
+                if (!string.Equals(configurationAtStart, configurationNow,
+                    StringComparison.Ordinal))
+                    return Refuse("Source configuration changed during import; refresh required.");
+
                 return new MultiSourceRuntimePlan(true, string.Empty,
                     new ReadOnlyCollection<GameMetadata>(planned.Games.ToList()),
-                    new ReadOnlyDictionary<string, SourceScopedGameAction>(routes));
+                    new ReadOnlyDictionary<string, SourceScopedGameAction>(routes),
+                    configurationAtStart);
             }
             catch (Exception ex) when (ex is InvalidOperationException ||
                                        ex is ArgumentException ||
