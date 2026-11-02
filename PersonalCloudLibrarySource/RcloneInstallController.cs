@@ -17,6 +17,7 @@ namespace PersonalCloudLibrarySource
         private readonly GameWorkflowNotificationService workflowNotifications;
         private readonly IImportUiDispatcher uiDispatcher;
         private readonly CacheOwnershipReceiptStore ownershipReceipts;
+        private readonly string ownershipReceiptKey;
         private readonly CancellationTokenSource inventoryCancellation = new CancellationTokenSource();
         private Guid activeJobId;
         private volatile bool disposed;
@@ -29,12 +30,22 @@ namespace PersonalCloudLibrarySource
             PersonalCloudLibrarySourceSettings settings,
             TransferQueueService transferQueue,
             GameWorkflowNotificationService workflowNotifications = null,
-            CacheOwnershipReceiptStore ownershipReceipts = null) : base(game)
+            CacheOwnershipReceiptStore ownershipReceipts = null,
+            string ownershipReceiptKey = null) : base(game)
         {
             this.item = item;
             this.settings = settings;
             this.transferQueue = transferQueue ?? throw new ArgumentNullException(nameof(transferQueue));
             this.ownershipReceipts = ownershipReceipts;
+            // Existing calls retain the original manifest item key. A new-profile
+            // caller must supply its namespaced Playnite game ID explicitly.
+            if (string.IsNullOrWhiteSpace(item?.Id))
+                throw new ArgumentException("A valid source item is required.", nameof(item));
+            if (ownershipReceiptKey != null &&
+                !string.Equals(ownershipReceiptKey, game?.GameId, StringComparison.Ordinal))
+                throw new ArgumentException("New-source receipt identity must match GameId.",
+                    nameof(ownershipReceiptKey));
+            this.ownershipReceiptKey = ownershipReceiptKey ?? item.Id;
             this.workflowNotifications = workflowNotifications ?? CreateNotifications(playniteApi);
             hasPlayniteHost = playniteApi != null;
             uiDispatcher = playniteApi == null
@@ -118,7 +129,7 @@ namespace PersonalCloudLibrarySource
                         var destination = PersonalCloudLibrarySource.ResolveDownloadDestinationFolder(
                             item, settings, launchPath);
                         await Task.Run(() => ownershipReceipts.RecordCompletedWithInventory(
-                            settings.LocalCacheFolder, item.Id, destination,
+                            settings.LocalCacheFolder, ownershipReceiptKey, destination,
                             inventoryCancellation.Token)).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
@@ -238,7 +249,7 @@ namespace PersonalCloudLibrarySource
                         StringComparison.OrdinalIgnoreCase)
                         ? PersonalCloudLibrarySource.ResolveDownloadDestinationFolder(item, settings, launchPath)
                         : PersonalCloudLibrarySource.ResolveDownloadDestinationFilePath(item, settings, launchPath);
-                    ownershipReceipts.RecordCompleted(settings.LocalCacheFolder, item.Id, destination);
+                    ownershipReceipts.RecordCompleted(settings.LocalCacheFolder, ownershipReceiptKey, destination);
                 }
                 catch (Exception ex)
                 {

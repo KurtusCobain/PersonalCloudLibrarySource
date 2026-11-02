@@ -22,6 +22,8 @@ namespace PersonalCloudLibrarySource
         private readonly ImportOutcomeService importOutcomeService = new ImportOutcomeService();
         private readonly ImportNotificationService importNotificationService;
         private readonly object validatedManifestItemsSync = new object();
+        private readonly object multiSourcePlanSync = new object();
+        private MultiSourceRuntimePlan experimentalMultiSourcePlan;
         private IReadOnlyDictionary<string, PersonalCloudLibraryItem> validatedManifestItems =
             new Dictionary<string, PersonalCloudLibraryItem>(StringComparer.OrdinalIgnoreCase);
         private readonly IPlayniteAPI playniteApi;
@@ -61,6 +63,12 @@ namespace PersonalCloudLibrarySource
                 return new List<GameMetadata>();
             }
 
+            if (pluginSettings.EnableMultiSourceProfiles)
+                return GetExperimentalMultiSourceGames(pluginSettings);
+
+            lock (multiSourcePlanSync)
+                experimentalMultiSourcePlan = null;
+
             var outcome = importOutcomeService.Import(pluginSettings, rcloneManifestReader.ReadManifestJson);
             PublishImportOutcome(outcome, pluginSettings);
             if (!outcome.Succeeded)
@@ -73,6 +81,76 @@ namespace PersonalCloudLibrarySource
             }
 
             return ImportExecutionPolicy.Complete(outcome);
+        }
+
+        private IEnumerable<GameMetadata> GetExperimentalMultiSourceGames(
+            PersonalCloudLibrarySourceSettingsV3 pluginSettings)
+        {
+            // Do not let a stale route remain usable while any configured
+            // source fails or the profile document changes.
+            lock (multiSourcePlanSync)
+                experimentalMultiSourcePlan = null;
+
+            var loaded = new SourceProfilesFileStore().Load(GetPluginDataDirectory());
+            if (!loaded.Succeeded)
+                throw new ImportOutcomeException(ImportOutcome.Failure(
+                    ImportFailureKind.InvalidManifest, "multi-source-profiles",
+                    "Profile configuration is missing or invalid; previous games remain unchanged."));
+
+            var prepared = new MultiSourceRuntimeCoordinator().Prepare(
+                loaded.Profiles, pluginSettings, rcloneManifestReader.ReadManifestJson);
+            if (!prepared.CanPublish)
+                throw new ImportOutcomeException(ImportOutcome.Failure(
+                    ImportFailureKind.SourceUnavailable, "multi-source-profiles",
+                    prepared.RefusalReason));
+
+            // Only publish a complete atomic snapshot. Game IDs in this plan
+            // resolve to their source-specific manifest and runtime settings.
+            lock (multiSourcePlanSync)
+                experimentalMultiSourcePlan = prepared;
+            logger.Info("PCLS experimental multi-source catalog prepared " +
+                prepared.Games.Count + " entries.");
+            return prepared.Games;
+        }
+
+        // Every action request revalidates the live profile document and
+        // action-sensitive settings before trusting a previously frozen route.
+        // Offline/corrupt/changed profile configurations never authorize
+        // stale uninstall or install actions. No provider call or disk write.
+        private MultiSourceRuntimePlan GetCurrentExperimentalActionPlan(
+            PersonalCloudLibrarySourceSettingsV3 runtimeSettings)
+        {
+            MultiSourceRuntimePlan plan;
+            lock (multiSourcePlanSync)
+                plan = experimentalMultiSourcePlan;
+            if (plan == null || !plan.CanPublish)
+                return null;
+
+            var stillValid = false;
+            try
+            {
+                var loaded = new SourceProfilesFileStore().Load(GetPluginDataDirectory());
+                stillValid = loaded.Succeeded &&
+                    plan.MatchesConfiguration(loaded.Profiles, runtimeSettings);
+            }
+            catch (Exception ex) when (ex is IOException ||
+                                       ex is UnauthorizedAccessException ||
+                                       ex is InvalidOperationException ||
+                                       ex is ArgumentException)
+            {
+                stillValid = false;
+            }
+            if (stillValid)
+                return plan;
+
+            lock (multiSourcePlanSync)
+            {
+                if (ReferenceEquals(experimentalMultiSourcePlan, plan))
+                    experimentalMultiSourcePlan = null;
+            }
+            logger.Warn("PCLS multi-source action routes invalidated: " +
+                "source profile or action settings changed or cannot be verified. Refresh required.");
+            return null;
         }
 
         private void PublishImportOutcome(
@@ -162,6 +240,19 @@ namespace PersonalCloudLibrarySource
                     return installActions;
                 }
 
+                if (pluginSettings.EnableMultiSourceProfiles)
+                {
+                    var plan = GetCurrentExperimentalActionPlan(pluginSettings);
+                    InstallController scopedController;
+                    if (new MultiSourceControllerFactory().TryPrepareInstall(
+                        playniteApi, args.Game, Id, plan, GetTransferQueue(),
+                        new CacheOwnershipReceiptStore(Path.Combine(
+                            GetPluginDataDirectory(), "ownership-receipts")),
+                        out scopedController))
+                        installActions.Add(scopedController);
+                    return installActions;
+                }
+
                 var manifest = LoadValidatedManifest(pluginSettings);
 
                 foreach (var item in manifest.Items)
@@ -223,6 +314,16 @@ namespace PersonalCloudLibrarySource
                 if (args.Game.PluginId != Id)
                 {
                     logger.Info($"Personal Cloud Library Source uninstall action not returned for {args.Game.GameId}: game belongs to another plugin.");
+                    return uninstallActions;
+                }
+
+                if (pluginSettings.EnableMultiSourceProfiles)
+                {
+                    var plan = GetCurrentExperimentalActionPlan(pluginSettings);
+                    UninstallController scopedController;
+                    if (new MultiSourceControllerFactory().TryPrepareUninstall(
+                        playniteApi, args.Game, Id, plan, out scopedController))
+                        uninstallActions.Add(scopedController);
                     return uninstallActions;
                 }
 
