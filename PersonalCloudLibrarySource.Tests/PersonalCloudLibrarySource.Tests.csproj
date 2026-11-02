@@ -82,6 +82,7 @@
     <Compile Include="Services\SourceProfileIdentityPolicyTests.cs" />
     <Compile Include="Services\MultiSourceCatalogPlannerTests.cs" />
     <Compile Include="Services\SourceProfileSettingsProjectorTests.cs" />
+    <Compile Include="Services\MultiSourceRuntimeCoordinatorTests.cs" />
     <Compile Include="Services\PathResolverTests.cs" />
     <Compile Include="Services\LibraryItemStateResolverTests.cs" />
     <Compile Include="Services\LibraryVerificationManifestDiagnosticsTests.cs" />
