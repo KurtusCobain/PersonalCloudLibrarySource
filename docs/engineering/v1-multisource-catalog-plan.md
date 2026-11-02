@@ -10,6 +10,16 @@
 - If **any** enabled source is inaccessible, invalid, or missing, the plan refuses to publish a partial successful catalog. This is a deliberate guard against Playnite removing games that disappear from the returned `GetGames` result when a NAS/cloud scan fails. Likewise, disabling a source without an explicit keep/retire policy cannot silently remove its titles.
 - Tests cover same original game ID in legacy and new sources, name/order/provider changes, source failure, disabled source, duplicate IDs, mismatched source item metadata, and nonmutation of input game objects.
 
+## Multi-source coordinator and source routing (next coding increment)
+
+`MultiSourceRuntimeCoordinator.Prepare(profiles, sharedSettings, rcloneReader)` now loads **real independently validated manifests**, projects each source's settings, refuses unavailable/disabled sources, checks duplicate and ancestor-overlapping cache destinations across **all** sources, and only then assembles a combined atomic catalog. It never publishes partial results to Playnite.
+
+For each combined game ID, `MultiSourceRuntimePlan.TryResolveAction` returns a `SourceScopedGameAction` whose original manifest item and source-specific runtime settings were captured at import time. Returned item/settings snapshots are copies, so an accidental settings-panel edit or caller mutation cannot silently switch the source for a previously staged action. This prepares *safe* install/uninstall routing; the live controller dispatch must still be connected in a separately reviewed change.
+
+`SourceProfilesConfigurationCodec` now provides a bounded **versioned (schema v1) JSON preview** for source profiles, including one legacy-source migration using an explicitly stable GUID. It refuses missing/unknown schema versions, invalid duplicate IDs and oversized documents. The codec is pure: it **does not save a file** or rewrite v0.3.2 settings. Secure and atomic persistence, source retirement UX and rollback must be designed before enabling the new settings.
+
+New deterministic tests cover two local manifests with identical original game IDs, source-specific action routing, changes to input profile settings after publication, offline source reconnect, identical/overlapping cache destinations across profiles, legacy settings preservation and JSON schema failures. This is **not native Playnite acceptance** or a test of actual connected NAS/cloud environments.
+
 ## Not yet implemented / release blockers
 
 1. No multi-profile settings persistence, migration from v0.3.2 single-source settings, or Source Profiles UI.
