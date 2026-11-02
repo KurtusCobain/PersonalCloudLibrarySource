@@ -12,9 +12,9 @@ namespace PersonalCloudLibrarySource
     // Display-only evidence, never a GameMetadata result or a controller route.
     public sealed class SourceCatalogDisplayEntry
     {
-        public string GameId { get; internal set; }
-        public string Name { get; internal set; }
-        public string Description { get; internal set; }
+        public string GameId { get; set; }
+        public string Name { get; set; }
+        public string Description { get; set; }
     }
 
     public sealed class SourceCatalogDisplaySnapshot
