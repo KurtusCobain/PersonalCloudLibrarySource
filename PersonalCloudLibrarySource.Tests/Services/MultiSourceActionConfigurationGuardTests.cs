@@ -69,8 +69,10 @@ namespace PersonalCloudLibrarySource.Tests.Services
             var shared = Shared();
             var plan = Prepare(profile, shared);
             Assert.That(plan.MatchesConfiguration(new[] { profile }, shared), Is.True);
+            // New profiles intentionally use namespaced GameIds; only the
+            // original legacy profile preserves the literal manifest item ID.
             SourceScopedGameAction route;
-            Assert.That(plan.TryResolveAction("game", out route), Is.True);
+            Assert.That(plan.TryResolveAction(plan.Games.Single().GameId, out route), Is.True);
         }
 
         [Test]
