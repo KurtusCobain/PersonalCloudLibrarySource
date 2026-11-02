@@ -101,6 +101,7 @@
     <Compile Include="Services\MultiSourceCatalogPlanner.cs" />
     <Compile Include="Services\SourceProfileSettingsProjector.cs" />
     <Compile Include="Services\MultiSourceRuntimeCoordinator.cs" />
+    <Compile Include="Services\SourceProfilesConfigurationCodec.cs" />
     <Compile Include="Services\ManifestParserValidator.cs" />
     <Compile Include="Services\PathResolvers.cs" />
     <Compile Include="Services\LibraryItemStateResolver.cs" />
