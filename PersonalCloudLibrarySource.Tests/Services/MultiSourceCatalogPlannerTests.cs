@@ -144,6 +144,28 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void ValidManifestItemWithoutMappedGameFailsWholeCatalog()
+        {
+            var profile = Source("6a94c3b0-ae21-4f3b-a4eb-87bd6f5f8ba5", true);
+            var incomplete = ImportOutcome.Success("fixture",
+                new[]
+                {
+                    new PersonalCloudLibraryItem { Id = "first", Title = "First" },
+                    new PersonalCloudLibraryItem { Id = "second", Title = "Second" }
+                },
+                new[] { new GameMetadata { GameId = "first", Name = "First" } });
+
+            var result = new MultiSourceCatalogPlanner().Build(new[]
+            {
+                new PclsSourceCatalogBatch { Profile = profile, Import = incomplete }
+            });
+
+            Assert.That(result.CanPublish, Is.False);
+            Assert.That(result.Games, Is.Empty);
+            Assert.That(result.RefusalReason, Does.Contain("incomplete catalog"));
+        }
+
+        [Test]
         public void PlannerDoesNotMutateCallerGameMetadata()
         {
             var profile = Source("6a94c3b0-ae21-4f3b-a4eb-87bd6f5f8ba5");
