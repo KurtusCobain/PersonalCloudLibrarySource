@@ -13,6 +13,7 @@ namespace PersonalCloudLibrarySource
     public sealed class ZipPackageStagingExtractor
     {
         private const int CopyBufferBytes = 64 * 1024;
+        private static readonly uint[] Crc32Table = BuildCrc32Table();
 
         public CloudTransferExecutionResult ExtractApprovedZip(
             string archivePath, string cacheRoot, string destinationDirectory,
@@ -117,6 +118,8 @@ namespace PersonalCloudLibrarySource
 
                         if (observation.IsDirectory)
                         {
+                            if (central[index].ExpectedCrc32 != 0)
+                                throw new InvalidDataException("Archive directory has a nonzero CRC.");
                             EnsurePrivateDirectory(staging, target, createdDirectories);
                             continue;
                         }
@@ -130,6 +133,7 @@ namespace PersonalCloudLibrarySource
                         {
                             createdFiles.Add(target);
                             long copiedEntry = 0;
+                            uint crc = 0xFFFFFFFFu;
                             int read;
                             while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
                             {
@@ -139,6 +143,7 @@ namespace PersonalCloudLibrarySource
                                     throw new InvalidDataException(
                                         "Archive output exceeds its declared or permitted size.");
                                 output.Write(buffer, 0, read);
+                                crc = UpdateCrc32(crc, buffer, read);
                                 copiedEntry += read;
                                 copiedTotal += read;
                                 progress?.Invoke(copiedTotal, inspected.TotalUncompressedBytes);
@@ -146,6 +151,9 @@ namespace PersonalCloudLibrarySource
                             if (copiedEntry != observation.UncompressedBytes)
                                 throw new InvalidDataException(
                                     "Archive output length differs from the inspected metadata.");
+                            if (~crc != central[index].ExpectedCrc32)
+                                throw new InvalidDataException(
+                                    "ZIP member CRC32 differs from central directory; refusing corrupted game.");
                         }
                     }
 
@@ -180,6 +188,28 @@ namespace PersonalCloudLibrarySource
                     "ZIP extraction failed: " + ex.Message +
                     (cleaned ? "" : " Private staging needs manual inspection."), ex);
             }
+        }
+
+        private static uint[] BuildCrc32Table()
+        {
+            var table = new uint[256];
+            for (var index = 0; index < table.Length; index++)
+            {
+                var value = (uint)index;
+                for (var bit = 0; bit < 8; bit++)
+                    value = (value & 1) != 0
+                        ? (value >> 1) ^ 0xEDB88320u : value >> 1;
+                table[index] = value;
+            }
+            return table;
+        }
+
+        private static uint UpdateCrc32(uint previous, byte[] buffer, int count)
+        {
+            var crc = previous;
+            for (var index = 0; index < count; index++)
+                crc = (crc >> 8) ^ Crc32Table[(int)((crc ^ buffer[index]) & 0xFFu)];
+            return crc;
         }
 
         private static void EnsurePrivateDirectory(string staging, string directory,
