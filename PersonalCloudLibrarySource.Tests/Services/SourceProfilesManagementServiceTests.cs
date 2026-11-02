@@ -127,6 +127,84 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void ExplicitRestorePreservesCurrentVersionAsNewBackup()
+        {
+            var settings = Settings();
+            var initial = manager.OpenOrPreviewLegacy(root, settings, Guid.NewGuid());
+            manager.SaveWithoutActivation(root, initial, initial, settings);
+            var beforeEdit = manager.OpenOrPreviewLegacy(root, settings, Guid.NewGuid());
+            var edited = manager.Clone(beforeEdit);
+            edited[0].DisplayName = "Accidentally changed";
+            var oldBackup = manager.SaveWithoutActivation(root, beforeEdit, edited, settings);
+
+            var current = manager.OpenOrPreviewLegacy(root, settings, Guid.NewGuid());
+            var selected = Path.GetFileName(oldBackup);
+            var preview = manager.PreviewBackupForRestore(root, selected, current, settings);
+            Assert.That(preview[0].ProfileId, Is.EqualTo(current[0].ProfileId));
+            Assert.That(preview[0].DisplayName, Is.EqualTo(initial[0].DisplayName));
+            Assert.That(new SourceProfilesFileStore().Load(root)
+                .Profiles.Single().DisplayName, Is.EqualTo("Accidentally changed"),
+                "A preview may not restore on its own.");
+
+            var rollbackBackup = manager.RestoreBackupWithoutActivation(
+                root, selected, current, preview, settings);
+
+            Assert.That(new SourceProfilesFileStore().Load(root)
+                .Profiles.Single().DisplayName, Is.EqualTo(initial[0].DisplayName));
+            Assert.That(new SourceProfilesFileStore()
+                .InspectBackup(root, Path.GetFileName(rollbackBackup))
+                .Profiles.Single().DisplayName, Is.EqualTo("Accidentally changed"));
+            Assert.That(File.Exists(oldBackup), Is.True,
+                "Restoration must not consume or delete the selected backup.");
+            Assert.That(settings.EnableMultiSourceProfiles, Is.False);
+        }
+
+        [Test]
+        public void RestoreRefusesBackupThatWouldRetireNewlyAddedSource()
+        {
+            var settings = Settings();
+            var initial = manager.OpenOrPreviewLegacy(root, settings, Guid.NewGuid());
+            manager.SaveWithoutActivation(root, initial, initial, settings);
+            var beforeAddition = manager.OpenOrPreviewLegacy(root, settings, Guid.NewGuid());
+            var expanded = manager.Clone(beforeAddition);
+            manager.AddProfile(expanded, "LocalFile", Guid.NewGuid());
+            expanded[1].LocalManifestPath = manifest;
+            var olderBackup = manager.SaveWithoutActivation(
+                root, beforeAddition, expanded, settings);
+
+            var current = manager.OpenOrPreviewLegacy(root, settings, Guid.NewGuid());
+            Assert.Throws<InvalidOperationException>(() =>
+                manager.PreviewBackupForRestore(
+                    root, Path.GetFileName(olderBackup), current, settings));
+            Assert.That(new SourceProfilesFileStore().Load(root).Profiles, Has.Count.EqualTo(2));
+        }
+
+        [Test]
+        public void RestoreRefusesChangedOrTamperedBackupAndStaleCurrentState()
+        {
+            var settings = Settings();
+            var original = manager.OpenOrPreviewLegacy(root, settings, Guid.NewGuid());
+            manager.SaveWithoutActivation(root, original, original, settings);
+            var before = manager.OpenOrPreviewLegacy(root, settings, Guid.NewGuid());
+            var revised = manager.Clone(before);
+            revised[0].DisplayName = "Changed once";
+            var backupPath = manager.SaveWithoutActivation(root, before, revised, settings);
+            var active = manager.OpenOrPreviewLegacy(root, settings, Guid.NewGuid());
+            var name = Path.GetFileName(backupPath);
+            var preview = manager.PreviewBackupForRestore(root, name, active, settings);
+            preview[0].DisplayName = "Forged preview";
+            Assert.Throws<InvalidOperationException>(() =>
+                manager.RestoreBackupWithoutActivation(
+                    root, name, active, preview, settings));
+
+            File.WriteAllText(backupPath, "corrupted backup");
+            Assert.Throws<InvalidOperationException>(() =>
+                manager.PreviewBackupForRestore(root, name, active, settings));
+            Assert.That(new SourceProfilesFileStore().Load(root)
+                .Profiles.Single().DisplayName, Is.EqualTo("Changed once"));
+        }
+
+        [Test]
         public void ExistingCorruptFileRefusesPreviewAndDoesNotReplaceIt()
         {
             var path = Path.Combine(root, SourceProfilesFileStore.FileName);
