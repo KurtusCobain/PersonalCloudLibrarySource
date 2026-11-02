@@ -22,6 +22,11 @@ namespace PersonalCloudLibrarySource
             ViewModel?.AddSourceProfilePreview();
         }
 
+        private void CheckSelectedSourceHealth_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel?.CheckSelectedSourceHealth();
+        }
+
         private void SaveSourceProfilesPreview_Click(object sender, RoutedEventArgs e)
         {
             ViewModel?.SaveSourceProfilesPreview();
