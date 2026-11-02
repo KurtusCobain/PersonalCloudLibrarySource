@@ -15,8 +15,9 @@ namespace PersonalCloudLibrarySource
         private List<PclsSourceProfileDefinition> sourceProfilesBaseline;
         private ObservableCollection<PclsSourceProfileDefinition> sourceProfileCandidates;
         private PclsSourceProfileDefinition selectedSourceProfile;
-        private string sourceProfilesStatus =
-            "Preview only. Existing one-source settings stay active until an explicitly approved 1.0 rollout.";
+        private string sourceProfilesStatus = PclsResources.Get(
+            "LOCPLSProfilesStatusInitial",
+            "Preview only. Existing one-source settings stay active until an explicitly approved release.");
         private string selectedNewSourceType = PersonalCloudLibrarySourceSettings.LocalFileProviderType;
 
         public ObservableCollection<PclsSourceProfileDefinition> SourceProfileCandidates
@@ -54,13 +55,15 @@ namespace PersonalCloudLibrarySource
                 SourceProfileCandidates = new ObservableCollection<PclsSourceProfileDefinition>(
                     profileManager.Clone(baseline));
                 SelectedSourceProfile = SourceProfileCandidates.FirstOrDefault();
-                SourceProfilesStatus =
-                    "Loaded " + SourceProfileCandidates.Count +
-                    " profile(s) for editing. This does not activate multiple sources.";
+                SourceProfilesStatus = PclsResources.Format(
+                    "LOCPLSProfilesStatusLoaded",
+                    "Loaded {0} profile(s) for editing. This does not activate multiple sources.",
+                    SourceProfileCandidates.Count);
             }
             catch (Exception ex)
             {
-                SourceProfilesStatus = "Could not load source profiles: " + ex.Message;
+                SourceProfilesStatus = PclsResources.Format(
+                    "LOCPLSProfilesStatusLoadFailed", "Could not load source profiles: {0}", ex.Message);
             }
         }
 
@@ -68,7 +71,8 @@ namespace PersonalCloudLibrarySource
         {
             if (SourceProfileCandidates == null)
             {
-                SourceProfilesStatus = "Load or preview the existing library first.";
+                SourceProfilesStatus = PclsResources.Get(
+                    "LOCPLSProfilesStatusNeedLoad", "Load or preview the existing library first.");
                 return;
             }
             try
@@ -77,12 +81,14 @@ namespace PersonalCloudLibrarySource
                 profileManager.AddProfile(edited, SelectedNewSourceType, Guid.NewGuid());
                 SourceProfileCandidates.Add(edited.Last());
                 SelectedSourceProfile = edited.Last();
-                SourceProfilesStatus =
-                    "Added an unsaved source. Complete its fields, then Save Profile File.";
+                SourceProfilesStatus = PclsResources.Get(
+                    "LOCPLSProfilesStatusAdded",
+                    "Added an unsaved source. Complete its fields, then save the profile file.");
             }
             catch (Exception ex)
             {
-                SourceProfilesStatus = "Source could not be added: " + ex.Message;
+                SourceProfilesStatus = PclsResources.Format(
+                    "LOCPLSProfilesStatusAddFailed", "Source could not be added: {0}", ex.Message);
             }
         }
 
@@ -90,15 +96,17 @@ namespace PersonalCloudLibrarySource
         {
             if (SourceProfileCandidates == null || sourceProfilesBaseline == null)
             {
-                SourceProfilesStatus = "Load the current source profiles before saving.";
+                SourceProfilesStatus = PclsResources.Get(
+                    "LOCPLSProfilesStatusNeedSaveLoad", "Load the current source profiles before saving.");
                 return;
             }
             // Do not imply this changes the active Playnite library. The
             // existing Settings edit transaction remains separate.
             if (MessageBox.Show(
-                "Save this source-profile document? This does NOT activate multi-source " +
-                "mode or modify installed games. Previous valid profile data will be backed up.",
-                "PCLS 1.0 source-profile preview", MessageBoxButton.YesNo,
+                PclsResources.Get("LOCPLSProfilesSaveConfirm",
+                    "Save the source-profile document? This does not activate multi-source mode or modify installed games. The previous valid profile configuration will be backed up."),
+                PclsResources.Get("LOCPLSProfilesDialogTitle", "PCLS source profiles preview"),
+                MessageBoxButton.YesNo,
                 MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
             try
@@ -109,13 +117,16 @@ namespace PersonalCloudLibrarySource
                     profiles, GetRuntimeSettingsSnapshot());
                 sourceProfilesBaseline = profileManager.Clone(profiles);
                 SourceProfilesStatus = string.IsNullOrWhiteSpace(backup)
-                    ? "Profile file saved. Multi-source mode remains OFF."
-                    : "Profile file saved and previous profile data backed up. " +
-                      "Multi-source mode remains OFF.";
+                    ? PclsResources.Get("LOCPLSProfilesStatusSaved",
+                        "Profile file saved. Multi-source mode remains off.")
+                    : PclsResources.Get("LOCPLSProfilesStatusSavedBackup",
+                        "Profile file saved and previous profile data backed up. Multi-source mode remains off.");
             }
             catch (Exception ex)
             {
-                SourceProfilesStatus = "Save refused; no activation: " + ex.Message;
+                SourceProfilesStatus = PclsResources.Format(
+                    "LOCPLSProfilesStatusSaveFailed",
+                    "Save refused; no activation: {0}", ex.Message);
             }
         }
 
