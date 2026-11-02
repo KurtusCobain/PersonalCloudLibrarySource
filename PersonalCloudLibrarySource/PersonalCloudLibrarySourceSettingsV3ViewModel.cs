@@ -1,6 +1,8 @@
 using Playnite.SDK;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
 using System.Windows;
 
 namespace PersonalCloudLibrarySource
@@ -8,6 +10,114 @@ namespace PersonalCloudLibrarySource
     public sealed class PersonalCloudLibrarySourceSettingsV3ViewModel : PersonalCloudLibrarySourceSettingsViewModel, ISettings
     {
         private readonly PersonalCloudLibrarySource plugin;
+        private readonly SourceProfilesManagementService profileManager =
+            new SourceProfilesManagementService();
+        private List<PclsSourceProfileDefinition> sourceProfilesBaseline;
+        private ObservableCollection<PclsSourceProfileDefinition> sourceProfileCandidates;
+        private PclsSourceProfileDefinition selectedSourceProfile;
+        private string sourceProfilesStatus =
+            "Preview only. Existing one-source settings stay active until an explicitly approved 1.0 rollout.";
+        private string selectedNewSourceType = PersonalCloudLibrarySourceSettings.LocalFileProviderType;
+
+        public ObservableCollection<PclsSourceProfileDefinition> SourceProfileCandidates
+        {
+            get => sourceProfileCandidates;
+            private set { sourceProfileCandidates = value; OnPropertyChanged(); }
+        }
+
+        public PclsSourceProfileDefinition SelectedSourceProfile
+        {
+            get => selectedSourceProfile;
+            set { selectedSourceProfile = value; OnPropertyChanged(); }
+        }
+
+        public string SourceProfilesStatus
+        {
+            get => sourceProfilesStatus;
+            private set => SetValue(ref sourceProfilesStatus, value);
+        }
+
+        public string SelectedNewSourceType
+        {
+            get => selectedNewSourceType;
+            set => SetValue(ref selectedNewSourceType, value);
+        }
+
+        public void LoadSourceProfilesPreview()
+        {
+            try
+            {
+                var baseline = profileManager.OpenOrPreviewLegacy(
+                    plugin.GetPluginDataDirectory(),
+                    GetRuntimeSettingsSnapshot(), Guid.NewGuid());
+                sourceProfilesBaseline = profileManager.Clone(baseline);
+                SourceProfileCandidates = new ObservableCollection<PclsSourceProfileDefinition>(
+                    profileManager.Clone(baseline));
+                SelectedSourceProfile = SourceProfileCandidates.FirstOrDefault();
+                SourceProfilesStatus =
+                    "Loaded " + SourceProfileCandidates.Count +
+                    " profile(s) for editing. This does not activate multiple sources.";
+            }
+            catch (Exception ex)
+            {
+                SourceProfilesStatus = "Could not load source profiles: " + ex.Message;
+            }
+        }
+
+        public void AddSourceProfilePreview()
+        {
+            if (SourceProfileCandidates == null)
+            {
+                SourceProfilesStatus = "Load or preview the existing library first.";
+                return;
+            }
+            try
+            {
+                var edited = SourceProfileCandidates.ToList();
+                profileManager.AddProfile(edited, SelectedNewSourceType, Guid.NewGuid());
+                SourceProfileCandidates.Add(edited.Last());
+                SelectedSourceProfile = edited.Last();
+                SourceProfilesStatus =
+                    "Added an unsaved source. Complete its fields, then Save Profile File.";
+            }
+            catch (Exception ex)
+            {
+                SourceProfilesStatus = "Source could not be added: " + ex.Message;
+            }
+        }
+
+        public void SaveSourceProfilesPreview()
+        {
+            if (SourceProfileCandidates == null || sourceProfilesBaseline == null)
+            {
+                SourceProfilesStatus = "Load the current source profiles before saving.";
+                return;
+            }
+            // Do not imply this changes the active Playnite library. The
+            // existing Settings edit transaction remains separate.
+            if (MessageBox.Show(
+                "Save this source-profile document? This does NOT activate multi-source " +
+                "mode or modify installed games. Previous valid profile data will be backed up.",
+                "PCLS 1.0 source-profile preview", MessageBoxButton.YesNo,
+                MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+            try
+            {
+                var profiles = SourceProfileCandidates.ToList();
+                var backup = profileManager.SaveWithoutActivation(
+                    plugin.GetPluginDataDirectory(), sourceProfilesBaseline,
+                    profiles, GetRuntimeSettingsSnapshot());
+                sourceProfilesBaseline = profileManager.Clone(profiles);
+                SourceProfilesStatus = string.IsNullOrWhiteSpace(backup)
+                    ? "Profile file saved. Multi-source mode remains OFF."
+                    : "Profile file saved and previous profile data backed up. " +
+                      "Multi-source mode remains OFF.";
+            }
+            catch (Exception ex)
+            {
+                SourceProfilesStatus = "Save refused; no activation: " + ex.Message;
+            }
+        }
 
         public PersonalCloudLibrarySourceSettingsV3ViewModel(PersonalCloudLibrarySource plugin)
             : base(plugin)
