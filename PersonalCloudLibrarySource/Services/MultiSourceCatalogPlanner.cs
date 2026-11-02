@@ -64,6 +64,9 @@ namespace PersonalCloudLibrarySource
                         "Keep the previously imported Playnite library unchanged.");
                 if (batch.Import.Games == null || batch.Import.ValidItems == null)
                     return Refuse("A source catalog is missing validated item records.");
+                if (batch.Import.Games.Count != batch.Import.ValidItems.Count)
+                    return Refuse("A source returned fewer or more games than its validated manifest. " +
+                        "Do not publish an incomplete catalog.");
                 var known = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var item in batch.Import.ValidItems)
                 {
