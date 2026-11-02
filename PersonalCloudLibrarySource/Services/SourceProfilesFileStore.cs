@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace PersonalCloudLibrarySource
@@ -88,6 +89,41 @@ namespace PersonalCloudLibrarySource
             return ReadValidated(path);
         }
 
+        // Never enumerate outside our existing plugin-data root. Any backup
+        // discovered here is a candidate for inspection, not a trusted restore.
+        public IReadOnlyList<string> ListBackupNames(string pluginDataDirectory)
+        {
+            var root = ValidateStoreDirectory(pluginDataDirectory);
+            var names = Directory.EnumerateFiles(root,
+                    "source-profiles-backup-*.json", SearchOption.TopDirectoryOnly)
+                .Take(201).Select(Path.GetFileName).ToList();
+            if (names.Count > 200)
+                throw new InvalidOperationException(
+                    "Too many source profile backups; review the plugin data folder.");
+            // Validate strict generated filename format. Do not list links or
+            // directories masquerading as backups.
+            return names.Where(name => IsBackupName(name) &&
+                    (File.GetAttributes(Path.Combine(root, name)) &
+                        FileAttributes.ReparsePoint) == 0)
+                .OrderByDescending(name => name, StringComparer.Ordinal)
+                .ToList().AsReadOnly();
+        }
+
+        private static bool IsBackupName(string name)
+        {
+            const string prefix = "source-profiles-backup-";
+            const string suffix = ".json";
+            if (string.IsNullOrWhiteSpace(name) ||
+                !name.StartsWith(prefix, StringComparison.Ordinal) ||
+                !name.EndsWith(suffix, StringComparison.Ordinal) ||
+                name.IndexOfAny(new[] { '/', '\\', ':' }) >= 0)
+                return false;
+            var token = name.Substring(prefix.Length,
+                name.Length - prefix.Length - suffix.Length);
+            Guid id;
+            return token.Length == 32 && Guid.TryParseExact(token, "N", out id);
+        }
+
         // Explicit backup preview, NOT rollback. The caller may present this
         // result to a user, but the implementation never auto-adopts an old
         // backup or writes an invalid current file.
@@ -95,17 +131,8 @@ namespace PersonalCloudLibrarySource
             string pluginDataDirectory, string backupFileName)
         {
             var root = ValidateStoreDirectory(pluginDataDirectory);
-            if (string.IsNullOrWhiteSpace(backupFileName) ||
-                !backupFileName.StartsWith("source-profiles-backup-",
-                    StringComparison.Ordinal) ||
-                !backupFileName.EndsWith(".json", StringComparison.Ordinal) ||
-                backupFileName.IndexOfAny(new[] { '/', '\\', ':' }) >= 0)
-                throw new InvalidOperationException("Only a local profile backup can be inspected.");
-            var token = backupFileName.Substring("source-profiles-backup-".Length,
-                backupFileName.Length - "source-profiles-backup-".Length - ".json".Length);
-            Guid identifier;
-            if (token.Length != 32 || !Guid.TryParseExact(token, "N", out identifier))
-                throw new InvalidOperationException("Invalid profile backup identity.");
+            if (!IsBackupName(backupFileName))
+                throw new InvalidOperationException("Invalid local profile backup identity.");
             return ReadValidated(Path.Combine(root, backupFileName));
         }
 
