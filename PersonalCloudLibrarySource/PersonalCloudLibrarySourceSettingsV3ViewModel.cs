@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace PersonalCloudLibrarySource
@@ -12,6 +13,84 @@ namespace PersonalCloudLibrarySource
         private readonly PersonalCloudLibrarySource plugin;
         private readonly SourceProfilesManagementService profileManager =
             new SourceProfilesManagementService();
+        private bool sourceHealthCheckRunning;
+        private string sourceHealthStatus = PclsResources.Get(
+            "LOCPLSProfilesHealthInitial",
+            "Select a source and check its manifest. This does not update Playnite games.");
+        public string SourceHealthStatus
+        {
+            get => sourceHealthStatus;
+            private set => SetValue(ref sourceHealthStatus, value);
+        }
+        public bool CanCheckSelectedSource => selectedSourceProfile != null && !sourceHealthCheckRunning;
+
+        // Explicit and read-only. Never retry automatically or run on the UI thread.
+        public async void CheckSelectedSourceHealth()
+        {
+            if (!CanCheckSelectedSource)
+                return;
+            PclsSourceProfileDefinition source;
+            PersonalCloudLibrarySourceSettingsV3 shared;
+            try
+            {
+                source = profileManager.Clone(new[] { SelectedSourceProfile }).Single();
+                shared = GetRuntimeSettingsSnapshot();
+            }
+            catch (Exception)
+            {
+                SourceHealthStatus = PclsResources.Get("LOCPLSProfilesHealthInvalid",
+                    "Selected source configuration is invalid.");
+                return;
+            }
+            sourceHealthCheckRunning = true;
+            OnPropertyChanged(nameof(CanCheckSelectedSource));
+            SourceHealthStatus = PclsResources.Get("LOCPLSProfilesHealthChecking",
+                "Checking the selected manifest without modifying games or cached files...");
+            try
+            {
+                var result = await Task.Run(() => new SourceProfileHealthProbe().Probe(
+                    source, shared, new RcloneManifestReader().ReadManifestJson));
+                switch (result.Status)
+                {
+                    case SourceManifestHealth.ManifestValid:
+                        SourceHealthStatus = PclsResources.Format("LOCPLSProfilesHealthValid",
+                            "Manifest readable: {0} entries. Game payload availability is not verified.",
+                            result.ManifestItemCount);
+                        break;
+                    case SourceManifestHealth.SourceUnavailable:
+                        SourceHealthStatus = PclsResources.Get("LOCPLSProfilesHealthUnavailable",
+                            "Manifest unavailable. No games were removed or imported.");
+                        break;
+                    case SourceManifestHealth.UnsupportedSchema:
+                        SourceHealthStatus = PclsResources.Get("LOCPLSProfilesHealthUnsupported",
+                            "Manifest uses an unsupported schema. No games were changed.");
+                        break;
+                    case SourceManifestHealth.InvalidManifest:
+                        SourceHealthStatus = PclsResources.Get("LOCPLSProfilesHealthMalformed",
+                            "Manifest is invalid. No games were changed.");
+                        break;
+                    case SourceManifestHealth.Disabled:
+                        SourceHealthStatus = PclsResources.Get("LOCPLSProfilesHealthDisabled",
+                            "Selected source is disabled; no manifest check was performed.");
+                        break;
+                    default:
+                        SourceHealthStatus = PclsResources.Get("LOCPLSProfilesHealthInvalid",
+                            "Selected source configuration is invalid.");
+                        break;
+                }
+            }
+            catch (Exception)
+            {
+                SourceHealthStatus = PclsResources.Get("LOCPLSProfilesHealthUnavailable",
+                    "Manifest unavailable. No games were removed or imported.");
+            }
+            finally
+            {
+                sourceHealthCheckRunning = false;
+                OnPropertyChanged(nameof(CanCheckSelectedSource));
+            }
+        }
+
         private List<PclsSourceProfileDefinition> sourceProfilesBaseline;
         private ObservableCollection<PclsSourceProfileDefinition> sourceProfileCandidates;
         private PclsSourceProfileDefinition selectedSourceProfile;
@@ -148,7 +227,7 @@ namespace PersonalCloudLibrarySource
         public PclsSourceProfileDefinition SelectedSourceProfile
         {
             get => selectedSourceProfile;
-            set { selectedSourceProfile = value; OnPropertyChanged(); }
+            set { selectedSourceProfile = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanCheckSelectedSource)); }
         }
 
         public string SourceProfilesStatus
