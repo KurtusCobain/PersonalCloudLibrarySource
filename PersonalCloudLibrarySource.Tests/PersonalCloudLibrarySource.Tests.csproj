@@ -84,6 +84,7 @@
     <Compile Include="Services\SourceProfileSettingsProjectorTests.cs" />
     <Compile Include="Services\MultiSourceRuntimeCoordinatorTests.cs" />
     <Compile Include="Services\SourceProfilesConfigurationCodecTests.cs" />
+    <Compile Include="Services\SourceProfilesFileStoreTests.cs" />
     <Compile Include="Services\PathResolverTests.cs" />
     <Compile Include="Services\LibraryItemStateResolverTests.cs" />
     <Compile Include="Services\LibraryVerificationManifestDiagnosticsTests.cs" />
