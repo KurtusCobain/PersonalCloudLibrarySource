@@ -15,11 +15,15 @@ namespace PersonalCloudLibrarySource
         private readonly PersonalCloudLibrarySourceSettingsV3 settings;
 
         internal SourceScopedGameAction(string gameId, string profileId,
-            PersonalCloudLibraryItem sourceItem, PersonalCloudLibrarySourceSettingsV3 sourceSettings)
+            PersonalCloudLibraryItem sourceItem, PersonalCloudLibrarySourceSettingsV3 sourceSettings,
+            bool preserveLegacyReceiptKey)
         {
             GameId = gameId;
             ProfileId = profileId;
             OriginalItemId = sourceItem.Id;
+            // Old receipts remain discoverable; new profiles must not share
+            // a receipt key when manifest IDs happen to be identical.
+            OwnershipReceiptKey = preserveLegacyReceiptKey ? sourceItem.Id : gameId;
             item = CopyItem(sourceItem);
             settings = CopySettings(sourceSettings);
         }
@@ -27,6 +31,7 @@ namespace PersonalCloudLibrarySource
         public string GameId { get; }
         public string ProfileId { get; }
         public string OriginalItemId { get; }
+        public string OwnershipReceiptKey { get; }
 
         // Return new objects: a caller must not mutate a published source route.
         public PersonalCloudLibraryItem CreateItemSnapshot() => CopyItem(item);
@@ -180,7 +185,8 @@ namespace PersonalCloudLibrarySource
                             StringComparison.OrdinalIgnoreCase));
                     var scoped = settingsByProfile[route.ProfileId];
                     var binding = new SourceScopedGameAction(route.GameId,
-                        route.ProfileId, sourceItem, scoped);
+                        route.ProfileId, sourceItem, scoped,
+                        batch.Profile.IsLegacySingleSource);
                     routes.Add(route.GameId, binding);
                 }
                 if (routes.Count != planned.Games.Count)
