@@ -108,6 +108,22 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void BackupEnumerationIsScopedToGeneratedFilesAndDoesNotRestore()
+        {
+            var store = new SourceProfilesFileStore();
+            store.Save(root, new[] { Profile(LegacyId, "First") });
+            var backup = store.Save(root, new[] { Profile(LegacyId, "Second") });
+            File.WriteAllText(Path.Combine(root, "source-profiles-backup-NOT-A-GUID.json"),
+                "not an owned backup");
+            var names = store.ListBackupNames(root);
+            Assert.That(names, Has.Count.EqualTo(1));
+            Assert.That(names[0], Is.EqualTo(Path.GetFileName(backup)));
+            Assert.That(store.InspectBackup(root, names[0]).Succeeded, Is.True);
+            Assert.That(store.Load(root).Profiles.Single().DisplayName,
+                Is.EqualTo("Second"), "Listing and inspecting backups must be read-only.");
+        }
+
+        [Test]
         public void InspectBackupRejectsTraversalAndNonBackupFiles()
         {
             var store = new SourceProfilesFileStore();
