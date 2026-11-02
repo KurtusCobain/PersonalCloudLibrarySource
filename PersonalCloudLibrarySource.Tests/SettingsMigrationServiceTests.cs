@@ -271,6 +271,25 @@ namespace PersonalCloudLibrarySource.Tests
         }
 
         [Test]
+        public void MultiSourceMode_DefaultsOffAndSurvivesExplicitSettingsSnapshotRollback()
+        {
+            var original = new PersonalCloudLibrarySourceSettingsV3();
+            Assert.That(original.EnableMultiSourceProfiles, Is.False,
+                "Existing installations must keep single-source behavior by default.");
+
+            original.EnableMultiSourceProfiles = true;
+            var snapshot = (PersonalCloudLibrarySourceSettingsV3)
+                SettingsMigrationService.CloneForEditing(original);
+            Assert.That(snapshot.EnableMultiSourceProfiles, Is.True);
+
+            original.EnableMultiSourceProfiles = false;
+            SettingsMigrationService.RestoreSnapshot(snapshot, original);
+            Assert.That(original.EnableMultiSourceProfiles, Is.True,
+                "A future opt-in must not be lost during a settings edit transaction.");
+            Assert.That(snapshot.EnableMultiSourceProfiles, Is.True);
+        }
+
+        [Test]
         public void CloneForEditing_V3Settings_PreservesRuntimeTypeAndV3Preferences()
         {
             PersonalCloudLibrarySourceSettings settings = new PersonalCloudLibrarySourceSettingsV3

@@ -322,6 +322,81 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Install_TwoNewSourcesWithSameOriginalId_UseDistinctOwnershipReceipts()
+        {
+            var source = CreateFile(Path.Combine(root, "original", "shared.exe"));
+            var settings = FileOnlySettings();
+            settings.SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType;
+            var receipts = new CacheOwnershipReceiptStore(Path.Combine(root, "ownership-receipts"));
+            var gameA = Game("pcls1-a-testgame");
+            var gameB = Game("pcls1-b-testgame");
+            gameA.IsInstalled = false;
+            gameB.IsInstalled = false;
+            var itemA = new PersonalCloudLibraryItem
+            {
+                Id = "shared", Title = "First Source",
+                SourcePath = source, CachePath = "source-a/play.exe"
+            };
+            var itemB = new PersonalCloudLibraryItem
+            {
+                Id = "shared", Title = "Second Source",
+                SourcePath = source, CachePath = "source-b/play.exe"
+            };
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager,
+                new CloudTransferExecutor(manager, new LocalTransferAdapter())))
+            {
+                var first = new RcloneInstallController(null, gameA, itemA, settings, queue,
+                    ownershipReceipts: receipts, ownershipReceiptKey: gameA.GameId);
+                var second = new RcloneInstallController(null, gameB, itemB, settings, queue,
+                    ownershipReceipts: receipts, ownershipReceiptKey: gameB.GameId);
+                try
+                {
+                    first.Install(new InstallActionArgs());
+                    second.Install(new InstallActionArgs());
+                    Assert.That(SpinWait.SpinUntil(() =>
+                        gameA.IsInstalled && gameB.IsInstalled, 10000), Is.True);
+                    CacheOwnershipReceipt receiptA = null, receiptB = null, legacy;
+                    Assert.That(SpinWait.SpinUntil(() =>
+                        receipts.TryRead(cache, gameA.GameId, out receiptA) &&
+                        receipts.TryRead(cache, gameB.GameId, out receiptB), 5000), Is.True);
+                    Assert.That(receiptA.ItemId, Is.EqualTo(gameA.GameId));
+                    Assert.That(receiptB.ItemId, Is.EqualTo(gameB.GameId));
+                    Assert.That(receiptA.Destination,
+                        Is.EqualTo(Path.Combine(cache, "source-a", "play.exe")));
+                    Assert.That(receiptB.Destination,
+                        Is.EqualTo(Path.Combine(cache, "source-b", "play.exe")));
+                    Assert.That(receipts.TryRead(cache, "shared", out legacy), Is.False);
+                }
+                finally
+                {
+                    first.Dispose();
+                    second.Dispose();
+                }
+            }
+        }
+
+        [Test]
+        public void Install_RejectsExplicitReceiptIdentityThatDoesNotMatchGameId()
+        {
+            var source = CreateFile(Path.Combine(root, "original", "play.exe"));
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "legacy-id", Title = "Source Game",
+                SourcePath = source, CachePath = "new-source/play.exe"
+            };
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager,
+                new CloudTransferExecutor(manager, new LocalTransferAdapter())))
+            {
+                Assert.Throws<ArgumentException>(() =>
+                    new RcloneInstallController(null, Game("pcls1-real-id"), item,
+                        FileOnlySettings(), queue,
+                        ownershipReceiptKey: "a-different-profile"));
+            }
+        }
+
+        [Test]
         public void Install_SuccessfulDirectoryTransfer_IssuesV2InventoryAndDetectsNewContent()
         {
             var original = Path.Combine(root, "original");

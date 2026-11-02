@@ -228,6 +228,99 @@
                 </ScrollViewer>
             </TabItem>
 
+            <TabItem Header="{DynamicResource LOCPLSProfilesTab}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="14">
+                        <TextBlock FontWeight="SemiBold" Text="{DynamicResource LOCPLSProfilesIntroTitle}"/>
+                        <TextBlock Margin="0,5,0,10" TextWrapping="Wrap"
+                                   Text="{DynamicResource LOCPLSProfilesIntroDescription}"/>
+                        <TextBlock Text="{Binding SourceProfilesStatus}" TextWrapping="Wrap"
+                                   AutomationProperties.Name="{DynamicResource LOCPLSProfilesStatusAutomation}"
+                                   Margin="0,0,0,12"/>
+                        <WrapPanel Margin="0,0,0,10">
+                            <Button Content="{DynamicResource LOCPLSProfilesLoad}"
+                                    Click="LoadSourceProfilesPreview_Click"
+                                    AutomationProperties.Name="{DynamicResource LOCPLSProfilesLoadAutomation}"
+                                    Padding="10,5" Margin="0,0,8,8"/>
+                            <ComboBox ItemsSource="{Binding ProviderTypeOptions}"
+                                      SelectedItem="{Binding SelectedNewSourceType, UpdateSourceTrigger=PropertyChanged}"
+                                      MinWidth="140" Margin="0,0,8,8"
+                                      AutomationProperties.Name="{DynamicResource LOCPLSProfilesNewProviderAutomation}"/>
+                            <Button Content="{DynamicResource LOCPLSProfilesAdd}" Click="AddSourceProfilePreview_Click"
+                                    AutomationProperties.Name="{DynamicResource LOCPLSProfilesAddAutomation}"
+                                    Padding="10,5" Margin="0,0,8,8"/>
+                            <Button Content="{DynamicResource LOCPLSProfilesSave}" Click="SaveSourceProfilesPreview_Click"
+                                    AutomationProperties.Name="{DynamicResource LOCPLSProfilesSaveAutomation}"
+                                    Padding="10,5" Margin="0,0,8,8"/>
+                        </WrapPanel>
+                        <DataGrid ItemsSource="{Binding SourceProfileCandidates}"
+                                  SelectedItem="{Binding SelectedSourceProfile, Mode=TwoWay}"
+                                  IsReadOnly="True" AutoGenerateColumns="False"
+                                  CanUserAddRows="False" CanUserDeleteRows="False"
+                                  SelectionMode="Single" Height="144" Margin="0,0,0,12"
+                                  AutomationProperties.Name="{DynamicResource LOCPLSProfilesTableAutomation}">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="{DynamicResource LOCPLSProfilesSourceColumn}" Binding="{Binding DisplayName}" Width="2*"/>
+                                <DataGridTextColumn Header="{DynamicResource LOCPLSProfilesProviderColumn}" Binding="{Binding ProviderType}" Width="*"/>
+                                <DataGridCheckBoxColumn Header="{DynamicResource LOCPLSProfilesOriginalColumn}" Binding="{Binding IsLegacySingleSource}" Width="Auto"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                        <GroupBox Header="{DynamicResource LOCPLSProfilesSelectedSettings}" Margin="0,0,0,12">
+                            <StackPanel Margin="12">
+                                <TextBlock Text="{DynamicResource LOCPLSProfilesSourceName}" FontWeight="SemiBold"/>
+                                <TextBox Text="{Binding SelectedSourceProfile.DisplayName, UpdateSourceTrigger=PropertyChanged}"
+                                         AutomationProperties.Name="{DynamicResource LOCPLSProfilesSourceNameAutomation}"
+                                         Margin="0,4,0,12"/>
+                                <TextBlock Text="{DynamicResource LOCPLSProfilesProviderColumn}" FontWeight="SemiBold"/>
+                                <ComboBox ItemsSource="{Binding ProviderTypeOptions}"
+                                          SelectedItem="{Binding SelectedSourceProfile.ProviderType, Mode=TwoWay}"
+                                          AutomationProperties.Name="{DynamicResource LOCPLSProfilesProviderAutomation}"
+                                          HorizontalAlignment="Left" MinWidth="180" Margin="0,4,0,12"/>
+                                <TextBlock Text="{DynamicResource LOCPLSProfilesIdLabel}" FontWeight="SemiBold"/>
+                                <TextBox Text="{Binding SelectedSourceProfile.ProfileId}"
+                                         IsReadOnly="True"
+                                         AutomationProperties.Name="{DynamicResource LOCPLSProfilesIdAutomation}"
+                                         Margin="0,4,0,12"/>
+                                <TextBlock Text="{DynamicResource LOCPLSProfilesManifestLabel}" FontWeight="SemiBold"/>
+                                <TextBox Text="{Binding SelectedSourceProfile.LocalManifestPath, UpdateSourceTrigger=PropertyChanged}"
+                                         AutomationProperties.Name="{DynamicResource LOCPLSProfilesManifestAutomation}"
+                                         Margin="0,4,0,12"/>
+                                <TextBlock Text="{DynamicResource LOCPLSProfilesRootLabel}" FontWeight="SemiBold"/>
+                                <TextBox Text="{Binding SelectedSourceProfile.LocalLibraryRoot, UpdateSourceTrigger=PropertyChanged}"
+                                         AutomationProperties.Name="{DynamicResource LOCPLSProfilesRootAutomation}"
+                                         Margin="0,4,0,12"/>
+                                <TextBlock Text="{DynamicResource LOCPLSProfilesRelativeManifestLabel}" FontWeight="SemiBold"/>
+                                <TextBox Text="{Binding SelectedSourceProfile.ManifestRelativePath, UpdateSourceTrigger=PropertyChanged}"
+                                         AutomationProperties.Name="{DynamicResource LOCPLSProfilesRelativeManifestAutomation}"
+                                         Margin="0,4,0,12"/>
+                                <TextBlock Text="{DynamicResource LOCPLSProfilesRcloneExe}" FontWeight="SemiBold"/>
+                                <TextBox Text="{Binding SelectedSourceProfile.RcloneExecutablePath, UpdateSourceTrigger=PropertyChanged}"
+                                         AutomationProperties.Name="{DynamicResource LOCPLSProfilesRcloneExeAutomation}"
+                                         Margin="0,4,0,12"/>
+                                <TextBlock Text="{DynamicResource LOCPLSProfilesRcloneRemote}" FontWeight="SemiBold"/>
+                                <TextBox Text="{Binding SelectedSourceProfile.RcloneRemoteName, UpdateSourceTrigger=PropertyChanged}"
+                                         AutomationProperties.Name="{DynamicResource LOCPLSProfilesRcloneRemoteAutomation}"
+                                         Margin="0,4,0,12"/>
+                                <TextBlock Text="{DynamicResource LOCPLSProfilesRcloneManifest}" FontWeight="SemiBold"/>
+                                <TextBox Text="{Binding SelectedSourceProfile.RcloneManifestPath, UpdateSourceTrigger=PropertyChanged}"
+                                         AutomationProperties.Name="{DynamicResource LOCPLSProfilesRcloneManifestAutomation}"
+                                         Margin="0,4,0,12"/>
+                                <TextBlock Text="{DynamicResource LOCPLSProfilesRcloneRoot}" FontWeight="SemiBold"/>
+                                <TextBox Text="{Binding SelectedSourceProfile.RcloneContentRoot, UpdateSourceTrigger=PropertyChanged}"
+                                         AutomationProperties.Name="{DynamicResource LOCPLSProfilesRcloneRootAutomation}"
+                                         Margin="0,4,0,12"/>
+                                <TextBlock Text="{DynamicResource LOCPLSProfilesRcloneTimeout}" FontWeight="SemiBold"/>
+                                <TextBox Text="{Binding SelectedSourceProfile.RcloneTimeoutSeconds, UpdateSourceTrigger=PropertyChanged}"
+                                         AutomationProperties.Name="{DynamicResource LOCPLSProfilesRcloneTimeoutAutomation}"
+                                         Width="100" HorizontalAlignment="Left" Margin="0,4,0,8"/>
+                            </StackPanel>
+                        </GroupBox>
+                        <TextBlock TextWrapping="Wrap"
+                                   Text="{DynamicResource LOCPLSProfilesRestrictions}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
             <TabItem Header="{DynamicResource LOCPLSSettingsManifestTab}">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="14">

@@ -21,12 +21,20 @@ namespace PersonalCloudLibrarySource
         private bool notifyTransferFailed = true;
         private bool notifySourceUnavailable = true;
         private bool notifyVerificationWarnings = true;
+        // Default OFF until the full v1.0 profiles UI and Windows acceptance.
+        private bool enableMultiSourceProfiles;
 
         public PersonalCloudLibrarySourceSettingsV3()
         {
             // Thirty seconds is too short for large or sleeping cloud remotes.
             // Existing custom values are preserved by deserialization and migration.
             RcloneTimeoutSeconds = 90;
+        }
+
+        public bool EnableMultiSourceProfiles
+        {
+            get => enableMultiSourceProfiles;
+            set => SetValue(ref enableMultiSourceProfiles, value);
         }
 
         public int SettingsVersion
