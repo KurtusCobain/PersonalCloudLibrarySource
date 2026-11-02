@@ -93,6 +93,7 @@ namespace PersonalCloudLibrarySource
             if (input == null)
                 return Refuse("Archive entry list is unavailable.");
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var filePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             long total = 0;
             var count = 0;
             foreach (var entry in input)
@@ -118,8 +119,10 @@ namespace PersonalCloudLibrarySource
                     IsReservedWindowsDevice(segment)))
                     return Refuse("Archive contains traversal, reserved names or ambiguous path segments.");
 
-                if (!seen.Add(path.TrimEnd('\\')))
+                if (!seen.Add(path))
                     return Refuse("Archive has colliding entry paths on Windows.");
+                if (!entry.IsDirectory)
+                    filePaths.Add(path);
                 if (entry.UncompressedBytes < 0 || entry.CompressedBytes < 0 ||
                     entry.UncompressedBytes > MaxEntryBytes)
                     return Refuse("Archive entry size is invalid or unbounded.");
@@ -137,6 +140,18 @@ namespace PersonalCloudLibrarySource
                 }
             }
             if (count == 0) return Refuse("Archive has no entries.");
+            foreach (var path in seen)
+            {
+                var segments = path.Split('\\');
+                var parent = string.Empty;
+                for (var index = 0; index < segments.Length - 1; index++)
+                {
+                    parent = index == 0 ? segments[index] :
+                        parent + "\\" + segments[index];
+                    if (filePaths.Contains(parent))
+                        return Refuse("Archive has a file where another entry requires a directory.");
+                }
+            }
             return new ArchiveInspectionResult
             {
                 AllowedForStagedExtraction = true,
