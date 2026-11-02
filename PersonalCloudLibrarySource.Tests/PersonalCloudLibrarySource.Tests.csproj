@@ -86,6 +86,7 @@
     <Compile Include="Services\SourceProfilesConfigurationCodecTests.cs" />
     <Compile Include="Services\SourceProfilesFileStoreTests.cs" />
     <Compile Include="Services\MultiSourceControllerFactoryTests.cs" />
+    <Compile Include="Services\SourceProfilesManagementServiceTests.cs" />
     <Compile Include="Services\PathResolverTests.cs" />
     <Compile Include="Services\LibraryItemStateResolverTests.cs" />
     <Compile Include="Services\LibraryVerificationManifestDiagnosticsTests.cs" />
