@@ -118,6 +118,52 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void LocalAndRcloneProfilesKeepTheirOwnSourceSpecificActionSettings()
+        {
+            SaveManifest(firstManifest, "game", "local/game.exe");
+            var local = Profile(LegacyId, firstManifest, true);
+            var remote = new PclsSourceProfileDefinition
+            {
+                ProfileId = NewId, DisplayName = "Disposable cloud",
+                ProviderType = "RcloneRemote",
+                RcloneExecutablePath = @"C:\Tools\rclone.exe",
+                RcloneRemoteName = "sandbox",
+                RcloneManifestPath = "catalog.json",
+                RcloneContentRoot = "games",
+                RcloneTimeoutSeconds = 121
+            };
+            var readCount = 0;
+            var result = new MultiSourceRuntimeCoordinator().Prepare(
+                new[] { local, remote }, Shared(), settings =>
+                {
+                    readCount++;
+                    Assert.That(settings.RcloneRemoteName, Is.EqualTo("sandbox"));
+                    Assert.That(settings.RcloneTimeoutSeconds, Is.EqualTo(121));
+                    return "{\"version\":3,\"items\":[{\"id\":\"game\"," +
+                        "\"title\":\"Remote Game\",\"sourceType\":\"file\"," +
+                        "\"remotePath\":\"cloud/game.exe\"," +
+                        "\"cachePath\":\"remote/game.exe\"}]}";
+                });
+
+            Assert.That(result.CanPublish, Is.True, result.RefusalReason);
+            Assert.That(readCount, Is.EqualTo(1));
+            Assert.That(result.Games, Has.Count.EqualTo(2));
+            SourceScopedGameAction sourceRoute;
+            var cloudId = result.Games.Single(x => x.GameId != "game").GameId;
+            Assert.That(result.TryResolveAction(cloudId, out sourceRoute), Is.True);
+            Assert.That(sourceRoute.CreateSettingsSnapshot().SourceProviderType,
+                Is.EqualTo("RcloneRemote"));
+            Assert.That(sourceRoute.CreateSettingsSnapshot().RcloneRemoteName,
+                Is.EqualTo("sandbox"));
+            Assert.That(sourceRoute.CreateSettingsSnapshot().RcloneContentRoot,
+                Is.EqualTo("games"));
+            Assert.That(sourceRoute.CreateItemSnapshot().RemotePath,
+                Is.EqualTo("cloud/game.exe"));
+            Assert.That(sourceRoute.CreateSettingsSnapshot().LocalCacheFolder,
+                Is.EqualTo(cache));
+        }
+
+        [Test]
         public void TwoSourceIdsCanStillCollideOnOneCacheFileAndMustNotPublish()
         {
             SaveManifest(firstManifest, "legacy", "shared/game.exe");
