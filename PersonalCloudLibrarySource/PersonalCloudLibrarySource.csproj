@@ -38,6 +38,7 @@
     <Reference Include="PresentationFramework" />
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.IO.Compression" />
     <Reference Include="System.Xaml" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
@@ -97,6 +98,10 @@
     <Compile Include="Services\ImportOutcomeService.cs" />
     <Compile Include="Services\ManifestLoader.cs" />
     <Compile Include="Services\ManifestItemMapper.cs" />
+    <Compile Include="Services\ArchiveInspectionPolicy.cs" />
+    <Compile Include="Services\GameLauncherCandidatePolicy.cs" />
+    <Compile Include="Transfers\ZipPackageStagingExtractor.cs" />
+    <Compile Include="Transfers\ZipCentralDirectoryInspector.cs" />
     <Compile Include="Services\ManifestParserValidator.cs" />
     <Compile Include="Services\PathResolvers.cs" />
     <Compile Include="Services\LibraryItemStateResolver.cs" />
