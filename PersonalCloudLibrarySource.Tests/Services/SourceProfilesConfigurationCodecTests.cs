@@ -74,6 +74,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
         {
             var codec = new SourceProfilesConfigurationCodec();
             Assert.That(codec.Parse("{\"SchemaVersion\":99,\"Profiles\":[]}").Succeeded, Is.False);
+            Assert.That(codec.Parse("{\"Profiles\":[{\"ProfileId\":\"cbce1e42-8f44-4424-9da4-2140d5c86a52\",\"DisplayName\":\"Test\",\"ProviderType\":\"LocalFile\"}]}").Succeeded, Is.False);
             Assert.That(codec.Parse("{\"SchemaVersion\":1,\"Profiles\":[]}").Succeeded, Is.False);
             var duplicated = new[]
             {
