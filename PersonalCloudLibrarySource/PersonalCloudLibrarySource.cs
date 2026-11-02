@@ -113,6 +113,46 @@ namespace PersonalCloudLibrarySource
             return prepared.Games;
         }
 
+        // Every action request revalidates the live profile document and
+        // action-sensitive settings before trusting a previously frozen route.
+        // Offline/corrupt/changed profile configurations never authorize
+        // stale uninstall or install actions. No provider call or disk write.
+        private MultiSourceRuntimePlan GetCurrentExperimentalActionPlan(
+            PersonalCloudLibrarySourceSettingsV3 runtimeSettings)
+        {
+            MultiSourceRuntimePlan plan;
+            lock (multiSourcePlanSync)
+                plan = experimentalMultiSourcePlan;
+            if (plan == null || !plan.CanPublish)
+                return null;
+
+            var stillValid = false;
+            try
+            {
+                var loaded = new SourceProfilesFileStore().Load(GetPluginDataDirectory());
+                stillValid = loaded.Succeeded &&
+                    plan.MatchesConfiguration(loaded.Profiles, runtimeSettings);
+            }
+            catch (Exception ex) when (ex is IOException ||
+                                       ex is UnauthorizedAccessException ||
+                                       ex is InvalidOperationException ||
+                                       ex is ArgumentException)
+            {
+                stillValid = false;
+            }
+            if (stillValid)
+                return plan;
+
+            lock (multiSourcePlanSync)
+            {
+                if (ReferenceEquals(experimentalMultiSourcePlan, plan))
+                    experimentalMultiSourcePlan = null;
+            }
+            logger.Warn("PCLS multi-source action routes invalidated: " +
+                "source profile or action settings changed or cannot be verified. Refresh required.");
+            return null;
+        }
+
         private void PublishImportOutcome(
             ImportOutcome outcome,
             PersonalCloudLibrarySourceSettings pluginSettings)
@@ -202,9 +242,7 @@ namespace PersonalCloudLibrarySource
 
                 if (pluginSettings.EnableMultiSourceProfiles)
                 {
-                    MultiSourceRuntimePlan plan;
-                    lock (multiSourcePlanSync)
-                        plan = experimentalMultiSourcePlan;
+                    var plan = GetCurrentExperimentalActionPlan(pluginSettings);
                     InstallController scopedController;
                     if (new MultiSourceControllerFactory().TryPrepareInstall(
                         playniteApi, args.Game, Id, plan, GetTransferQueue(),
@@ -281,9 +319,7 @@ namespace PersonalCloudLibrarySource
 
                 if (pluginSettings.EnableMultiSourceProfiles)
                 {
-                    MultiSourceRuntimePlan plan;
-                    lock (multiSourcePlanSync)
-                        plan = experimentalMultiSourcePlan;
+                    var plan = GetCurrentExperimentalActionPlan(pluginSettings);
                     UninstallController scopedController;
                     if (new MultiSourceControllerFactory().TryPrepareUninstall(
                         playniteApi, args.Game, Id, plan, out scopedController))
