@@ -215,18 +215,6 @@ namespace PersonalCloudLibrarySource
                     return installActions;
                 }
 
-                if (pluginSettings.EnableMultiSourceProfiles)
-                {
-                    MultiSourceRuntimePlan plan;
-                    lock (multiSourcePlanSync)
-                        plan = experimentalMultiSourcePlan;
-                    UninstallController scopedController;
-                    if (new MultiSourceControllerFactory().TryPrepareUninstall(
-                        playniteApi, args.Game, Id, plan, out scopedController))
-                        uninstallActions.Add(scopedController);
-                    return uninstallActions;
-                }
-
                 var manifest = LoadValidatedManifest(pluginSettings);
 
                 foreach (var item in manifest.Items)
@@ -288,6 +276,18 @@ namespace PersonalCloudLibrarySource
                 if (args.Game.PluginId != Id)
                 {
                     logger.Info($"Personal Cloud Library Source uninstall action not returned for {args.Game.GameId}: game belongs to another plugin.");
+                    return uninstallActions;
+                }
+
+                if (pluginSettings.EnableMultiSourceProfiles)
+                {
+                    MultiSourceRuntimePlan plan;
+                    lock (multiSourcePlanSync)
+                        plan = experimentalMultiSourcePlan;
+                    UninstallController scopedController;
+                    if (new MultiSourceControllerFactory().TryPrepareUninstall(
+                        playniteApi, args.Game, Id, plan, out scopedController))
+                        uninstallActions.Add(scopedController);
                     return uninstallActions;
                 }
 
