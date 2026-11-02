@@ -50,6 +50,9 @@ namespace PersonalCloudLibrarySource
             {
                 var result = await Task.Run(() => new SourceProfileHealthProbe().Probe(
                     source, shared, new RcloneManifestReader().ReadManifestJson));
+                if (!string.Equals(SelectedSourceProfile?.ProfileId, source.ProfileId,
+                    StringComparison.OrdinalIgnoreCase))
+                    return; // Selection changed while the read-only check was running.
                 switch (result.Status)
                 {
                     case SourceManifestHealth.ManifestValid:
@@ -227,7 +230,14 @@ namespace PersonalCloudLibrarySource
         public PclsSourceProfileDefinition SelectedSourceProfile
         {
             get => selectedSourceProfile;
-            set { selectedSourceProfile = value; OnPropertyChanged(); OnPropertyChanged(nameof(CanCheckSelectedSource)); }
+            set
+            {
+                selectedSourceProfile = value;
+                SourceHealthStatus = PclsResources.Get("LOCPLSProfilesHealthInitial",
+                    "Select a source and check its manifest. This does not update Playnite games.");
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(CanCheckSelectedSource));
+            }
         }
 
         public string SourceProfilesStatus
