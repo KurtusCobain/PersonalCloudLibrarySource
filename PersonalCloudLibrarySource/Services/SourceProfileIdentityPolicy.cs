@@ -15,6 +15,15 @@ namespace PersonalCloudLibrarySource
         public string ProviderType { get; set; } = string.Empty;
         public bool IsLegacySingleSource { get; set; }
         public bool Enabled { get; set; } = true;
+        // Source-local configuration. The shared cache remains outside profiles.
+        public string LocalManifestPath { get; set; } = string.Empty;
+        public string LocalLibraryRoot { get; set; } = string.Empty;
+        public string ManifestRelativePath { get; set; } = string.Empty;
+        public string RcloneExecutablePath { get; set; } = "rclone";
+        public string RcloneRemoteName { get; set; } = string.Empty;
+        public string RcloneManifestPath { get; set; } = string.Empty;
+        public string RcloneContentRoot { get; set; } = string.Empty;
+        public int RcloneTimeoutSeconds { get; set; } = 90;
     }
 
     public sealed class PclsSourceProfileValidation
