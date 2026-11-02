@@ -27,6 +27,16 @@ namespace PersonalCloudLibrarySource
             ViewModel?.SaveSourceProfilesPreview();
         }
 
+        private void PreviewSelectedSourceBackup_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel?.PreviewSelectedSourceBackup();
+        }
+
+        private void RestoreSelectedSourceBackup_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel?.RestoreSelectedSourceBackup();
+        }
+
         private void BrowseLocalManifestPath_Click(object sender, RoutedEventArgs e)
         {
             ViewModel?.BrowseLocalManifestPath();
