@@ -47,6 +47,11 @@ namespace PersonalCloudLibrarySource
                 }
                 if (File.Exists(primary))
                 {
+                    // A corrupt or unknown current schema is not a license to
+                    // overwrite the user's only copy. Explicit recovery first.
+                    if (!ReadValidated(primary).Succeeded)
+                        throw new InvalidOperationException(
+                            "Existing source profiles are invalid; inspect and recover manually.");
                     // Backup name is unique: do not overwrite earlier backups or
                     // anything the user has added to this directory.
                     var backup = Path.Combine(root, "source-profiles-backup-" +
