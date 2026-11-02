@@ -19,6 +19,125 @@ namespace PersonalCloudLibrarySource
             "LOCPLSProfilesStatusInitial",
             "Preview only. Existing one-source settings stay active until an explicitly approved release.");
         private string selectedNewSourceType = PersonalCloudLibrarySourceSettings.LocalFileProviderType;
+        private ObservableCollection<string> profileBackupNames;
+        private string selectedProfileBackupName;
+        private ObservableCollection<PclsSourceProfileDefinition> backupProfilePreview;
+        private List<PclsSourceProfileDefinition> inspectedBackup;
+        private string backupPreviewStatus = PclsResources.Get(
+            "LOCPLSProfilesBackupInitial",
+            "Load source profiles and select a backup to inspect before restoring.");
+
+        public ObservableCollection<string> ProfileBackupNames
+        {
+            get => profileBackupNames;
+            private set { profileBackupNames = value; OnPropertyChanged(); }
+        }
+
+        public string SelectedProfileBackupName
+        {
+            get => selectedProfileBackupName;
+            set
+            {
+                if (string.Equals(selectedProfileBackupName, value, StringComparison.Ordinal))
+                    return;
+                selectedProfileBackupName = value;
+                OnPropertyChanged();
+                InvalidateBackupPreview();
+            }
+        }
+
+        public ObservableCollection<PclsSourceProfileDefinition> BackupProfilePreview
+        {
+            get => backupProfilePreview;
+            private set { backupProfilePreview = value; OnPropertyChanged(); }
+        }
+
+        public string BackupPreviewStatus
+        {
+            get => backupPreviewStatus;
+            private set => SetValue(ref backupPreviewStatus, value);
+        }
+
+        public bool HasRestorableBackupPreview => inspectedBackup != null &&
+            sourceProfilesBaseline != null &&
+            !string.IsNullOrWhiteSpace(SelectedProfileBackupName);
+
+        private void InvalidateBackupPreview()
+        {
+            inspectedBackup = null;
+            BackupProfilePreview = null;
+            OnPropertyChanged(nameof(HasRestorableBackupPreview));
+        }
+
+        private void RefreshBackupNames()
+        {
+            var backups = new SourceProfilesFileStore()
+                .ListBackupNames(plugin.GetPluginDataDirectory());
+            ProfileBackupNames = new ObservableCollection<string>(backups);
+            SelectedProfileBackupName = ProfileBackupNames.FirstOrDefault();
+            InvalidateBackupPreview();
+        }
+
+        public void PreviewSelectedSourceBackup()
+        {
+            InvalidateBackupPreview();
+            if (sourceProfilesBaseline == null ||
+                string.IsNullOrWhiteSpace(SelectedProfileBackupName))
+            {
+                BackupPreviewStatus = PclsResources.Get(
+                    "LOCPLSProfilesBackupNeedSelection",
+                    "Load profiles and select an existing backup first.");
+                return;
+            }
+            try
+            {
+                var preview = profileManager.PreviewBackupForRestore(
+                    plugin.GetPluginDataDirectory(), SelectedProfileBackupName,
+                    sourceProfilesBaseline, GetRuntimeSettingsSnapshot());
+                inspectedBackup = profileManager.Clone(preview);
+                BackupProfilePreview = new ObservableCollection<PclsSourceProfileDefinition>(
+                    profileManager.Clone(preview));
+                BackupPreviewStatus = PclsResources.Format(
+                    "LOCPLSProfilesBackupInspected",
+                    "Backup inspected: {0} unchanged source identities. Review the names and providers, then explicitly restore if desired.",
+                    preview.Count);
+                OnPropertyChanged(nameof(HasRestorableBackupPreview));
+            }
+            catch (Exception ex)
+            {
+                BackupPreviewStatus = PclsResources.Format(
+                    "LOCPLSProfilesBackupInspectFailed",
+                    "Backup inspection refused: {0}", ex.Message);
+            }
+        }
+
+        public void RestoreSelectedSourceBackup()
+        {
+            if (!HasRestorableBackupPreview)
+                return;
+            if (MessageBox.Show(
+                PclsResources.Get("LOCPLSProfilesBackupRestoreConfirm",
+                    "Restore the inspected source profile settings? All current profile identities must be preserved. The current file will become a separate rollback backup. This does not activate multi-source mode."),
+                PclsResources.Get("LOCPLSProfilesDialogTitle", "PCLS source profiles preview"),
+                MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                return;
+            try
+            {
+                profileManager.RestoreBackupWithoutActivation(
+                    plugin.GetPluginDataDirectory(), SelectedProfileBackupName,
+                    sourceProfilesBaseline, inspectedBackup, GetRuntimeSettingsSnapshot());
+                LoadSourceProfilesPreview();
+                BackupPreviewStatus = PclsResources.Get("LOCPLSProfilesBackupRestored",
+                    "Restored the selected profile backup. The previous current configuration was backed up. Multi-source mode remains off.");
+            }
+            catch (Exception ex)
+            {
+                InvalidateBackupPreview();
+                BackupPreviewStatus = PclsResources.Format(
+                    "LOCPLSProfilesBackupRestoreFailed", "Restore refused: {0}", ex.Message);
+            }
+        }
+
 
         public ObservableCollection<PclsSourceProfileDefinition> SourceProfileCandidates
         {
@@ -55,6 +174,10 @@ namespace PersonalCloudLibrarySource
                 SourceProfileCandidates = new ObservableCollection<PclsSourceProfileDefinition>(
                     profileManager.Clone(baseline));
                 SelectedSourceProfile = SourceProfileCandidates.FirstOrDefault();
+                RefreshBackupNames();
+                BackupPreviewStatus = PclsResources.Get(
+                    "LOCPLSProfilesBackupInitial",
+                    "Load source profiles and select a backup to inspect before restoring.");
                 SourceProfilesStatus = PclsResources.Format(
                     "LOCPLSProfilesStatusLoaded",
                     "Loaded {0} profile(s) for editing. This does not activate multiple sources.",
@@ -116,6 +239,7 @@ namespace PersonalCloudLibrarySource
                     plugin.GetPluginDataDirectory(), sourceProfilesBaseline,
                     profiles, GetRuntimeSettingsSnapshot());
                 sourceProfilesBaseline = profileManager.Clone(profiles);
+                RefreshBackupNames();
                 SourceProfilesStatus = string.IsNullOrWhiteSpace(backup)
                     ? PclsResources.Get("LOCPLSProfilesStatusSaved",
                         "Profile file saved. Multi-source mode remains off.")
