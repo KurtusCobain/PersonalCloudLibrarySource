@@ -82,6 +82,18 @@ namespace PersonalCloudLibrarySource
                     () => playniteApi.InstallGame(target.Game.Id)));
             }
 
+            // ZIP inspection is a read-only action. It never turns an
+            // archive into an installed game or skips an extraction prompt.
+            if (new ZipGameReviewTargetPolicy().Resolve(
+                    target, settings.GetRuntimeSettingsSnapshot(), Id).Available)
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section,
+                    "LOCPLSGameReviewZip",
+                    "Review ZIP Package Contents",
+                    () => ReviewZipGameTarget(target)));
+            }
+
             if (availability.CanCancelTransfer)
             {
                 menuItems.Add(CreateGameMenuItem(
@@ -210,6 +222,77 @@ namespace PersonalCloudLibrarySource
                 "LOCPLSOpenDashboard",
                 "Open Dashboard",
                 navigationService.OpenDashboard));
+        }
+
+        private void ReviewZipGameTarget(GameCommandTarget selected)
+        {
+            // Selection and source settings may have changed since the menu
+            // opened; revalidate from the currently loaded manifest on click.
+            var title = GetDashboardResource("LOCPLSGameReviewZip",
+                "Review ZIP Package Contents");
+            try
+            {
+                if (selected?.Game == null || selected.Game.PluginId != Id)
+                    return;
+                var currentSettings = settings.GetRuntimeSettingsSnapshot();
+                if (currentSettings == null || !currentSettings.Enabled)
+                    return;
+                var currentManifest = LoadValidatedManifest(currentSettings);
+                var refreshed = gameCommandService.ResolveTargets(
+                    new[] { selected.Game }, currentManifest.Items,
+                    currentSettings, Id).Single();
+                var candidate = new ZipGameReviewTargetPolicy()
+                    .Resolve(refreshed, currentSettings, Id);
+                if (!candidate.Available)
+                {
+                    playniteApi.Dialogs.ShowMessage(
+                        "A matching local ZIP is no longer available. No files were changed.",
+                        title);
+                    return;
+                }
+
+                var review = new ZipPackageReviewService().Inspect(
+                    candidate.ArchivePath,
+                    refreshed.Item.Title);
+                if (!review.PassedPreflight)
+                {
+                    playniteApi.Dialogs.ShowMessage(
+                        "ZIP review was refused: " + review.Reason +
+                        Environment.NewLine + "No files were changed.", title);
+                    return;
+                }
+
+                var classification = review.Kind == ZipPackageReviewKind.KeepArchiveCandidate
+                    ? "May be a directly loadable emulator ZIP; keep or extract requires review."
+                    : review.Kind == ZipPackageReviewKind.ExtractCandidate
+                        ? "Contains a possible PC game launcher; extraction requires separate approval."
+                        : "Archive contents are ambiguous; review the package manually.";
+                var launcher = review.Launchers.SuggestedRelativePath;
+                var examples = string.Join(Environment.NewLine,
+                    review.MemberPaths.Take(6)
+                        .Select(path => "  " + path));
+                if (review.FileCount > 6)
+                    examples += Environment.NewLine + "  ...";
+                playniteApi.Dialogs.ShowMessage(
+                    "Read-only ZIP inspection complete." + Environment.NewLine +
+                    "Files: " + review.FileCount + Environment.NewLine +
+                    "Uncompressed bytes: " + review.TotalUncompressedBytes +
+                    Environment.NewLine + classification + Environment.NewLine +
+                    (string.IsNullOrWhiteSpace(launcher) ? string.Empty :
+                        "Possible launcher (not approved): " + launcher +
+                        Environment.NewLine) +
+                    "Contents:" + Environment.NewLine + examples +
+                    Environment.NewLine + Environment.NewLine +
+                    "No files were extracted, executed, installed or removed. " +
+                    "The extraction/install workflow still requires an explicit choice.",
+                    title);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn(ex, "PCLS could not inspect the selected ZIP.");
+                playniteApi.Dialogs.ShowMessage(
+                    "ZIP review could not be completed. No files were changed.", title);
+            }
         }
 
         private void CancelActiveTransfer(GameCommandTarget target)
