@@ -10,7 +10,8 @@ namespace PersonalCloudLibrarySource
     // the live v0.3.2 settings file or saved automatically.
     public sealed class PclsSourceProfilesDocument
     {
-        public int SchemaVersion { get; set; } = 1;
+        // Default absent version to unsupported; do not adopt unversioned data.
+        public int SchemaVersion { get; set; }
         public List<PclsSourceProfileDefinition> Profiles { get; set; }
             = new List<PclsSourceProfileDefinition>();
     }
