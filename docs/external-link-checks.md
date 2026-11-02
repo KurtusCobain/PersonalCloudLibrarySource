@@ -22,3 +22,15 @@ Checked with HTTP `HEAD` requests on 2026-07-14. All listed endpoints returned H
 | Result | URL |
 |---|---|
 | Successful Windows workflow (official Playnite Toolbox addon and installer checks, both exit code 0) | https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/41353669451 |
+
+## PCLS 1.0 roadmap issues — 2026-11-01
+
+| Result | URL |
+|---|---|
+| Verified existence (2026-11-01 via GitHub connected repository data) | https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/12 |
+| Verified existence (2026-11-01 via GitHub connected repository data) | https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/13 |
+| Verified existence (2026-11-01 via GitHub connected repository data) | https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/14 |
+| Verified existence (2026-11-01 via GitHub connected repository data) | https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/17 |
+| Verified existence (2026-11-01 via GitHub connected repository data) | https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/18 |
+| Verified existence (2026-11-01 via GitHub connected repository data) | https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/19 |
+| Verified existence (2026-11-01 via GitHub connected repository data) | https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/20 |
