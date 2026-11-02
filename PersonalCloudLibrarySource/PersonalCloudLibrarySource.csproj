@@ -99,6 +99,7 @@
     <Compile Include="Services\ManifestItemMapper.cs" />
     <Compile Include="Services\SourceProfileIdentityPolicy.cs" />
     <Compile Include="Services\MultiSourceCatalogPlanner.cs" />
+    <Compile Include="Services\SourceProfileSettingsProjector.cs" />
     <Compile Include="Services\ManifestParserValidator.cs" />
     <Compile Include="Services\PathResolvers.cs" />
     <Compile Include="Services\LibraryItemStateResolver.cs" />
