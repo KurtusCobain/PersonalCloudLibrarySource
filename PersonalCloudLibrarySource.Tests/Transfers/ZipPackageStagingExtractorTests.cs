@@ -151,16 +151,25 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         [Test]
         public void UnixSymlinkHeaderNeverCreatesFilesystemLink()
         {
-            WriteArchive(zip =>
+            WriteArchive(zip => AddFile(zip, "external-link", "C:/Private"));
+            // .NET 4.6.2 cannot set ZipArchiveEntry.ExternalAttributes.
+            // Rewrite only the ZIP central record's 4 external attribute bytes.
+            var bytes = File.ReadAllBytes(source);
+            var patched = false;
+            for (var i = 0; i <= bytes.Length - 46; i++)
             {
-                var link = zip.CreateEntry("external-link", CompressionLevel.NoCompression);
-                link.ExternalAttributes = unchecked((int)0xA1FF0000); // Unix symlink 0120777
-                using (var stream = link.Open())
-                {
-                    var bytes = Encoding.UTF8.GetBytes("C:/Private");
-                    stream.Write(bytes, 0, bytes.Length);
-                }
-            });
+                if (bytes[i] != 0x50 || bytes[i + 1] != 0x4b ||
+                    bytes[i + 2] != 0x01 || bytes[i + 3] != 0x02)
+                    continue;
+                bytes[i + 38] = 0x00;
+                bytes[i + 39] = 0x00;
+                bytes[i + 40] = 0xff;
+                bytes[i + 41] = 0xa1; // Unix symlink 0120777
+                patched = true;
+                break;
+            }
+            Assert.That(patched, Is.True);
+            File.WriteAllBytes(source, bytes);
             var result = new ZipPackageStagingExtractor().ExtractApprovedZip(
                 source, cache, destination, Guid.NewGuid(), CancellationToken.None);
             Assert.That(result.Succeeded, Is.False);
