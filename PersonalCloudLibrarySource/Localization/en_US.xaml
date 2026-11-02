@@ -357,4 +357,20 @@
     <sys:String x:Key="LOCPLSProfilesStatusSaved">Profile file saved. Multi-source mode remains off.</sys:String>
     <sys:String x:Key="LOCPLSProfilesStatusSavedBackup">Profile file saved and previous profile data backed up. Multi-source mode remains off.</sys:String>
     <sys:String x:Key="LOCPLSProfilesStatusSaveFailed">Save refused; no activation: {0}</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupGroup">Restore earlier source profiles</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupGuidance">Inspect a saved backup before restoring. Restores preserve existing source identities, do not activate multiple sources, and create another backup of the current settings.</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupPickerAutomation">Choose a source profiles backup</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupInspectButton">Inspect backup</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupInspectAutomation">Inspect selected source profile backup without changing files</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupRestoreButton">Restore inspected backup</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupRestoreAutomation">Restore the inspected profile configuration after explicit confirmation</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupStatusAutomation">Source profiles backup inspection status</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupGridAutomation">Source profiles contained in the selected backup</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupInitial">Load source profiles and select a backup to inspect before restoring.</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupNeedSelection">Load profiles and select an existing backup first.</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupInspected">Backup inspected: {0} unchanged source identities. Review the names and providers, then explicitly restore if desired.</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupInspectFailed">Backup inspection refused: {0}</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupRestoreConfirm">Restore the inspected source profile settings? All current profile identities must be preserved. The current file will become a separate rollback backup. This does not activate multi-source mode.</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupRestored">Restored the selected profile backup. The previous current configuration was backed up. Multi-source mode remains off.</sys:String>
+    <sys:String x:Key="LOCPLSProfilesBackupRestoreFailed">Restore refused: {0}</sys:String>
 </ResourceDictionary>
