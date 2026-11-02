@@ -101,6 +101,9 @@ namespace PersonalCloudLibrarySource
                 if (entry == null || entry.IsLink)
                     return Refuse("Archive has a missing or linked entry.");
                 var path = (entry.EntryPath ?? string.Empty).Replace('/', '\\');
+                // ZIP directory entries conventionally end with one separator.
+                if (entry.IsDirectory && path.EndsWith("\\", StringComparison.Ordinal))
+                    path = path.Substring(0, path.Length - 1);
                 if (path.Length == 0 || path.Length > MaxPathCharacters ||
                     Path.IsPathRooted(path) || path.StartsWith("\\", StringComparison.Ordinal) ||
                     path.Contains(":") || path.Contains("\0"))
