@@ -20,6 +20,21 @@ PCLS is **not** a ROM provider, store, emulator frontend, game streaming product
 
 Nonsecurity polish can use normal PR + CI. **Fix any verified data-loss vulnerability immediately instead of holding for a scheduled version.**
 
+## Owner-approved scope: PCLS v1.0.0 (November 1, 2026)
+
+This roadmap is now the **target feature contract for the first stable 1.0 release**, not merely a menu of possibilities. The four pillars must be implemented and qualified together, and the final version will be **v1.0.0**. Approval of scope does **not** authorize changing the existing public v0.3.2 package, installer feed or release tag.
+
+1. **Reliable and safe storage** — stable cache ownership, file-safe lifecycle and non-destructive cancellation/retry; accuracy for game sizes; source-disconnect and provider recovery. See [#12](https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/12), [#13](https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/13) and [#14](https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/14).
+2. **Smart package handling** — secure discovery, bounded inspection, staged ZIP/7z/RAR extraction, conservative executable selection and unambiguous Playnite install/play actions. See [#18](https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/18).
+3. **Multiple source profiles** — add more than one local/NAS/rclone location in one PCLS catalog, preserve old game identities, isolate credentials and failures, and avoid accidental deletion of entries when a source is offline. See [#19](https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/19).
+4. **Polished integration and onboarding** — approachable first-run wizard, source/transfer health, duplicate warnings, correct Playnite state, keyboard/150% DPI and Fullscreen core actions, privacy-clean diagnostics and accurate public listing. See [#20](https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/20).
+
+**Safety line:** no automatic recursive cache-directory deletion unless a separate independent review and Windows qualification support it. The user-facing 1.0 feature can instead offer a safe refusal/manual-review route for unowned content. Do not use unsafe deletion merely to satisfy a checklist.
+
+**Development sequence:** finish coding in small draft PRs with automated CI on every HEAD; freeze one integrated candidate; have Claude, Grok and Nova review that exact SHA; repair verified findings; perform **one** consolidated disposable Windows/Playnite and provider acceptance cycle; explicitly approve publishing. See [#17](https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/17).
+
+**Not part of 1.0:** direct OAuth account integrations, an emulator frontend, online game/content delivery, auto-downloading entire libraries, AI recommendations, save/mod sync, streaming and destructive cache eviction.
+
 ## The path to 1.0: prioritized engineering tracks
 
 ### Track A — cache ownership, uninstall safety and recovery (P0)
