@@ -317,6 +317,17 @@
     <sys:String x:Key="LOCPLSProfilesAdd">Add source</sys:String>
     <sys:String x:Key="LOCPLSProfilesAddAutomation">Add a new source profile to the unsaved preview</sys:String>
     <sys:String x:Key="LOCPLSProfilesSave">Save profile file</sys:String>
+    <sys:String x:Key="LOCPLSProfilesHealthCheck">Check selected manifest</sys:String>
+    <sys:String x:Key="LOCPLSProfilesHealthCheckAutomation">Read-only health check for the selected source manifest</sys:String>
+    <sys:String x:Key="LOCPLSProfilesHealthStatusAutomation">Selected source manifest health result</sys:String>
+    <sys:String x:Key="LOCPLSProfilesHealthInitial">Select a source and check its manifest. This does not update Playnite games.</sys:String>
+    <sys:String x:Key="LOCPLSProfilesHealthChecking">Checking the selected manifest without modifying games or cached files...</sys:String>
+    <sys:String x:Key="LOCPLSProfilesHealthValid">Manifest readable: {0} entries. Game payload availability is not verified.</sys:String>
+    <sys:String x:Key="LOCPLSProfilesHealthUnavailable">Manifest unavailable. No games were removed or imported.</sys:String>
+    <sys:String x:Key="LOCPLSProfilesHealthMalformed">Manifest is invalid. No games were changed.</sys:String>
+    <sys:String x:Key="LOCPLSProfilesHealthUnsupported">Manifest uses an unsupported schema. No games were changed.</sys:String>
+    <sys:String x:Key="LOCPLSProfilesHealthDisabled">Selected source is disabled; no manifest check was performed.</sys:String>
+    <sys:String x:Key="LOCPLSProfilesHealthInvalid">Selected source configuration is invalid.</sys:String>
     <sys:String x:Key="LOCPLSProfilesSaveAutomation">Save source profiles without activating multi-source mode</sys:String>
     <sys:String x:Key="LOCPLSProfilesTableAutomation">Configured source profile preview</sys:String>
     <sys:String x:Key="LOCPLSProfilesSourceColumn">Source</sys:String>
