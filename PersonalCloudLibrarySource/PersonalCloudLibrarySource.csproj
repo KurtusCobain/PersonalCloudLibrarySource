@@ -97,6 +97,7 @@
     <Compile Include="Services\ImportOutcomeService.cs" />
     <Compile Include="Services\ManifestLoader.cs" />
     <Compile Include="Services\ManifestItemMapper.cs" />
+    <Compile Include="Services\ArchiveInspectionPolicy.cs" />
     <Compile Include="Services\ManifestParserValidator.cs" />
     <Compile Include="Services\PathResolvers.cs" />
     <Compile Include="Services\LibraryItemStateResolver.cs" />
