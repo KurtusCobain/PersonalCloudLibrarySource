@@ -79,6 +79,7 @@
     <Compile Include="Services\ImportOutcomeServiceTests.cs" />
     <Compile Include="Services\ManifestLoaderTests.cs" />
     <Compile Include="Services\ManifestItemMapperTests.cs" />
+    <Compile Include="Services\ArchiveInspectionPolicyTests.cs" />
     <Compile Include="Services\PathResolverTests.cs" />
     <Compile Include="Services\LibraryItemStateResolverTests.cs" />
     <Compile Include="Services\LibraryVerificationManifestDiagnosticsTests.cs" />
