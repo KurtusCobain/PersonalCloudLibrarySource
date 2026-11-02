@@ -32,7 +32,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
             // Use LocalFolder source path, so manifest needs no rooted paths.
             File.WriteAllText(manifest, "{\"version\":3,\"items\":[{" +
                 "\"id\":\"game\",\"title\":\"Test Game\"," +
-                "\"sourcePath\":\"game.exe\",\"sourceType\":\"file\"," +
+                "\"sourcePath\":\"source/game.exe\",\"sourceType\":\"file\"," +
                 "\"cachePath\":\"test-game/game.exe\"}]}");
             pluginId = Guid.NewGuid();
         }
