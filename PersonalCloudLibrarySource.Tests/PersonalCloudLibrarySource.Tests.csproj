@@ -91,6 +91,7 @@
     <Compile Include="Services\SourceCatalogContinuityPolicyTests.cs" />
     <Compile Include="Services\SourceCatalogSnapshotStoreTests.cs" />
     <Compile Include="Services\SourceCatalogDisplaySnapshotStoreTests.cs" />
+    <Compile Include="Services\MultiSourceActionConfigurationGuardTests.cs" />
     <Compile Include="Services\PathResolverTests.cs" />
     <Compile Include="Services\LibraryItemStateResolverTests.cs" />
     <Compile Include="Services\LibraryVerificationManifestDiagnosticsTests.cs" />
