@@ -100,6 +100,7 @@
     <Compile Include="Services\ManifestItemMapper.cs" />
     <Compile Include="Services\ArchiveInspectionPolicy.cs" />
     <Compile Include="Transfers\ZipPackageStagingExtractor.cs" />
+    <Compile Include="Transfers\ZipCentralDirectoryInspector.cs" />
     <Compile Include="Services\ManifestParserValidator.cs" />
     <Compile Include="Services\PathResolvers.cs" />
     <Compile Include="Services\LibraryItemStateResolver.cs" />
