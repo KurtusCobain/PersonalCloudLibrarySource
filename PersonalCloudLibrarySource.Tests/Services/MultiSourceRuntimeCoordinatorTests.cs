@@ -84,6 +84,11 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(added.ProfileId, Is.EqualTo(NewId));
             Assert.That(legacy.OriginalItemId, Is.EqualTo("same"));
             Assert.That(added.OriginalItemId, Is.EqualTo("same"));
+            Assert.That(legacy.OwnershipReceiptKey, Is.EqualTo("same"),
+                "Existing single-source receipts must retain their historic lookup key.");
+            Assert.That(added.OwnershipReceiptKey, Is.EqualTo(result.Games[1].GameId),
+                "New source receipts must not collide with the legacy source.");
+            Assert.That(legacy.OwnershipReceiptKey, Is.Not.EqualTo(added.OwnershipReceiptKey));
             Assert.That(legacy.CreateItemSnapshot().CachePath, Is.EqualTo("legacy/game.exe"));
             Assert.That(added.CreateItemSnapshot().CachePath, Is.EqualTo("remote/game.exe"));
             Assert.That(legacy.CreateSettingsSnapshot().LocalManifestPath, Is.EqualTo(firstManifest));
