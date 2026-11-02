@@ -151,10 +151,6 @@ namespace PersonalCloudLibrarySource
             }
             catch (ArgumentException) { return Refuse("Snapshot cannot be decoded."); }
             catch (InvalidOperationException) { return Refuse("Snapshot cannot be decoded."); }
-            catch (System.Web.Script.Serialization.JavaScriptSerializerException)
-            {
-                return Refuse("Snapshot cannot be decoded.");
-            }
         }
 
         private static bool ValidRecord(string id, string fingerprint, IList<string> gameIds)
