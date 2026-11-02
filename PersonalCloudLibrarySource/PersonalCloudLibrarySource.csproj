@@ -99,6 +99,7 @@
     <Compile Include="Services\ManifestLoader.cs" />
     <Compile Include="Services\ManifestItemMapper.cs" />
     <Compile Include="Services\ArchiveInspectionPolicy.cs" />
+    <Compile Include="Services\GameLauncherCandidatePolicy.cs" />
     <Compile Include="Transfers\ZipPackageStagingExtractor.cs" />
     <Compile Include="Transfers\ZipCentralDirectoryInspector.cs" />
     <Compile Include="Services\ManifestParserValidator.cs" />
