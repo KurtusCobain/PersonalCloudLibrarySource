@@ -247,6 +247,7 @@ namespace PersonalCloudLibrarySource
             PersonalCloudLibrarySourceSettingsV3 destination)
         {
             destination.SettingsVersion = source.SettingsVersion;
+            destination.EnableMultiSourceProfiles = source.EnableMultiSourceProfiles;
             destination.ShowTopPanelButton = source.ShowTopPanelButton;
             destination.ShowSidebarDashboard = source.ShowSidebarDashboard;
             destination.ShowSetupReminders = source.ShowSetupReminders;
