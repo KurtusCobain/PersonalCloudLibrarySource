@@ -186,7 +186,9 @@ namespace PersonalCloudLibrarySource
                     !string.Equals(current.Item.Id, selected.Game.GameId,
                         StringComparison.Ordinal))
                     return;
-                if (activeZipExtractions.ContainsKey(selected.Game.Id) ||
+                if (selected.Game.IsRunning || selected.Game.IsLaunching ||
+                    selected.Game.IsInstalling || selected.Game.IsUninstalling ||
+                    activeZipExtractions.ContainsKey(selected.Game.Id) ||
                     activeZipCleanups.ContainsKey(selected.Game.Id) ||
                     GetTransferManager().GetActiveJobForGame(selected.Game.Id) != null)
                     return;
@@ -253,7 +255,9 @@ namespace PersonalCloudLibrarySource
                     !string.Equals(GetItemSourcePath(updatedTarget.Item),
                         GetItemSourcePath(current.Item), StringComparison.Ordinal))
                     return;
-                if (activeZipExtractions.ContainsKey(selected.Game.Id) ||
+                if (selected.Game.IsRunning || selected.Game.IsLaunching ||
+                    selected.Game.IsInstalling || selected.Game.IsUninstalling ||
+                    activeZipExtractions.ContainsKey(selected.Game.Id) ||
                     GetTransferManager().GetActiveJobForGame(selected.Game.Id) != null ||
                     !activeZipCleanups.TryAdd(selected.Game.Id, true))
                     return;
