@@ -109,12 +109,44 @@ namespace PersonalCloudLibrarySource
                         cancellationToken.ThrowIfCancellationRequested();
                         var entry = archive.Entries[index];
                         var observation = records[index];
-                        var relative = entry.FullName.Replace('/', Path.DirectorySeparatorChar)
-                            .Replace('\\', Path.DirectorySeparatorChar)
-                            .TrimEnd(Path.DirectorySeparatorChar);
+                        // Defense in depth against ZIP Slip: never pass a raw ZIP
+                        // entry name to Path.Combine. Revalidate its individual
+                        // components here, at the filesystem write boundary,
+                        // even though the archive-wide preflight already ran.
+                        var rawName = entry.FullName;
+                        if (string.IsNullOrWhiteSpace(rawName) ||
+                            rawName.Length > ArchiveInspectionPolicy.MaxPathCharacters ||
+                            Path.IsPathRooted(rawName) ||
+                            rawName.StartsWith("/", StringComparison.Ordinal) ||
+                            rawName.StartsWith("\\", StringComparison.Ordinal) ||
+                            rawName.IndexOf(':') >= 0 ||
+                            rawName.IndexOf('\0') >= 0 ||
+                            rawName.Any(ch => ch < 32))
+                            throw new InvalidDataException("Unsafe ZIP entry name.");
+
+                        var parts = rawName.Replace('\\', '/')
+                            .TrimEnd('/').Split('/');
+                        if (parts.Length == 0 || parts.Any(part =>
+                            part.Length == 0 || part == "." || part == ".." ||
+                            part.EndsWith(".", StringComparison.Ordinal) ||
+                            part.EndsWith(" ", StringComparison.Ordinal)))
+                            throw new InvalidDataException(
+                                "ZIP entry contains unsafe path components.");
+
+                        var relative = Path.Combine(parts);
+                        var stageRoot = Path.GetFullPath(staging)
+                            .TrimEnd(Path.DirectorySeparatorChar,
+                                Path.AltDirectorySeparatorChar) +
+                            Path.DirectorySeparatorChar;
                         var target = Path.GetFullPath(Path.Combine(staging, relative));
-                        if (!PathBoundary.IsContained(staging, target))
-                            throw new IOException("Archive entry escaped its private staging root.");
+                        // A canonical child path MUST be below the staging
+                        // root plus separator (not equal to root or a prefix
+                        // sibling). This check is local to the filesystem sink.
+                        if (!target.StartsWith(stageRoot,
+                                StringComparison.OrdinalIgnoreCase) ||
+                            !PathBoundary.IsContained(staging, target))
+                            throw new IOException(
+                                "Archive entry escaped its private staging root.");
 
                         if (observation.IsDirectory)
                         {
