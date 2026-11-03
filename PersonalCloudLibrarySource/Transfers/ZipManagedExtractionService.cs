@@ -47,6 +47,8 @@ namespace PersonalCloudLibrarySource
             if (reviewed == null || !reviewed.PassedPreflight ||
                 receipts == null || string.IsNullOrWhiteSpace(gameId) ||
                 gameId.Length > 256 || gameId != gameId.Trim() ||
+                gameId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+                gameId == "." || gameId == ".." ||
                 string.IsNullOrWhiteSpace(archivePath) ||
                 string.IsNullOrWhiteSpace(cacheRoot))
                 return null;
