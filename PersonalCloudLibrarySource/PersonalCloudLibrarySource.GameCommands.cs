@@ -181,6 +181,14 @@ namespace PersonalCloudLibrarySource
                 }
             }
 
+            if (activeZipCleanups.ContainsKey(target.Game.Id))
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section, "LOCPLSZipPermanentCleanupCancel",
+                    "Cancel Permanent ZIP Cleanup",
+                    () => CancelZipCleanup(target.Game.Id)));
+            }
+
             // Revoke remains available for a recorded approval even when the
             // manifest source changed or the extracted files no longer match.
             // It changes only plugin approval metadata, not game files.
