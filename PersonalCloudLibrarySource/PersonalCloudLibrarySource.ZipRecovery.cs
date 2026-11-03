@@ -57,6 +57,14 @@ namespace PersonalCloudLibrarySource
                         title);
                     return;
                 }
+                if (state.State == ZipRecoveryState.Restored)
+                {
+                    playniteApi.Dialogs.ShowMessage(
+                        PclsResources.Get("LOCPLSZipRecoveryAlreadyRestored",
+                            "This ZIP recovery was already restored and finalized. The original files remain in place; no further recovery move is available for this journal."),
+                        title);
+                    return;
+                }
 
                 if (state.State == ZipRecoveryState.NoJournal)
                 {
