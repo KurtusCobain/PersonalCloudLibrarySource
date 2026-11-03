@@ -92,6 +92,24 @@ namespace PersonalCloudLibrarySource
                     "LOCPLSGameReviewZip",
                     "Review ZIP Package Contents",
                     () => ReviewZipGameTarget(target)));
+                if (settings.GetRuntimeSettingsSnapshot().AllowDownloads &&
+                    !activeZipExtractions.ContainsKey(target.Game.Id))
+                {
+                    menuItems.Add(CreateGameMenuItem(
+                        section,
+                        "LOCPLSZipExtractTitle",
+                        "Extract ZIP to Separate Cache Folder",
+                        () => ExtractZipGameTargetAsync(target)));
+                }
+            }
+
+            if (activeZipExtractions.ContainsKey(target.Game.Id))
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section,
+                    "LOCPLSZipExtractCancelMenu",
+                    "Cancel ZIP Extraction",
+                    () => CancelZipExtraction(target.Game.Id)));
             }
 
             if (availability.CanCancelTransfer)
