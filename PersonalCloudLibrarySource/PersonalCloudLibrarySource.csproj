@@ -76,6 +76,7 @@
     <Compile Include="ManifestGenerationService.cs" />
     <Compile Include="PersonalCloudLibrarySource.GameCommands.cs" />
     <Compile Include="PersonalCloudLibrarySource.ZipPackages.cs" />
+    <Compile Include="PersonalCloudLibrarySource.ZipLaunchGuard.cs" />
     <Compile Include="PersonalCloudLibrarySource.Navigation.cs" />
     <Compile Include="PersonalCloudLibrarySource.Transfers.cs" />
     <Compile Include="PersonalCloudLibrarySourceClient.cs" />
@@ -105,6 +106,7 @@
     <Compile Include="Services\ZipExtractedLauncherReviewService.cs" />
     <Compile Include="Services\ZipLauncherApprovalService.cs" />
     <Compile Include="Services\ZipManagedMaintenanceService.cs" />
+    <Compile Include="Services\ZipManagedLaunchGate.cs" />
     <Compile Include="Transfers\ZipPackageStagingExtractor.cs" />
     <Compile Include="Transfers\ZipPackageReviewService.cs" />
     <Compile Include="Transfers\ZipManagedExtractionService.cs" />
