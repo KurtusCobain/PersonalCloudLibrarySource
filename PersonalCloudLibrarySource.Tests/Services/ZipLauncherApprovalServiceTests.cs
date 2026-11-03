@@ -541,6 +541,28 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void ExperimentalMultiSourceModeNeverUsesLegacyZipLauncherApproval()
+        {
+            var approved = ApprovedPlayAction();
+            var multi = new PersonalCloudLibrarySourceSettingsV3
+            {
+                Enabled = true,
+                EnableMultiSourceProfiles = true,
+                LocalCacheFolder = cache,
+                SourceProviderType =
+                    PersonalCloudLibrarySourceSettings.LocalFileProviderType,
+                LocalManifestPath = settings.LocalManifestPath
+            };
+            var decision = new ZipManagedLaunchGate().Evaluate(
+                guardedPluginId, GuardedGame(), approved,
+                item, multi, receipts, approvals);
+            Assert.That(decision.Applies, Is.True);
+            Assert.That(decision.Allowed, Is.False,
+                "Source-bound game IDs require independent ZIP approval provenance.");
+            Assert.That(File.Exists(approved.Path), Is.True);
+        }
+
+        [Test]
         public void ApprovalStoreInsideCacheCannotActivateOrWrite()
         {
             var invalid = new ZipLauncherApprovalService(
