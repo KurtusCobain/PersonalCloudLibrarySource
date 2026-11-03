@@ -512,6 +512,35 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void ManagedInstallDirectoryBlocksRewrittenUnrelatedPlayAction()
+        {
+            var approved = ApprovedPlayAction();
+            var game = GuardedGame();
+            game.InstallDirectory = extracted.Destination;
+            var replacedAction = new GameAction
+            {
+                Name = "Changed", Type = GameActionType.File,
+                Path = Path.Combine(root, "different-launch.exe"),
+                WorkingDir = root, IsPlayAction = true
+            };
+            var result = CheckLaunch(replacedAction, game);
+            Assert.That(result.Applies, Is.True);
+            Assert.That(result.Allowed, Is.False);
+            Assert.That(File.Exists(approved.Path), Is.True);
+        }
+
+        [Test]
+        public void ManagedInstallWithoutSelectedSourceActionFailsClosed()
+        {
+            ApprovedPlayAction();
+            var game = GuardedGame();
+            game.InstallDirectory = extracted.Destination;
+            var result = CheckLaunch(null, game);
+            Assert.That(result.Applies, Is.True);
+            Assert.That(result.Allowed, Is.False);
+        }
+
+        [Test]
         public void ApprovalStoreInsideCacheCannotActivateOrWrite()
         {
             var invalid = new ZipLauncherApprovalService(
