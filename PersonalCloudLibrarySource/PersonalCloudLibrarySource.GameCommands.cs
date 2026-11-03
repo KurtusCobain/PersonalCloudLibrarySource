@@ -128,6 +128,21 @@ namespace PersonalCloudLibrarySource
                     () => ApproveExtractedZipLauncherAsync(target)));
             }
 
+            // Show the diagnostic for a managed ZIP folder or ownership
+            // record, even if it was modified or the receipt is missing.
+            var menuSnapshot = settings.GetRuntimeSettingsSnapshot();
+            if (target.Item != null && menuSnapshot != null &&
+                new ZipManagedMaintenanceService().HasManagedFootprint(
+                    menuSnapshot.LocalCacheFolder, target.Item.Id,
+                    new CacheOwnershipReceiptStore(Path.Combine(
+                        GetPluginDataDirectory(), "ownership-receipts"))))
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section, "LOCPLSZipMaintenanceTitle",
+                    "Review Managed ZIP Maintenance",
+                    () => ReviewManagedZipMaintenanceAsync(target)));
+            }
+
             // Revoke remains available for a recorded approval even when the
             // manifest source changed or the extracted files no longer match.
             // It changes only plugin approval metadata, not game files.
