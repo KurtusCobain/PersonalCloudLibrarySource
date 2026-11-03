@@ -21,6 +21,11 @@
     <sys:String x:Key="LOCPLSZipLauncherReviewEmpty">No supported Windows launcher candidates were found.</sys:String>
     <sys:String x:Key="LOCPLSZipLauncherReviewCompleted">Verified extracted ZIP inventory:{0}{1}{0}{0}Candidate launchers (first six):{0}{2}{0}{0}These are only suggestions. No launcher or installer has been approved or executed. Playnite install state and game actions are unchanged.</sys:String>
     <sys:String x:Key="LOCPLSZipLauncherReviewFailed">Launcher review could not be completed. No files were changed.</sys:String>
+    <sys:String x:Key="LOCPLSZipApproveTitle">Approve Extracted ZIP Launcher</sys:String>
+    <sys:String x:Key="LOCPLSZipApproveNoCandidates">No eligible game executables were found. Installers, helpers and scripts cannot be approved here.</sys:String>
+    <sys:String x:Key="LOCPLSZipApproveChoice">Approve this extracted game executable?{0}{0}{1}{0}{0}Yes: approve this file; No: next candidate; Cancel: stop.{0}No executable will run. After approval, Update Game Library to enable Playnite's Play action, provided the source and extracted files still match.</sys:String>
+    <sys:String x:Key="LOCPLSZipApproveSuccess">Launcher approval saved. Use Update Game Library to refresh Playnite's Play action. Files were not executed or modified.</sys:String>
+    <sys:String x:Key="LOCPLSZipApproveFailed">Launcher approval was not saved. Source, inventory or approval state may have changed. No files were executed or modified.</sys:String>
     <sys:String x:Key="LOCPLSZipExtractConfirmation">Keep the current ZIP (No), or extract its verified contents to this new folder (Yes)?{0}{0}{1}{0}{0}No existing files will be overwritten. No executable or installer will run. Playnite installed state and game launch settings will NOT change. The result is a separate managed-cache extraction.</sys:String>
     <sys:String x:Key="LOCPLSZipExtractUnavailable">Extraction is unavailable: the destination is unsafe, already occupied or already recorded. No files were changed.</sys:String>
     <sys:String x:Key="LOCPLSZipExtractCancelled">ZIP extraction was cancelled. Existing source and game files were preserved.</sys:String>
