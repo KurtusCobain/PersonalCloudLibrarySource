@@ -1,0 +1,94 @@
+name: Archive backend compatibility (net462)
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - feature/v1-combined-integration-20261103
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  net462-archive-smoke:
+    name: SharpCompress 0.50.7 Windows net462 read-only smoke
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore isolated compatibility project
+        shell: pwsh
+        run: |
+          dotnet restore .\tools\archive-compatibility\ArchiveCompatibility.csproj --force-evaluate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build .NET Framework 4.6.2 executable
+        shell: pwsh
+        run: |
+          dotnet build .\tools\archive-compatibility\ArchiveCompatibility.csproj --no-restore --configuration Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Create synthetic 7z and test streamed decompression
+        shell: pwsh
+        run: |
+          $sevenZip = @(
+            (Get-Command '7z.exe' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1),
+            'C:\Program Files\7-Zip\7z.exe',
+            'C:\Program Files (x86)\7-Zip\7z.exe'
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+          if (-not $sevenZip) { throw 'Windows 7z fixture creator unavailable; test must not silently skip.' }
+
+          $fixture = Join-Path $env:RUNNER_TEMP 'pcls-archive-compat'
+          New-Item -ItemType Directory -Path (Join-Path $fixture 'sample') -Force | Out-Null
+          [IO.File]::WriteAllText((Join-Path $fixture 'sample\hello.txt'),
+            'Synthetic 7z fixture for read-only .NET Framework runtime test.')
+          $archive = Join-Path $fixture 'sample.7z'
+          Push-Location $fixture
+          try {
+            & $sevenZip a '-t7z' '-mx=1' $archive '.\sample' | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create synthetic 7z fixture.' }
+          } finally { Pop-Location }
+
+          $built = '.\tools\archive-compatibility\bin\Release\net462'
+          $exe = Join-Path $built 'ArchiveCompatibility.exe'
+          if (-not (Test-Path -LiteralPath $exe)) { throw 'net462 smoke executable absent.' }
+          if (-not (Test-Path -LiteralPath (Join-Path $built 'SharpCompress.dll'))) {
+            throw 'SharpCompress runtime DLL was not copied beside net462 executable.'
+          }
+          & $exe $archive
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          $assemblyFiles = @(Get-ChildItem -LiteralPath $built -Filter '*.dll' -File |
+            Select-Object -ExpandProperty Name | Sort-Object)
+          Write-Host ('Runtime dependency DLLs: ' + ($assemblyFiles -join ', '))
+          if ($assemblyFiles.Count -lt 1) {
+            throw 'No runtime DLLs in executable output.'
+          }
+
+      - name: Confirm release package remains dependency-free
+        shell: pwsh
+        run: |
+          $production = '.\PersonalCloudLibrarySource\packages.config'
+          $config = Get-Content -LiteralPath $production -Raw
+          if ($config -match '(?i)SharpCompress|AsyncInterfaces|Encoding.CodePages') {
+            throw 'Experimental backend leaked into production Playnite dependencies.'
+          }
+          Write-Host 'Production dependency manifest remains unchanged. No 7z/RAR support enabled.'
+
+      - name: Retain isolated compatibility log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcls-archive-net462-${{ github.run_number }}
+          path: tools/archive-compatibility/obj/project.assets.json
+          if-no-files-found: warn
+          retention-days: 7
