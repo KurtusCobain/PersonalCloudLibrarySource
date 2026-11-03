@@ -233,6 +233,54 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void RestoreRefusesOccupiedOriginalDestinationWithoutOverwritingEitherFolder()
+        {
+            Assert.That(Quarantine(), Is.True);
+            var quarantined = RecoveryDirectory();
+            Directory.CreateDirectory(plan.Destination);
+            var userSave = Path.Combine(plan.Destination, "user-save.sav");
+            File.WriteAllText(userSave, "keep the new save");
+            Assert.That(Restore(), Is.False);
+            Assert.That(File.ReadAllText(userSave), Is.EqualTo("keep the new save"));
+            Assert.That(File.ReadAllText(Path.Combine(quarantined, "Game.exe")),
+                Is.EqualTo("original game"));
+            Assert.That(recovery.Inspect(cache, gameId).State,
+                Is.EqualTo(ZipRecoveryState.Ambiguous));
+        }
+
+        [Test]
+        public void MissingOrCorruptOwnershipReceiptBlocksRestoreWithoutDataLoss()
+        {
+            Assert.That(Quarantine(), Is.True);
+            var quarantined = RecoveryDirectory();
+            var receiptPath = Directory.GetFiles(Path.Combine(root, "receipts"),
+                "*.json").Single();
+            File.WriteAllText(receiptPath, "{ invalid");
+            Assert.That(Restore(), Is.False);
+            Assert.That(File.ReadAllText(Path.Combine(quarantined, "Game.exe")),
+                Is.EqualTo("original game"));
+            Assert.That(File.Exists(archive), Is.True);
+        }
+
+        [Test]
+        public void CancelledRestorePreservesQuarantineAndJournal()
+        {
+            Assert.That(Quarantine(), Is.True);
+            using (var stop = new CancellationTokenSource())
+            {
+                stop.Cancel();
+                string reason;
+                Assert.That(recovery.TryRestore(cache, gameId, receipts,
+                    approvals, true, stop.Token, out reason), Is.False);
+            }
+            Assert.That(recovery.Inspect(cache, gameId).State,
+                Is.EqualTo(ZipRecoveryState.Quarantined));
+            Assert.That(recovery.HasJournalFootprint(cache, gameId), Is.True);
+            Assert.That(File.ReadAllText(Path.Combine(RecoveryDirectory(), "Game.exe")),
+                Is.EqualTo("original game"));
+        }
+
+        [Test]
         public void WrongGameIdAndCacheCannotUseAnotherGamesJournal()
         {
             Assert.That(Quarantine(), Is.True);
