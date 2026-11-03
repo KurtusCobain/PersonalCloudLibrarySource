@@ -11,8 +11,8 @@ namespace PersonalCloudLibrarySource
 {
     public partial class PersonalCloudLibrarySource
     {
-        private readonly ConcurrentDictionary<Guid, bool> activeZipCleanups =
-            new ConcurrentDictionary<Guid, bool>();
+        private readonly ConcurrentDictionary<Guid, CancellationTokenSource> activeZipCleanups =
+            new ConcurrentDictionary<Guid, CancellationTokenSource>();
 
         // The user must explicitly choose each SAME-VOLUME recovery move.
         // This feature never erases a directory, receipt, source ZIP or save.
@@ -258,13 +258,18 @@ namespace PersonalCloudLibrarySource
                 if (selected.Game.IsRunning || selected.Game.IsLaunching ||
                     selected.Game.IsInstalling || selected.Game.IsUninstalling ||
                     activeZipExtractions.ContainsKey(selected.Game.Id) ||
-                    GetTransferManager().GetActiveJobForGame(selected.Game.Id) != null ||
-                    !activeZipCleanups.TryAdd(selected.Game.Id, true))
+                    GetTransferManager().GetActiveJobForGame(selected.Game.Id) != null)
                     return;
+                var cancellation = new CancellationTokenSource();
+                if (!activeZipCleanups.TryAdd(selected.Game.Id, cancellation))
+                {
+                    cancellation.Dispose();
+                    return;
+                }
                 registered = true;
 
                 var result = await Task.Run(() => cleanup.Execute(root, gameId,
-                    receiptStore, approvals, true, CancellationToken.None));
+                    receiptStore, approvals, true, cancellation.Token));
                 playniteApi.Dialogs.ShowMessage(result.Succeeded
                     ? PclsResources.Get("LOCPLSZipPermanentCleanupSuccess",
                         "Verified quarantined ZIP package files were permanently removed. The original source ZIP and audit records remain. Update Game Library.")
@@ -286,10 +291,26 @@ namespace PersonalCloudLibrarySource
             {
                 if (registered && selected?.Game != null)
                 {
-                    bool removed;
-                    activeZipCleanups.TryRemove(selected.Game.Id, out removed);
+                    CancellationTokenSource removed;
+                    if (activeZipCleanups.TryRemove(selected.Game.Id, out removed))
+                        removed.Dispose();
                 }
             }
+        }
+
+        private void CancelZipCleanup(Guid gameId)
+        {
+            CancellationTokenSource pending;
+            if (!activeZipCleanups.TryGetValue(gameId, out pending))
+                return;
+            try { pending.Cancel(); }
+            catch (ObjectDisposedException) { }
+        }
+
+        private void CancelAllZipCleanups()
+        {
+            foreach (var pending in activeZipCleanups)
+                CancelZipCleanup(pending.Key);
         }
     }
 }
