@@ -302,6 +302,45 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void CancellationDoesNotDeleteAJobFileReplacedWithDifferentUserContent()
+        {
+            const string original = "first original file";
+            WriteArchive(zip =>
+            {
+                AddFile(zip, "first.txt", original);
+                AddFile(zip, "second.bin", "second original file");
+            });
+            var job = Guid.NewGuid();
+            var stage = TransferPartialPathPolicy.Create(destination, job);
+            var altered = Path.Combine(stage, "first.txt");
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var replaced = false;
+                var result = new ZipPackageStagingExtractor().ExtractApprovedZip(
+                    source, cache, destination, job, cancellation.Token,
+                    (copied, total) =>
+                    {
+                        if (replaced || copied <= Encoding.UTF8.GetByteCount(original))
+                            return;
+                        replaced = true;
+                        File.WriteAllText(altered, "valuable user replacement");
+                        cancellation.Cancel();
+                    });
+                Assert.That(replaced, Is.True,
+                    "The earlier entry must be closed before replacement.");
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(result.Cancelled, Is.False,
+                    "A modified staged file requires manual inspection.");
+                Assert.That(Directory.Exists(destination), Is.False);
+                Assert.That(File.ReadAllText(altered),
+                    Is.EqualTo("valuable user replacement"));
+                Assert.That(Directory.Exists(stage), Is.True,
+                    "Rollback must preserve a modified staged file.");
+                Assert.That(File.Exists(source), Is.True);
+            }
+        }
+
+        [Test]
         public void CorruptedStoredZipMember_FailsCrcAndLeavesNoPublishedGame()
         {
             WriteArchive(zip =>
