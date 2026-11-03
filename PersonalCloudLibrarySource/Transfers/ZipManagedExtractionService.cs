@@ -12,8 +12,9 @@ namespace PersonalCloudLibrarySource
     {
         internal ZipManagedExtractionPlan(ZipPackageReview review,
             string archivePath, string cacheRoot, string destination,
-            string receiptKey)
+            string gameId, string receiptKey)
         {
+            GameId = gameId;
             Review = review;
             ArchivePath = archivePath;
             CacheRoot = cacheRoot;
@@ -22,6 +23,7 @@ namespace PersonalCloudLibrarySource
         }
 
         internal ZipPackageReview Review { get; }
+        public string GameId { get; }
         // Provenance key is inspectable, but never permits deletion.
         public string ReceiptKey { get; }
         public string ArchivePath { get; }
@@ -76,7 +78,7 @@ namespace PersonalCloudLibrarySource
                 if (receipts.TryRead(normalizedCache, key, out existing))
                     return null;
                 return new ZipManagedExtractionPlan(reviewed, normalizedArchive,
-                    normalizedCache, destination, key);
+                    normalizedCache, destination, gameId, key);
             }
             catch (Exception ex) when (ex is ArgumentException ||
                                        ex is IOException ||
@@ -147,7 +149,7 @@ namespace PersonalCloudLibrarySource
                     if (mutableBaseline != null)
                     {
                         outcome.MutableDataBaselineRecorded = mutableBaseline.TryRecord(
-                            plan.CacheRoot, plan.ReceiptKey, plan.Destination,
+                            plan.CacheRoot, plan.GameId, plan.Destination,
                             receipts, baseline);
                     }
                 }
