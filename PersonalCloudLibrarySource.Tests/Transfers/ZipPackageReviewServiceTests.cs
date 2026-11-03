@@ -114,6 +114,43 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void ApprovedZipStaysReadLockedDuringStreamingOnWindows()
+        {
+            WriteZip("game.exe", "data.bin");
+            var service = new ZipPackageReviewService();
+            var review = service.Inspect(source, "Game");
+            Assert.That(review.PassedPreflight, Is.True, review.Reason);
+            var attempted = false;
+            var writerDenied = false;
+            var result = service.ExtractAfterExplicitChoice(review, true,
+                source, cache, destination, Guid.NewGuid(), CancellationToken.None,
+                (copied, total) =>
+                {
+                    if (attempted) return;
+                    attempted = true;
+                    try
+                    {
+                        using (var writer = new FileStream(source, FileMode.Open,
+                            FileAccess.Write, FileShare.None))
+                        {
+                            // If this succeeds, the source lock is ineffective.
+                        }
+                    }
+                    catch (IOException)
+                    {
+                        writerDenied = true;
+                    }
+                });
+
+            Assert.That(result.Succeeded, Is.True, result.Message);
+            Assert.That(attempted, Is.True);
+            Assert.That(writerDenied, Is.True,
+                "The reviewed ZIP must stay read-locked through extraction.");
+            Assert.That(File.Exists(source), Is.True);
+            Assert.That(File.Exists(Path.Combine(destination, "game.exe")), Is.True);
+        }
+
+        [Test]
         public void SourceContentChangedSinceReviewCannotBePublished()
         {
             WriteZip("game.exe");
