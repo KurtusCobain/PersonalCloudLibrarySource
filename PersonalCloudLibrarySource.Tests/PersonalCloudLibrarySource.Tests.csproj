@@ -84,6 +84,7 @@
     <Compile Include="Services\ZipGameReviewTargetPolicyTests.cs" />
     <Compile Include="Transfers\ZipPackageStagingExtractorTests.cs" />
     <Compile Include="Transfers\ZipPackageReviewServiceTests.cs" />
+    <Compile Include="Transfers\ZipManagedExtractionServiceTests.cs" />
     <Compile Include="Services\PathResolverTests.cs" />
     <Compile Include="Services\LibraryItemStateResolverTests.cs" />
     <Compile Include="Services\LibraryVerificationManifestDiagnosticsTests.cs" />
