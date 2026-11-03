@@ -16,6 +16,7 @@ namespace PersonalCloudLibrarySource
         // Paths present in the original snapshot. Never a deletion grant.
         public IReadOnlyList<string> EntryPaths { get; set; } = new string[0];
         public int IgnoredAddedSaveCount { get; set; }
+        public int IgnoredAddedDirectoryCount { get; set; }
     }
 
     public sealed class CacheTreeInventoryScanner
@@ -65,6 +66,7 @@ namespace PersonalCloudLibrarySource
             var entries = new List<string>();
             var entryPaths = new List<string>();
             var pending = new Stack<string>();
+            var visitedEntries = 0;
             pending.Push(root);
             while (pending.Count > 0)
             {
@@ -75,7 +77,10 @@ namespace PersonalCloudLibrarySource
                 foreach (var entry in Directory.EnumerateFileSystemEntries(current, "*", SearchOption.TopDirectoryOnly))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    if (entries.Count >= MaximumEntries)
+                    // Count ALL observed entries, not only ones included in
+                    // the immutable fingerprint. Ignored save directories must
+                    // never bypass the scanner's resource bound.
+                    if (++visitedEntries > MaximumEntries)
                         throw new IOException("Inventory entry limit exceeded.");
                     var attributes = File.GetAttributes(entry);
                     if ((attributes & FileAttributes.ReparsePoint) != 0)
@@ -87,8 +92,13 @@ namespace PersonalCloudLibrarySource
                         originalEntryPaths.Contains(identifier);
                     if (isDirectory)
                     {
-                        if (!original && !IsAllowedNewSaveDirectory(relative))
-                            throw new IOException("Unrecorded directory cannot be trusted.");
+                        if (!original)
+                        {
+                            if (!IsAllowedNewSaveDirectory(relative) ||
+                                result.IgnoredAddedDirectoryCount >= 256)
+                                throw new IOException("Unrecorded directory cannot be trusted.");
+                            result.IgnoredAddedDirectoryCount++;
+                        }
                         if (original)
                         {
                             result.DirectoryCount++;
