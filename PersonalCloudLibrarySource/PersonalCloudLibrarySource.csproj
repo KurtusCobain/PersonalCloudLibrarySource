@@ -107,6 +107,7 @@
     <Compile Include="Services\ZipExtractedLauncherReviewService.cs" />
     <Compile Include="Services\ZipLauncherApprovalService.cs" />
     <Compile Include="Services\ZipManagedMaintenanceService.cs" />
+    <Compile Include="Services\ZipManagedRecoveryService.cs" />
     <Compile Include="Services\ZipManagedLaunchGate.cs" />
     <Compile Include="Services\ZipMutableDataBaselineStore.cs" />
     <Compile Include="Transfers\ZipPackageStagingExtractor.cs" />
