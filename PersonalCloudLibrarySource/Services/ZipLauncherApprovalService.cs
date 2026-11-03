@@ -84,6 +84,26 @@ namespace PersonalCloudLibrarySource
         // A stale approval remains revocable after the manifest/source changes.
         // This checks only the exact game's approval identity; it does not
         // adopt, modify, or inventory files under the game cache.
+        // Absence of a parseable record is NOT proof that no approval exists.
+        // A corrupt or linked approval must block moving/repairing managed
+        // content, rather than silently clearing a launch lifecycle barrier.
+        public bool HasApprovalFootprint(string gameId, string cacheRoot)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(
+                        ZipManagedExtractionService.ReceiptKeyForGame(gameId)) ||
+                    !SafeSeparateStore(cacheRoot))
+                    return true;
+                var path = RecordPath(gameId, cacheRoot);
+                return File.Exists(path) || Directory.Exists(path);
+            }
+            catch (Exception)
+            {
+                return true;
+            }
+        }
+
         public bool HasApproval(string gameId, string cacheRoot)
         {
             try
