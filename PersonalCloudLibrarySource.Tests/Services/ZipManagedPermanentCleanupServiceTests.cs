@@ -189,6 +189,23 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void NewOriginalFolderConflictBlocksInterruptedCleanupResume()
+        {
+            var original = recover.Inspect(cache, gameId).OriginalDirectory;
+            using (var cancel = new CancellationTokenSource())
+                Assert.That(Purge(true, cancel.Token, count => cancel.Cancel())
+                    .Succeeded, Is.False);
+            Directory.CreateDirectory(original);
+            var save = Path.Combine(original, "user-progress.sav");
+            File.WriteAllText(save, "do not overwrite");
+            Assert.That(recover.Inspect(cache, gameId).State,
+                Is.EqualTo(ZipRecoveryState.Ambiguous));
+            Assert.That(Purge().Succeeded, Is.False);
+            Assert.That(File.ReadAllText(save), Is.EqualTo("do not overwrite"));
+            Assert.That(Directory.Exists(quarantine), Is.True);
+        }
+
+        [Test]
         public void ForgedOrCorruptedFileIntentBlocksResumeAndPreservesRemainingFiles()
         {
             using (var cancel = new CancellationTokenSource())
