@@ -122,6 +122,10 @@ namespace PersonalCloudLibrarySource
                     section, "LOCPLSZipLauncherReviewTitle",
                     "Review Extracted ZIP Launchers",
                     () => ReviewExtractedZipLauncherAsync(target)));
+                menuItems.Add(CreateGameMenuItem(
+                    section, "LOCPLSZipApproveTitle",
+                    "Approve Extracted ZIP Launcher",
+                    () => ApproveExtractedZipLauncherAsync(target)));
             }
 
             if (availability.CanCancelTransfer)
