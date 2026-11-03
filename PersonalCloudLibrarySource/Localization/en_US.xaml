@@ -13,6 +13,14 @@
     <sys:String x:Key="LOCPLSZipReviewLauncher">Possible launcher (not approved): {0}{1}</sys:String>
     <sys:String x:Key="LOCPLSZipReviewCompleted">Read-only ZIP inspection complete.{0}Files: {1}{0}Uncompressed bytes: {2}{0}{3}{0}{4}Contents:{0}{5}{0}{0}No files were extracted, executed, installed or removed. The extraction/install workflow still requires an explicit choice.</sys:String>
     <sys:String x:Key="LOCPLSZipReviewFailed">ZIP review could not be completed. No files were changed.</sys:String>
+    <sys:String x:Key="LOCPLSZipExtractTitle">Extract ZIP to Separate Cache Folder</sys:String>
+    <sys:String x:Key="LOCPLSZipExtractCancelMenu">Cancel ZIP Extraction</sys:String>
+    <sys:String x:Key="LOCPLSZipExtractConfirmation">Keep the current ZIP (No), or extract its verified contents to this new folder (Yes)?{0}{0}{1}{0}{0}No existing files will be overwritten. No executable or installer will run. Playnite installed state and game launch settings will NOT change. The result is a separate managed-cache extraction.</sys:String>
+    <sys:String x:Key="LOCPLSZipExtractUnavailable">Extraction is unavailable: the destination is unsafe, already occupied or already recorded. No files were changed.</sys:String>
+    <sys:String x:Key="LOCPLSZipExtractCancelled">ZIP extraction was cancelled. Existing source and game files were preserved.</sys:String>
+    <sys:String x:Key="LOCPLSZipExtractFailed">ZIP extraction was refused or failed. Inspect the archive and cache settings. Existing files were not overwritten.</sys:String>
+    <sys:String x:Key="LOCPLSZipExtractUntracked">ZIP files were extracted to {0}, but an inventory receipt could not be saved. Preserve these files and inspect them manually. The game has NOT been marked installed.</sys:String>
+    <sys:String x:Key="LOCPLSZipExtractComplete">ZIP contents extracted and recorded at:{0}{1}{0}{0}The ZIP source was preserved. Playnite installed state, launch settings and uninstall permissions were not changed. Configure a launcher explicitly before playing.</sys:String>
     <sys:String x:Key="LOCPLSOpenDashboard">Open Dashboard</sys:String>
     <sys:String x:Key="LOCPLSOpenSettings">Settings</sys:String>
     <sys:String x:Key="LOCPLSVerifyLibrary">Verify Library</sys:String>
