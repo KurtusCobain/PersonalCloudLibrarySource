@@ -175,24 +175,29 @@ namespace PersonalCloudLibrarySource
                     (File.GetAttributes(archivePath) & FileAttributes.ReparsePoint) != 0)
                     return CloudTransferExecutionResult.Failure(
                         "ZIP source is unavailable or linked.");
-                // Fail before staging if the approved file has since changed.
+                // Keep the same read-only, no-write/no-delete-shared handle
+                // open through the extractor's full read. On Windows this
+                // prevents a normal concurrent writer/replacement between
+                // final digest verification and staged extraction.
                 using (var input = new FileStream(archivePath, FileMode.Open,
                     FileAccess.Read, FileShare.Read))
-                using (var sha = SHA256.Create())
                 {
-                    var current = BitConverter.ToString(
-                        sha.ComputeHash(input)).Replace("-", "");
+                    string current;
+                    using (var sha = SHA256.Create())
+                        current = BitConverter.ToString(
+                            sha.ComputeHash(input)).Replace("-", "");
                     if (!string.Equals(current, reviewed.ArchiveSha256,
                         StringComparison.Ordinal))
                         return CloudTransferExecutionResult.Failure(
                             "ZIP changed after review; inspect it again.");
+                    cancellationToken.ThrowIfCancellationRequested();
+                    // The extractor independently revalidates central metadata,
+                    // lengths and CRC; it opens another read-shared handle while
+                    // the verified source handle is still held.
+                    return new ZipPackageStagingExtractor().ExtractApprovedZip(
+                        archivePath, cacheRoot, destinationDirectory,
+                        jobId, cancellationToken, progress);
                 }
-                cancellationToken.ThrowIfCancellationRequested();
-                // Existing extractor revalidates every ZIP entry, stages privately,
-                // checks lengths/CRC and refuses an occupied destination.
-                return new ZipPackageStagingExtractor().ExtractApprovedZip(
-                    archivePath, cacheRoot, destinationDirectory,
-                    jobId, cancellationToken, progress);
             }
             catch (OperationCanceledException)
             {
