@@ -341,6 +341,39 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void PreviouslyWrittenMemberChangedDuringLaterMemberNeverPublishes()
+        {
+            const string original = "first immutable file";
+            WriteArchive(zip =>
+            {
+                AddFile(zip, "first.txt", original);
+                AddFile(zip, "second.bin", "second file for verification boundary");
+            });
+            var job = Guid.NewGuid();
+            var stage = TransferPartialPathPolicy.Create(destination, job);
+            var changed = Path.Combine(stage, "first.txt");
+            var injected = false;
+            var result = new ZipPackageStagingExtractor().ExtractApprovedZip(
+                source, cache, destination, job, CancellationToken.None,
+                (copied, total) =>
+                {
+                    if (injected || copied <= Encoding.UTF8.GetByteCount(original))
+                        return;
+                    injected = true;
+                    File.WriteAllText(changed, "new content not from archive");
+                });
+
+            Assert.That(injected, Is.True);
+            Assert.That(result.Succeeded, Is.False,
+                "A post-write modification cannot be published as owned ZIP content.");
+            Assert.That(Directory.Exists(destination), Is.False);
+            Assert.That(File.ReadAllText(changed),
+                Is.EqualTo("new content not from archive"));
+            Assert.That(Directory.Exists(stage), Is.True,
+                "Preserve the unexpected file for inspection, not rollback deletion.");
+        }
+
+        [Test]
         public void CorruptedStoredZipMember_FailsCrcAndLeavesNoPublishedGame()
         {
             WriteArchive(zip =>
