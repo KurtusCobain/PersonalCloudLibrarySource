@@ -85,6 +85,7 @@
     <Compile Include="Services\ZipExtractedLauncherReviewServiceTests.cs" />
     <Compile Include="Services\ZipLauncherApprovalServiceTests.cs" />
     <Compile Include="Services\ZipManagedMaintenanceServiceTests.cs" />
+    <Compile Include="Services\ZipMutableDataBaselineStoreTests.cs" />
     <Compile Include="Transfers\ZipPackageStagingExtractorTests.cs" />
     <Compile Include="Transfers\ZipPackageReviewServiceTests.cs" />
     <Compile Include="Transfers\ZipManagedExtractionServiceTests.cs" />
