@@ -34,6 +34,7 @@ namespace PersonalCloudLibrarySource
         public bool Succeeded { get; internal set; }
         public bool Cancelled { get; internal set; }
         public bool ReceiptRecorded { get; internal set; }
+        public bool MutableDataBaselineRecorded { get; internal set; }
         public bool NeedsManualAttention { get; internal set; }
         public string Reason { get; internal set; } = string.Empty;
         public string Destination { get; internal set; } = string.Empty;
@@ -89,7 +90,8 @@ namespace PersonalCloudLibrarySource
         public ZipManagedExtractionResult ExecuteApproved(
             ZipManagedExtractionPlan plan, bool userConfirmedExtract,
             CacheOwnershipReceiptStore receipts, CancellationToken cancellationToken,
-            Action<long, long?> progress = null)
+            Action<long, long?> progress = null,
+            ZipMutableDataBaselineStore mutableBaseline = null)
         {
             var refused = new ZipManagedExtractionResult
             {
@@ -138,9 +140,16 @@ namespace PersonalCloudLibrarySource
                 {
                     // An inventory receipt is diagnostic provenance only; its
                     // presence must never authorize recursive uninstall.
-                    receipts.RecordCompletedWithInventory(plan.CacheRoot,
-                        plan.ReceiptKey, plan.Destination, CancellationToken.None);
+                    var baseline = receipts.RecordCompletedWithInventorySnapshot(
+                        plan.CacheRoot, plan.ReceiptKey,
+                        plan.Destination, CancellationToken.None);
                     outcome.ReceiptRecorded = true;
+                    if (mutableBaseline != null)
+                    {
+                        outcome.MutableDataBaselineRecorded = mutableBaseline.TryRecord(
+                            plan.CacheRoot, plan.ReceiptKey, plan.Destination,
+                            receipts, baseline);
+                    }
                 }
                 catch (Exception ex) when (ex is IOException ||
                                            ex is UnauthorizedAccessException ||
