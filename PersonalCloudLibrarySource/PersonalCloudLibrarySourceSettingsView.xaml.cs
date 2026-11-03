@@ -12,6 +12,36 @@ namespace PersonalCloudLibrarySource
 
         private PersonalCloudLibrarySourceSettingsV3ViewModel ViewModel => DataContext as PersonalCloudLibrarySourceSettingsV3ViewModel;
 
+        private void LoadSourceProfilesPreview_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel?.LoadSourceProfilesPreview();
+        }
+
+        private void AddSourceProfilePreview_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel?.AddSourceProfilePreview();
+        }
+
+        private void CheckSelectedSourceHealth_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel?.CheckSelectedSourceHealth();
+        }
+
+        private void SaveSourceProfilesPreview_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel?.SaveSourceProfilesPreview();
+        }
+
+        private void PreviewSelectedSourceBackup_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel?.PreviewSelectedSourceBackup();
+        }
+
+        private void RestoreSelectedSourceBackup_Click(object sender, RoutedEventArgs e)
+        {
+            ViewModel?.RestoreSelectedSourceBackup();
+        }
+
         private void BrowseLocalManifestPath_Click(object sender, RoutedEventArgs e)
         {
             ViewModel?.BrowseLocalManifestPath();
