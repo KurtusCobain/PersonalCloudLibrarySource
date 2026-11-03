@@ -216,6 +216,128 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void ExplicitRevocationRemovesOnlyApprovalAndNextImportCannotActivate()
+        {
+            Assert.That(Approve(), Is.True);
+            Assert.That(approvals.HasApproval(item.Id, cache), Is.True);
+            Assert.That(approvals.TryApply(item, settings, Game(), receipts), Is.True);
+            string reason;
+            Assert.That(approvals.TryRevoke(item.Id, cache, true, out reason),
+                Is.True, reason);
+            Assert.That(approvals.HasApproval(item.Id, cache), Is.False);
+            var reimport = Game();
+            Assert.That(approvals.TryApply(item, settings, reimport, receipts),
+                Is.False);
+            Assert.That(reimport.IsInstalled, Is.False);
+            Assert.That(File.Exists(archive), Is.True);
+            Assert.That(File.ReadAllText(Path.Combine(extracted.Destination, "Game.exe")),
+                Is.EqualTo("original executable"));
+            CacheOwnershipReceipt receipt;
+            Assert.That(receipts.TryRead(cache, extracted.ReceiptKey, out receipt),
+                Is.True, "Revoking launch approval must not erase extraction ownership.");
+        }
+
+        [Test]
+        public void MissingConsentCannotRevokeAnExistingApproval()
+        {
+            Assert.That(Approve(), Is.True);
+            string reason;
+            Assert.That(approvals.TryRevoke(item.Id, cache, false, out reason),
+                Is.False);
+            Assert.That(approvals.HasApproval(item.Id, cache), Is.True);
+            Assert.That(approvals.TryApply(item, settings, Game(), receipts), Is.True);
+        }
+
+        [Test]
+        public void StaleSourceApprovalCanStillBeRevokedWithoutSourceAccess()
+        {
+            Assert.That(Approve(), Is.True);
+            item.SourcePath = Path.Combine(root, "changed.zip");
+            Assert.That(approvals.TryApply(item, settings, Game(), receipts),
+                Is.False);
+            string reason;
+            Assert.That(approvals.TryRevoke(item.Id, cache, true, out reason),
+                Is.True, reason);
+            Assert.That(approvals.HasApproval(item.Id, cache), Is.False);
+            Assert.That(Directory.Exists(extracted.Destination), Is.True);
+        }
+
+        [Test]
+        public void WrongGameIdentityCannotRevokeAnotherGamesApproval()
+        {
+            Assert.That(Approve(), Is.True);
+            string reason;
+            Assert.That(approvals.TryRevoke("other", cache, true, out reason),
+                Is.False);
+            Assert.That(approvals.TryRevoke("../game", cache, true, out reason),
+                Is.False);
+            Assert.That(approvals.HasApproval(item.Id, cache), Is.True);
+        }
+
+        [Test]
+        public void WrongCacheRootCannotRevokeAnotherCachesApproval()
+        {
+            Assert.That(Approve(), Is.True);
+            var anotherCache = Path.Combine(root, "another-cache");
+            Directory.CreateDirectory(anotherCache);
+            string reason;
+            Assert.That(approvals.TryRevoke(item.Id, anotherCache, true, out reason),
+                Is.False);
+            Assert.That(approvals.HasApproval(item.Id, cache), Is.True);
+        }
+
+        [Test]
+        public void CorruptedApprovalIsNeverDeletedByRevocation()
+        {
+            Assert.That(Approve(), Is.True);
+            var record = Directory.GetFiles(Path.Combine(root, "approvals"),
+                "*.json").Single();
+            File.WriteAllText(record, "{ invalid json");
+            string reason;
+            Assert.That(approvals.TryRevoke(item.Id, cache, true, out reason),
+                Is.False);
+            Assert.That(File.ReadAllText(record), Is.EqualTo("{ invalid json"));
+            Assert.That(File.Exists(Path.Combine(extracted.Destination, "Game.exe")),
+                Is.True);
+        }
+
+        [Test]
+        public void ReapprovalAfterExplicitRevocationIsAllowed()
+        {
+            Assert.That(Approve(), Is.True);
+            string reason;
+            Assert.That(approvals.TryRevoke(item.Id, cache, true, out reason),
+                Is.True, reason);
+            Assert.That(Approve(), Is.True);
+            Assert.That(approvals.TryApply(item, settings, Game(), receipts), Is.True);
+        }
+
+        [Test]
+        public void RevocationLeavesUserCreatedSaveInExtractedDirectory()
+        {
+            Assert.That(Approve(), Is.True);
+            var save = Path.Combine(extracted.Destination, "progress.sav");
+            File.WriteAllText(save, "keep this");
+            string reason;
+            Assert.That(approvals.TryRevoke(item.Id, cache, true, out reason),
+                Is.True, reason);
+            Assert.That(File.ReadAllText(save), Is.EqualTo("keep this"));
+            Assert.That(File.Exists(archive), Is.True);
+        }
+
+        [Test]
+        public void StoreUnderCacheCannotRevokeOrDeleteAnything()
+        {
+            Assert.That(Approve(), Is.True);
+            var invalid = new ZipLauncherApprovalService(
+                Path.Combine(cache, "approval-files"));
+            string reason;
+            Assert.That(invalid.TryRevoke(item.Id, cache, true, out reason),
+                Is.False);
+            Assert.That(approvals.HasApproval(item.Id, cache), Is.True);
+        }
+
+        [Test]
         public void ApprovalStoreInsideCacheCannotActivateOrWrite()
         {
             var invalid = new ZipLauncherApprovalService(
