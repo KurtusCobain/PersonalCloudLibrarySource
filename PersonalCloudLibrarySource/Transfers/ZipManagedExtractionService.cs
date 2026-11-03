@@ -22,7 +22,8 @@ namespace PersonalCloudLibrarySource
         }
 
         internal ZipPackageReview Review { get; }
-        internal string ReceiptKey { get; }
+        // Provenance key is inspectable, but never permits deletion.
+        public string ReceiptKey { get; }
         public string ArchivePath { get; }
         public string CacheRoot { get; }
         public string Destination { get; }
