@@ -113,6 +113,14 @@ namespace PersonalCloudLibrarySource
                 }
                 if (File.Exists(purgeFootprint) || Directory.Exists(purgeFootprint))
                 {
+                    if (File.Exists(original) || Directory.Exists(original) ||
+                        File.Exists(recovery) ||
+                        File.Exists(journal + ".restored") ||
+                        Directory.Exists(journal + ".restored"))
+                    {
+                        result.Reason = "Cleanup journal conflicts with an original or unexpected recovery location. Preserve both paths.";
+                        return result;
+                    }
                     result.State = ZipRecoveryState.CleanupPending;
                     result.Reason = "Permanent cleanup has a durable progress manifest; use the cleanup action to resume or inspect it.";
                     return result;
