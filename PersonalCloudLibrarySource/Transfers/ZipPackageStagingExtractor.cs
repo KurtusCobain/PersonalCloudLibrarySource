@@ -220,6 +220,9 @@ namespace PersonalCloudLibrarySource
                         throw new InvalidDataException("Extracted byte totals failed verification.");
                     if (!VerifyExactStagingTree(staging, records, cancellationToken))
                         throw new IOException("Private ZIP staging contains unrecognized or linked content.");
+                    if (!VerifyOriginalStagedBytes(cacheRoot, createdFiles,
+                        cancellationToken))
+                        throw new IOException("A staged ZIP file changed before publication.");
                     if (File.Exists(destination) || Directory.Exists(destination) ||
                         !policy.Authorize(cacheRoot, destination, false).Allowed ||
                         !policy.Authorize(cacheRoot, staging, false).Allowed)
@@ -255,6 +258,36 @@ namespace PersonalCloudLibrarySource
         // preflighted member paths and their implicit parent directories.
         // This prevents unexpected files injected during extraction from
         // becoming part of the published game and its ownership inventory.
+        // Archive CRC verifies the stream at write time, but another process
+        // could change a closed staged file before final publication. Require
+        // every job-owned file to retain its exact bytes at the publication
+        // boundary. This is best-effort against concurrent same-user writers,
+        // not an OS filesystem transaction or sandbox.
+        private static bool VerifyOriginalStagedBytes(string cacheRoot,
+            IEnumerable<CreatedFileRecord> createdFiles, CancellationToken token)
+        {
+            var policy = new SafeCacheDeletionPolicy();
+            foreach (var record in createdFiles)
+            {
+                token.ThrowIfCancellationRequested();
+                if (record.WrittenSha256 == null ||
+                    !policy.Authorize(cacheRoot, record.Path, false).Allowed ||
+                    !File.Exists(record.Path) ||
+                    (File.GetAttributes(record.Path) & FileAttributes.ReparsePoint) != 0)
+                    return false;
+                using (var input = new FileStream(record.Path, FileMode.Open,
+                    FileAccess.Read, FileShare.Read))
+                using (var digest = SHA256.Create())
+                {
+                    if (input.Length != record.WrittenBytes ||
+                        !digest.ComputeHash(input).SequenceEqual(
+                            record.WrittenSha256))
+                        return false;
+                }
+            }
+            return true;
+        }
+
         private static bool VerifyExactStagingTree(string staging,
             IList<ArchiveEntryObservation> records, CancellationToken token)
         {
