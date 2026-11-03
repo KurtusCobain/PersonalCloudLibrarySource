@@ -337,6 +337,180 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(approvals.HasApproval(item.Id, cache), Is.True);
         }
 
+        private Guid guardedPluginId = Guid.NewGuid();
+
+        private Playnite.SDK.Models.Game GuardedGame()
+        {
+            return new Playnite.SDK.Models.Game("Guarded Game")
+            {
+                PluginId = guardedPluginId, GameId = item.Id
+            };
+        }
+
+        private GameAction ApprovedPlayAction()
+        {
+            Assert.That(Approve(), Is.True);
+            var metadata = Game();
+            Assert.That(approvals.TryApply(item, settings, metadata, receipts), Is.True);
+            return metadata.GameActions.Single();
+        }
+
+        private ZipManagedLaunchDecision CheckLaunch(GameAction selected,
+            Playnite.SDK.Models.Game game = null)
+        {
+            return new ZipManagedLaunchGate().Evaluate(
+                guardedPluginId, game ?? GuardedGame(), selected,
+                item, settings, receipts, approvals);
+        }
+
+        [Test]
+        public void ExactApprovedLauncherIsVerifiedAgainJustBeforePlay()
+        {
+            var play = ApprovedPlayAction();
+            var outcome = CheckLaunch(play);
+            Assert.That(outcome.Applies, Is.True);
+            Assert.That(outcome.Allowed, Is.True, outcome.Reason);
+            Assert.That(File.Exists(play.Path), Is.True);
+        }
+
+        [Test]
+        public void AManagedZipActionWithoutApprovalIsBlockedAtLaunchTime()
+        {
+            var play = new GameAction
+            {
+                Name = "Play", Type = GameActionType.File,
+                Path = Path.Combine(extracted.Destination, "Game.exe"),
+                WorkingDir = extracted.Destination,
+                IsPlayAction = true
+            };
+            var outcome = CheckLaunch(play);
+            Assert.That(outcome.Applies, Is.True);
+            Assert.That(outcome.Allowed, Is.False);
+        }
+
+        [Test]
+        public void RevokedApprovalBlocksPreviouslyImportedStalePlayAction()
+        {
+            var oldAction = ApprovedPlayAction();
+            string reason;
+            Assert.That(approvals.TryRevoke(item.Id, cache, true, out reason),
+                Is.True, reason);
+            var result = CheckLaunch(oldAction);
+            Assert.That(result.Applies, Is.True);
+            Assert.That(result.Allowed, Is.False);
+        }
+
+        [Test]
+        public void ChangedExecutableBytesBlockPreviouslyApprovedLaunch()
+        {
+            var play = ApprovedPlayAction();
+            File.WriteAllText(play.Path, "new executable contents");
+            Assert.That(CheckLaunch(play).Allowed, Is.False);
+        }
+
+        [Test]
+        public void UserSaveAddedAfterImportBlocksStaleLaunchWithoutDeletion()
+        {
+            var play = ApprovedPlayAction();
+            var save = Path.Combine(extracted.Destination, "progress.sav");
+            File.WriteAllText(save, "irreplaceable");
+            var result = CheckLaunch(play);
+            Assert.That(result.Applies, Is.True);
+            Assert.That(result.Allowed, Is.False);
+            Assert.That(File.ReadAllText(save), Is.EqualTo("irreplaceable"));
+        }
+
+        [Test]
+        public void ChangedSourceBindingBlocksStalePlayAction()
+        {
+            var play = ApprovedPlayAction();
+            item.SourcePath = Path.Combine(root, "different.zip");
+            Assert.That(CheckLaunch(play).Allowed, Is.False);
+            Assert.That(File.Exists(play.Path), Is.True);
+        }
+
+        [Test]
+        public void ChangedCacheRootStillRecognizesAndBlocksStaleManagedPath()
+        {
+            var play = ApprovedPlayAction();
+            settings.LocalCacheFolder = Path.Combine(root, "other-cache");
+            Directory.CreateDirectory(settings.LocalCacheFolder);
+            var result = CheckLaunch(play);
+            Assert.That(result.Applies, Is.True);
+            Assert.That(result.Allowed, Is.False);
+        }
+
+        [Test]
+        public void TamperedArgumentsOrWorkingDirectoryBlockManagedPlay()
+        {
+            var approved = ApprovedPlayAction();
+            var altered = new GameAction
+            {
+                Name = "Play", Type = GameActionType.File, IsPlayAction = true,
+                Path = approved.Path, WorkingDir = approved.WorkingDir,
+                Arguments = "--unexpected"
+            };
+            Assert.That(CheckLaunch(altered).Allowed, Is.False);
+            altered.Arguments = string.Empty;
+            altered.WorkingDir = root;
+            Assert.That(CheckLaunch(altered).Allowed, Is.False);
+        }
+
+        [Test]
+        public void UnrelatedGamePlayActionIsNotIntercepted()
+        {
+            var approved = ApprovedPlayAction();
+            var otherAction = new GameAction
+            {
+                Name = "Other", Type = GameActionType.File, IsPlayAction = true,
+                Path = Path.Combine(root, "unrelated.exe"),
+                WorkingDir = root
+            };
+            var result = CheckLaunch(otherAction);
+            Assert.That(result.Applies, Is.False);
+            Assert.That(result.Allowed, Is.False);
+            var foreign = GuardedGame();
+            foreign.PluginId = Guid.NewGuid();
+            var foreignResult = CheckLaunch(approved, foreign);
+            Assert.That(foreignResult.Applies, Is.False);
+        }
+
+        [Test]
+        public void ScriptsTargetingManagedExecutableAreNeverApproved()
+        {
+            var approved = ApprovedPlayAction();
+            var script = new GameAction
+            {
+                Name = "Script", Type = GameActionType.Script,
+                Path = approved.Path, WorkingDir = approved.WorkingDir,
+                IsPlayAction = true
+            };
+            var decision = CheckLaunch(script);
+            Assert.That(decision.Applies, Is.True);
+            Assert.That(decision.Allowed, Is.False);
+        }
+
+        [Test]
+        public void DisabledProviderBlocksPreviouslyApprovedManagedPlay()
+        {
+            var approved = ApprovedPlayAction();
+            settings.Enabled = false;
+            var result = CheckLaunch(approved);
+            Assert.That(result.Applies, Is.True);
+            Assert.That(result.Allowed, Is.False);
+        }
+
+        [Test]
+        public void MissingCurrentManifestItemBlocksManagedPlay()
+        {
+            var approved = ApprovedPlayAction();
+            var result = new ZipManagedLaunchGate().Evaluate(
+                guardedPluginId, GuardedGame(), approved,
+                null, settings, receipts, approvals);
+            Assert.That(result.Applies, Is.True);
+            Assert.That(result.Allowed, Is.False);
+        }
+
         [Test]
         public void ApprovalStoreInsideCacheCannotActivateOrWrite()
         {
