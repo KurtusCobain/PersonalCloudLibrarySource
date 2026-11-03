@@ -168,6 +168,46 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
                 "data.bin")), Is.EqualTo("unix separators"));
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void UnexpectedContentInjectedIntoPrivateStageIsNeverPublished(bool folder)
+        {
+            WriteArchive(zip =>
+            {
+                AddFile(zip, "game.exe", "legitimate game executable");
+                AddFile(zip, "data/info.txt", "legitimate game data");
+            });
+            var job = Guid.NewGuid();
+            var stage = TransferPartialPathPolicy.Create(destination, job);
+            var unexpected = Path.Combine(stage, folder
+                ? "unexpected-folder" : "unexpected-save.sav");
+            var injected = false;
+            var result = new ZipPackageStagingExtractor().ExtractApprovedZip(
+                source, cache, destination, job, CancellationToken.None,
+                (bytes, total) =>
+                {
+                    if (injected) return;
+                    injected = true;
+                    if (folder)
+                        Directory.CreateDirectory(unexpected);
+                    else
+                        File.WriteAllText(unexpected, "unowned user progress");
+                });
+
+            Assert.That(injected, Is.True);
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(Directory.Exists(destination), Is.False,
+                "A foreign staging member must block publication.");
+            Assert.That(Directory.Exists(stage), Is.True,
+                "Refuse destructive cleanup of unrelated staging content.");
+            if (folder)
+                Assert.That(Directory.Exists(unexpected), Is.True);
+            else
+                Assert.That(File.ReadAllText(unexpected),
+                    Is.EqualTo("unowned user progress"));
+            Assert.That(File.Exists(source), Is.True);
+        }
+
         [Test]
         public void FileAsParentConflictIsRejectedBeforeWriting()
         {
