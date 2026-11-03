@@ -67,6 +67,20 @@ jobs:
           & $exe $archive
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+          # This is an upstream test archive used strictly by CI, not a
+          # downloadable game or an embedded production dependency. Failure
+          # to retrieve/parse it fails this RAR compatibility gate.
+          $rarFixture = Join-Path $fixture 'sample-rar5.rar'
+          $rarUrl = 'https://raw.githubusercontent.com/adamhathcock/sharpcompress/0.50.3/tests/TestArchives/Rar5.rar'
+          Invoke-WebRequest -Uri $rarUrl -OutFile $rarFixture -MaximumRedirection 3
+          if ((Get-Item -LiteralPath $rarFixture).Length -gt 2097152) {
+            throw 'RAR fixture exceeds CI-only test size bound.'
+          }
+          & $exe $rarFixture
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Write-Host ('RAR5 upstream fixture SHA256: ' +
+            (Get-FileHash -LiteralPath $rarFixture -Algorithm SHA256).Hash)
+
           $assemblyFiles = @(Get-ChildItem -LiteralPath $built -Filter '*.dll' -File |
             Select-Object -ExpandProperty Name | Sort-Object)
           Write-Host ('Runtime dependency DLLs: ' + ($assemblyFiles -join ', '))
