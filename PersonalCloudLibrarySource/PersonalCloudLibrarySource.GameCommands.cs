@@ -128,6 +128,21 @@ namespace PersonalCloudLibrarySource
                     () => ApproveExtractedZipLauncherAsync(target)));
             }
 
+            // Revoke remains available for a recorded approval even when the
+            // manifest source changed or the extracted files no longer match.
+            // It changes only plugin approval metadata, not game files.
+            var currentSettings = settings.GetRuntimeSettingsSnapshot();
+            if (target.Item != null && currentSettings != null &&
+                new ZipLauncherApprovalService(Path.Combine(
+                    GetPluginDataDirectory(), "zip-launcher-approvals"))
+                    .HasApproval(target.Item.Id, currentSettings.LocalCacheFolder))
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section, "LOCPLSZipRevokeTitle",
+                    "Revoke ZIP Launcher Approval",
+                    () => RevokeZipLauncherApproval(target)));
+            }
+
             if (availability.CanCancelTransfer)
             {
                 menuItems.Add(CreateGameMenuItem(
