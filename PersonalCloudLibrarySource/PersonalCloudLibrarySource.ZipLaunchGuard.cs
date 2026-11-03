@@ -1,6 +1,7 @@
 using Playnite.SDK.Events;
 using System;
 using System.IO;
+using System.Threading;
 using System.Windows;
 
 namespace PersonalCloudLibrarySource
@@ -31,8 +32,19 @@ namespace PersonalCloudLibrarySource
                     GetPluginDataDirectory(), "ownership-receipts"));
                 var approvals = new ZipLauncherApprovalService(Path.Combine(
                     GetPluginDataDirectory(), "zip-launcher-approvals"));
-                var decision = gate.Evaluate(Id, args.Game, args.SourceAction,
-                    item, snapshot, receipts, approvals);
+                var baseline = new ZipMutableDataBaselineStore(Path.Combine(
+                    GetPluginDataDirectory(), "zip-mutable-data-baselines"));
+                ZipManagedLaunchDecision decision;
+                // Enforce a real bounded synchronous verification window.
+                // A timeout denies this launch; it never skips integrity
+                // checks or permits execution on a cache-only shortcut.
+                using (var verification = new CancellationTokenSource())
+                {
+                    verification.CancelAfter(TimeSpan.FromSeconds(5));
+                    decision = gate.Evaluate(Id, args.Game, args.SourceAction,
+                        item, snapshot, receipts, approvals,
+                        verification.Token, baseline);
+                }
                 if (decision.Applies && decision.Allowed)
                     return;
 
