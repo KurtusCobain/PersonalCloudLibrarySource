@@ -77,6 +77,7 @@
     <Compile Include="PersonalCloudLibrarySource.GameCommands.cs" />
     <Compile Include="PersonalCloudLibrarySource.ZipPackages.cs" />
     <Compile Include="PersonalCloudLibrarySource.ZipLaunchGuard.cs" />
+    <Compile Include="PersonalCloudLibrarySource.ZipRecovery.cs" />
     <Compile Include="PersonalCloudLibrarySource.Navigation.cs" />
     <Compile Include="PersonalCloudLibrarySource.Transfers.cs" />
     <Compile Include="PersonalCloudLibrarySourceClient.cs" />
