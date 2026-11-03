@@ -390,6 +390,85 @@ namespace PersonalCloudLibrarySource
             }
         }
 
+        private void RevokeZipLauncherApproval(GameCommandTarget selected)
+        {
+            var title = PclsResources.Get("LOCPLSZipRevokeTitle",
+                "Revoke ZIP Launcher Approval");
+            try
+            {
+                if (selected?.Game == null || selected.Game.PluginId != Id)
+                    return;
+                // Re-resolve the currently validated manifest identity rather
+                // than trusting a stale context-menu snapshot.
+                var snapshot = settings.GetRuntimeSettingsSnapshot();
+                if (snapshot == null || !snapshot.Enabled)
+                    return;
+                var manifest = LoadValidatedManifest(snapshot);
+                var target = gameCommandService.ResolveTargets(
+                    new[] { selected.Game }, manifest.Items, snapshot, Id).Single();
+                if (target.Item == null ||
+                    !string.Equals(target.Item.Id, selected.Game.GameId,
+                        StringComparison.Ordinal))
+                    return;
+
+                var approvals = new ZipLauncherApprovalService(Path.Combine(
+                    GetPluginDataDirectory(), "zip-launcher-approvals"));
+                if (!approvals.HasApproval(target.Item.Id,
+                    snapshot.LocalCacheFolder))
+                {
+                    playniteApi.Dialogs.ShowMessage(
+                        PclsResources.Get("LOCPLSZipRevokeUnavailable",
+                            "No valid ZIP launcher approval is recorded for this game."),
+                        title);
+                    return;
+                }
+
+                var confirmation = playniteApi.Dialogs.ShowMessage(
+                    PclsResources.Get("LOCPLSZipRevokeConfirm",
+                        "Revoke this ZIP launcher approval? Yes revokes it; No keeps it. The original ZIP, extracted game files, saves, and inventory receipt will remain untouched. Update Game Library afterward to refresh Playnite. An existing Play action may remain visible until it is refreshed; do not use it in the meantime."),
+                    title, MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                if (confirmation != MessageBoxResult.Yes)
+                    return;
+
+                // A config change during the confirmation invalidates the
+                // selected cache identity. Re-read before removing the record.
+                var updatedSettings = settings.GetRuntimeSettingsSnapshot();
+                if (updatedSettings == null || !updatedSettings.Enabled ||
+                    !string.Equals(PathBoundary.Normalize(
+                            updatedSettings.LocalCacheFolder),
+                        PathBoundary.Normalize(snapshot.LocalCacheFolder),
+                        StringComparison.OrdinalIgnoreCase))
+                    return;
+                var updatedManifest = LoadValidatedManifest(updatedSettings);
+                var updated = gameCommandService.ResolveTargets(
+                    new[] { selected.Game }, updatedManifest.Items,
+                    updatedSettings, Id).Single();
+                if (updated.Item == null ||
+                    !string.Equals(updated.Item.Id, target.Item.Id,
+                        StringComparison.Ordinal))
+                    return;
+
+                string reason;
+                var success = approvals.TryRevoke(updated.Item.Id,
+                    updatedSettings.LocalCacheFolder, true, out reason);
+                playniteApi.Dialogs.ShowMessage(
+                    success
+                        ? PclsResources.Get("LOCPLSZipRevokeCompleted",
+                            "ZIP launcher approval revoked. The original ZIP, extracted files, saves and receipt were preserved. Update Game Library to refresh Playnite's installed state and Play action. To select a different launcher, explicitly approve another candidate afterward.")
+                        : PclsResources.Get("LOCPLSZipRevokeFailed",
+                            "ZIP launcher approval could not be safely revoked. No game files were changed."),
+                    title);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn(ex, "PCLS could not revoke ZIP launcher approval.");
+                playniteApi.Dialogs.ShowMessage(
+                    PclsResources.Get("LOCPLSZipRevokeFailed",
+                        "ZIP launcher approval could not be safely revoked. No game files were changed."),
+                    title);
+            }
+        }
+
         private void CancelZipExtraction(Guid gameId)
         {
             CancellationTokenSource cancellation;
