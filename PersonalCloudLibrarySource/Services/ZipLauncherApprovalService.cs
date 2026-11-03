@@ -269,13 +269,20 @@ namespace PersonalCloudLibrarySource
                 string.IsNullOrWhiteSpace(
                     ZipManagedExtractionService.ReceiptKeyForGame(item.Id)))
                 return false;
-            var source = PersonalCloudLibrarySource.GetItemSourcePath(item) ?? "";
-            return string.Equals(Path.GetExtension(source.Replace('\\', '/')),
-                ".zip", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(Path.GetExtension(item.CachePath ?? ""),
+            try
+            {
+                var source = PersonalCloudLibrarySource.GetItemSourcePath(item) ?? "";
+                return string.Equals(Path.GetExtension(source.Replace('\\', '/')),
                     ".zip", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(Path.GetExtension(item.LocalPath ?? ""),
-                    ".zip", StringComparison.OrdinalIgnoreCase);
+                    string.Equals(Path.GetExtension(item.CachePath ?? ""),
+                        ".zip", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(Path.GetExtension(item.LocalPath ?? ""),
+                        ".zip", StringComparison.OrdinalIgnoreCase);
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
         }
 
         private static string SourceBinding(PersonalCloudLibraryItem item,
