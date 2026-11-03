@@ -192,8 +192,11 @@ namespace PersonalCloudLibrarySource
                     cancellationToken.ThrowIfCancellationRequested();
                     if (copiedTotal != inspected.TotalUncompressedBytes)
                         throw new InvalidDataException("Extracted byte totals failed verification.");
+                    if (!VerifyExactStagingTree(staging, records, cancellationToken))
+                        throw new IOException("Private ZIP staging contains unrecognized or linked content.");
                     if (File.Exists(destination) || Directory.Exists(destination) ||
-                        !policy.Authorize(cacheRoot, destination, false).Allowed)
+                        !policy.Authorize(cacheRoot, destination, false).Allowed ||
+                        !policy.Authorize(cacheRoot, staging, false).Allowed)
                         throw new IOException("Destination changed before publishing the staged game.");
 
                     cancellationToken.ThrowIfCancellationRequested();
@@ -220,6 +223,72 @@ namespace PersonalCloudLibrarySource
                     "ZIP extraction failed: " + ex.Message +
                     (cleaned ? "" : " Private staging needs manual inspection."), ex);
             }
+        }
+
+        // Verify that the completed private stage contains exactly the
+        // preflighted member paths and their implicit parent directories.
+        // This prevents unexpected files injected during extraction from
+        // becoming part of the published game and its ownership inventory.
+        private static bool VerifyExactStagingTree(string staging,
+            IList<ArchiveEntryObservation> records, CancellationToken token)
+        {
+            if (!Directory.Exists(staging) ||
+                (File.GetAttributes(staging) & FileAttributes.ReparsePoint) != 0)
+                return false;
+
+            var expectedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var expectedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var record in records)
+            {
+                token.ThrowIfCancellationRequested();
+                var relative = record.EntryPath.Replace('\\', '/').TrimEnd('/');
+                var parts = relative.Split('/');
+                for (var i = 1; i < parts.Length; i++)
+                    expectedDirs.Add(string.Join("/", parts.Take(i)));
+                if (record.IsDirectory)
+                    expectedDirs.Add(relative);
+                else
+                    expectedFiles.Add(relative);
+            }
+
+            var actualFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var actualDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var pending = new Stack<string>();
+            pending.Push(staging);
+            var count = 0;
+            while (pending.Count > 0)
+            {
+                token.ThrowIfCancellationRequested();
+                var parent = pending.Pop();
+                if ((File.GetAttributes(parent) & FileAttributes.ReparsePoint) != 0)
+                    return false;
+                foreach (var entry in Directory.EnumerateFileSystemEntries(parent))
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (++count > ArchiveInspectionPolicy.MaxEntries * 2 ||
+                        !PathBoundary.IsContained(staging, entry))
+                        return false;
+                    var attrs = File.GetAttributes(entry);
+                    if ((attrs & FileAttributes.ReparsePoint) != 0)
+                        return false;
+                    var relative = entry.Substring(staging.Length)
+                        .TrimStart(Path.DirectorySeparatorChar,
+                            Path.AltDirectorySeparatorChar)
+                        .Replace('\\', '/');
+                    if ((attrs & FileAttributes.Directory) != 0)
+                    {
+                        if (!expectedDirs.Contains(relative) ||
+                            !actualDirs.Add(relative))
+                            return false;
+                        pending.Push(entry);
+                    }
+                    else if (!expectedFiles.Contains(relative) ||
+                             !actualFiles.Add(relative))
+                        return false;
+                }
+            }
+            return expectedFiles.SetEquals(actualFiles) &&
+                expectedDirs.SetEquals(actualDirs);
         }
 
         private static uint[] BuildCrc32Table()
@@ -252,6 +321,11 @@ namespace PersonalCloudLibrarySource
                 !PathBoundary.IsContained(staging, full))
                 throw new IOException("Archive attempted to create a directory outside staging.");
 
+            // Check the staging root again. A directory can be swapped for
+            // a junction by another process after our initial CreateDirectory.
+            if (!Directory.Exists(staging) ||
+                (File.GetAttributes(staging) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Private staging root is missing or linked.");
             if (string.Equals(staging, full, StringComparison.OrdinalIgnoreCase))
                 return;
             var relative = full.Substring(staging.Length)
