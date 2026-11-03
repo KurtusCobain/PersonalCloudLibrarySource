@@ -231,6 +231,164 @@ namespace PersonalCloudLibrarySource
             }
         }
 
+        private void ApplyExplicitZipLauncherApprovals(
+            IReadOnlyList<GameMetadata> games,
+            IReadOnlyList<PersonalCloudLibraryItem> validItems,
+            PersonalCloudLibrarySourceSettings runtimeSettings)
+        {
+            try
+            {
+                if (games == null || validItems == null || runtimeSettings == null ||
+                    !runtimeSettings.Enabled)
+                    return;
+                var storePath = Path.Combine(GetPluginDataDirectory(),
+                    "zip-launcher-approvals");
+                if (!Directory.Exists(storePath)) return;
+                var service = new ZipLauncherApprovalService(storePath);
+                var approvedIds = service.ApprovedGameIds();
+                if (approvedIds.Count == 0) return;
+                var gameById = games.Where(g => g != null &&
+                    !string.IsNullOrWhiteSpace(g.GameId))
+                    .GroupBy(g => g.GameId, StringComparer.Ordinal)
+                    .ToDictionary(g => g.Key, g => g.First(), StringComparer.Ordinal);
+                var itemById = validItems.Where(i => i != null &&
+                    !string.IsNullOrWhiteSpace(i.Id))
+                    .GroupBy(i => i.Id, StringComparer.Ordinal)
+                    .ToDictionary(i => i.Key, i => i.First(), StringComparer.Ordinal);
+                var receiptStore = new CacheOwnershipReceiptStore(
+                    Path.Combine(GetPluginDataDirectory(), "ownership-receipts"));
+                var activated = 0;
+                foreach (var id in approvedIds)
+                {
+                    GameMetadata metadata;
+                    PersonalCloudLibraryItem item;
+                    if (!gameById.TryGetValue(id, out metadata) ||
+                        !itemById.TryGetValue(id, out item))
+                        continue;
+                    if (service.TryApply(item, runtimeSettings, metadata,
+                        receiptStore))
+                        activated++;
+                }
+                if (activated > 0)
+                    logger.Info("PCLS activated " + activated +
+                        " explicitly approved managed ZIP launcher(s) during import.");
+            }
+            catch (Exception ex)
+            {
+                // A malformed approval never converts a successful manifest
+                // import into a destructive partial library result.
+                logger.Warn(ex, "PCLS could not apply ZIP launcher approvals.");
+            }
+        }
+
+        private async void ApproveExtractedZipLauncherAsync(GameCommandTarget selected)
+        {
+            var title = PclsResources.Get("LOCPLSZipApproveTitle",
+                "Approve Extracted ZIP Launcher");
+            try
+            {
+                if (selected?.Game == null || selected.Game.PluginId != Id)
+                    return;
+                var snapshot = settings.GetRuntimeSettingsSnapshot();
+                if (snapshot == null || !snapshot.Enabled) return;
+                var manifest = LoadValidatedManifest(snapshot);
+                var current = gameCommandService.ResolveTargets(
+                    new[] { selected.Game }, manifest.Items, snapshot, Id).Single();
+                if (current.Item == null || !string.Equals(current.Item.Id,
+                    selected.Game.GameId, StringComparison.Ordinal))
+                    return;
+
+                var receipts = new CacheOwnershipReceiptStore(Path.Combine(
+                    GetPluginDataDirectory(), "ownership-receipts"));
+                var reviewer = new ZipExtractedLauncherReviewService();
+                var inspected = await Task.Run(() => reviewer.Inspect(
+                    snapshot.LocalCacheFolder, current.Item.Id,
+                    current.Item.Title, receipts));
+                if (!inspected.InventoryVerified)
+                {
+                    playniteApi.Dialogs.ShowMessage(
+                        PclsResources.Get("LOCPLSZipLauncherReviewRefused",
+                            "Extracted files or their ownership inventory have changed. No launcher is approved. Review the files manually."),
+                        title);
+                    return;
+                }
+                var candidates = inspected.Launchers.Candidates
+                    .Where(c => c.Kind != LauncherCandidateKind.InstallerOrHelper &&
+                        string.Equals(Path.GetExtension(c.RelativePath), ".exe",
+                            StringComparison.OrdinalIgnoreCase))
+                    .Take(6).ToList();
+                if (candidates.Count == 0)
+                {
+                    playniteApi.Dialogs.ShowMessage(
+                        PclsResources.Get("LOCPLSZipApproveNoCandidates",
+                            "No eligible game executables were found. Installers, helpers and scripts cannot be approved here."),
+                        title);
+                    return;
+                }
+
+                foreach (var choice in candidates)
+                {
+                    // Yes approves this exact path; No examines the next;
+                    // Cancel quits with no writes. The dialog does NOT execute it.
+                    var decision = playniteApi.Dialogs.ShowMessage(
+                        PclsResources.Format("LOCPLSZipApproveChoice",
+                            "Approve this extracted game executable?{0}{0}{1}{0}{0}Yes: approve this file; No: next candidate; Cancel: stop.{0}No executable will run. After approval, Update Game Library to enable Playnite's Play action, provided the source and extracted files still match.",
+                            Environment.NewLine, choice.RelativePath),
+                        title, MessageBoxButton.YesNoCancel, MessageBoxImage.Question);
+                    if (decision == MessageBoxResult.Cancel) return;
+                    if (decision != MessageBoxResult.Yes) continue;
+
+                    // Re-resolve after user interaction. Never persist an
+                    // approval for a changed source or cache configuration.
+                    var latest = settings.GetRuntimeSettingsSnapshot();
+                    if (latest == null || !latest.Enabled ||
+                        !string.Equals(PathBoundary.Normalize(snapshot.LocalCacheFolder),
+                            PathBoundary.Normalize(latest.LocalCacheFolder),
+                            StringComparison.OrdinalIgnoreCase) ||
+                        !string.Equals(PersonalCloudLibrarySource.GetProviderType(snapshot),
+                            PersonalCloudLibrarySource.GetProviderType(latest),
+                            StringComparison.OrdinalIgnoreCase))
+                        return;
+                    var latestManifest = LoadValidatedManifest(latest);
+                    var updated = gameCommandService.ResolveTargets(
+                        new[] { selected.Game }, latestManifest.Items, latest, Id).Single();
+                    if (updated.Item == null ||
+                        !string.Equals(updated.Item.Id, current.Item.Id,
+                            StringComparison.Ordinal) ||
+                        !string.Equals(GetItemSourcePath(updated.Item),
+                            GetItemSourcePath(current.Item), StringComparison.Ordinal) ||
+                        !string.Equals(updated.Item.CachePath,
+                            current.Item.CachePath, StringComparison.Ordinal))
+                        return;
+
+                    var service = new ZipLauncherApprovalService(Path.Combine(
+                        GetPluginDataDirectory(), "zip-launcher-approvals"));
+                    var success = await Task.Run(() =>
+                    {
+                        string reason;
+                        return service.TryApprove(updated.Item, latest,
+                            choice.RelativePath, receipts, true,
+                            CancellationToken.None, out reason);
+                    });
+                    playniteApi.Dialogs.ShowMessage(success
+                        ? PclsResources.Get("LOCPLSZipApproveSuccess",
+                            "Launcher approval saved. Use Update Game Library to refresh Playnite's Play action. Files were not executed or modified.")
+                        : PclsResources.Get("LOCPLSZipApproveFailed",
+                            "Launcher approval was not saved. Source, inventory or approval state may have changed. No files were executed or modified."),
+                        title);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.Warn(ex, "PCLS could not approve managed ZIP launcher.");
+                playniteApi.Dialogs.ShowMessage(
+                    PclsResources.Get("LOCPLSZipApproveFailed",
+                        "Launcher approval was not saved. Source, inventory or approval state may have changed. No files were executed or modified."),
+                    title);
+            }
+        }
+
         private void CancelZipExtraction(Guid gameId)
         {
             CancellationTokenSource cancellation;
