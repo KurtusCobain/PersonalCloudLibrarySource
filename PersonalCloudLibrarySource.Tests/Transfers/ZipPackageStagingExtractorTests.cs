@@ -100,7 +100,20 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [TestCase("../escape.exe")]
+        [TestCase("../../escape.exe")]
+        [TestCase("game/../../escape.exe")]
+        [TestCase(@"game\..\..\escape.exe")]
+        [TestCase(@"..\escape.exe")]
+        [TestCase("./escape.exe")]
+        [TestCase("game/./play.exe")]
+        [TestCase("game//play.exe")]
+        [TestCase("game/trailing./play.exe")]
+        [TestCase("game/trailing /play.exe")]
+        [TestCase("game/play.exe:ads")]
         [TestCase("C:/Windows/system.exe")]
+        [TestCase(@"C:\Windows\system.exe")]
+        [TestCase("/absolute.exe")]
+        [TestCase(@"\server\share\game.exe")]
         [TestCase("game/CON.txt")]
         public void MaliciousArchivePathCannotEscapeOrLeaveStaging(string unsafeName)
         {
@@ -114,6 +127,45 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(Directory.Exists(TransferPartialPathPolicy.Create(destination, job)),
                 Is.False);
             Assert.That(File.Exists(Path.Combine(root, "escape.exe")), Is.False);
+        }
+
+        [Test]
+        public void UnsafeMemberAnywhereInZipStopsAllWritesBeforePrivateStage()
+        {
+            var sentinel = Path.Combine(root, "escape.exe");
+            File.WriteAllText(sentinel, "owned by user");
+            WriteArchive(zip =>
+            {
+                AddFile(zip, "safe/good.exe", "trusted fixture");
+                AddFile(zip, "safe/../../../escape.exe", "malicious overwrite");
+            });
+            var job = Guid.NewGuid();
+            var result = new ZipPackageStagingExtractor().ExtractApprovedZip(
+                source, cache, destination, job, CancellationToken.None);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(File.ReadAllText(sentinel), Is.EqualTo("owned by user"));
+            Assert.That(Directory.Exists(destination), Is.False);
+            Assert.That(Directory.Exists(
+                TransferPartialPathPolicy.Create(destination, job)), Is.False);
+            Assert.That(File.Exists(source), Is.True);
+        }
+
+        [Test]
+        public void SafeWindowsStyleAndUnixStyleMemberPathsRemainContained()
+        {
+            WriteArchive(zip =>
+            {
+                AddFile(zip, @"Game\bin\play.exe", "windows separators");
+                AddFile(zip, "Game/assets/data.bin", "unix separators");
+            });
+            var result = new ZipPackageStagingExtractor().ExtractApprovedZip(
+                source, cache, destination, Guid.NewGuid(), CancellationToken.None);
+            Assert.That(result.Succeeded, Is.True, result.Message);
+            Assert.That(File.ReadAllText(Path.Combine(destination, "Game", "bin",
+                "play.exe")), Is.EqualTo("windows separators"));
+            Assert.That(File.ReadAllText(Path.Combine(destination, "Game", "assets",
+                "data.bin")), Is.EqualTo("unix separators"));
         }
 
         [Test]
