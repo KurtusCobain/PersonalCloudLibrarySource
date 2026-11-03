@@ -82,6 +82,11 @@ namespace PersonalCloudLibrarySource
             try
             {
                 if (settings == null || !settings.Enabled ||
+                    // Source-bound multi-source IDs must never reuse a
+                    // legacy single-manifest ZIP launch approval.
+                    (settings is PersonalCloudLibrarySourceSettingsV3 &&
+                     ((PersonalCloudLibrarySourceSettingsV3)settings)
+                         .EnableMultiSourceProfiles) ||
                     currentItem == null || receipts == null || approvals == null ||
                     selectedAction == null ||
                     !string.Equals(currentItem.Id, game.GameId,
