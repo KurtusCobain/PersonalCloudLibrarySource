@@ -13,6 +13,29 @@ namespace PersonalCloudLibrarySource
             if (args?.Game == null || args.Game.PluginId != Id)
                 return;
 
+            // Once irreversible cleanup begins, Playnite must not start this
+            // game while file-level deletion is in progress. This complements
+            // the IsRunning/IsLaunching check performed before cleanup.
+            if (activeZipCleanups.ContainsKey(args.Game.Id))
+            {
+                args.CancelStartup = true;
+                logger.Warn("PCLS prevented game startup during managed ZIP cleanup.");
+                try
+                {
+                    playniteApi.Dialogs.ShowMessage(
+                        PclsResources.Get("LOCPLSZipPermanentCleanupBusy",
+                            "This game cannot start while its quarantined ZIP files are being permanently cleaned up."),
+                        PclsResources.Get("LOCPLSZipLaunchBlockedTitle",
+                            "Managed ZIP Launch Blocked"),
+                        MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+                catch (Exception ex)
+                {
+                    logger.Warn(ex, "PCLS could not display cleanup launch refusal.");
+                }
+                return;
+            }
+
             var gate = new ZipManagedLaunchGate();
             if (!gate.IsManagedAction(Id, args.Game, args.SourceAction))
                 return;
