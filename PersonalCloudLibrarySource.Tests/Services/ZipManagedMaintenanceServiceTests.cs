@@ -238,6 +238,35 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void CorruptReceiptAndMissingDirectoryStillBlockLegacyUninstall()
+        {
+            Extract();
+            var record = Directory.GetFiles(Path.Combine(root, "receipts"),
+                "*.json").Single();
+            var moved = Path.Combine(root, "moved-files");
+            Directory.Move(extracted.Destination, moved);
+            File.WriteAllText(record, "{ not valid json");
+            Assert.That(maintenance.HasManagedFootprint(cache, item.Id, receipts),
+                Is.True, "Invalid receipt presence must remain a conservative uninstall guard.");
+            var report = maintenance.Assess(cache, item.Id, receipts, approvals);
+            Assert.That(report.Status, Is.EqualTo(
+                ZipManagedMaintenanceStatus.UnsafeExtraction));
+            Assert.That(report.CanDeleteUnattended, Is.False);
+            Assert.That(File.ReadAllText(record), Is.EqualTo("{ not valid json"));
+            Assert.That(File.Exists(Path.Combine(moved, "Game.exe")), Is.True);
+
+            var cachedFile = Path.Combine(cache, "cached", "game.zip");
+            Directory.CreateDirectory(Path.GetDirectoryName(cachedFile));
+            File.WriteAllText(cachedFile, "preserve cached archive");
+            var game = new Game("Game") { GameId = item.Id };
+            var controller = new PersonalCloudLibraryUninstallController(
+                null, game, item, settings, ownershipReceipts: receipts);
+            Assert.Throws<InvalidOperationException>(
+                () => controller.Uninstall(new UninstallActionArgs()));
+            Assert.That(File.ReadAllText(cachedFile), Is.EqualTo("preserve cached archive"));
+        }
+
+        [Test]
         public void LegacyPlayniteUninstallControllerRefusesManagedZip()
         {
             Extract();
