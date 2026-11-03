@@ -94,6 +94,24 @@ jobs:
             Write-Host ($name + ' immutable fixture SHA256: ' + $hash)
           }
 
+          # A matching signature alone cannot make a corrupted archive
+          # acceptable. Both truncated formats must be rejected read-only.
+          $truncatedRar = Join-Path $fixture 'truncated.rar'
+          [IO.File]::WriteAllBytes($truncatedRar, [byte[]]@(0x52,0x61,0x72,0x21,0x1A,0x07,0x01,0x00))
+          & $exe $truncatedRar
+          if ($LASTEXITCODE -eq 0) {
+            throw 'A signature-only truncated RAR was incorrectly accepted.'
+          }
+          Write-Host 'PASS truncated RAR5 denied without extraction.'
+
+          $truncated7z = Join-Path $fixture 'truncated.7z'
+          [IO.File]::WriteAllBytes($truncated7z, [byte[]]@(0x37,0x7A,0xBC,0xAF,0x27,0x1C,0x00,0x00))
+          & $exe $truncated7z
+          if ($LASTEXITCODE -eq 0) {
+            throw 'A signature-only truncated 7z was incorrectly accepted.'
+          }
+          Write-Host 'PASS truncated 7z denied without extraction.'
+
           $assemblyFiles = @(Get-ChildItem -LiteralPath $built -Filter '*.dll' -File |
             Select-Object -ExpandProperty Name | Sort-Object)
           Write-Host ('Runtime dependency DLLs: ' + ($assemblyFiles -join ', '))
