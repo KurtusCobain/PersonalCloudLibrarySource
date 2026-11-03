@@ -143,6 +143,25 @@ namespace PersonalCloudLibrarySource
                     () => ReviewManagedZipMaintenanceAsync(target)));
             }
 
+            // A managed ZIP can be reversibly moved to its own recovery
+            // folder, or explicitly restored, without recursive deletion.
+            // The action rechecks the live manifest and ownership on click.
+            if (target.Item != null && menuSnapshot != null &&
+                (new ZipManagedMaintenanceService().HasManagedFootprint(
+                    menuSnapshot.LocalCacheFolder, target.Item.Id,
+                    new CacheOwnershipReceiptStore(Path.Combine(
+                        GetPluginDataDirectory(), "ownership-receipts"))) ||
+                 new ZipManagedRecoveryService(Path.Combine(
+                     GetPluginDataDirectory(), "zip-recovery-journals"))
+                    .HasJournalFootprint(menuSnapshot.LocalCacheFolder,
+                        target.Item.Id)))
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section, "LOCPLSZipRecoveryTitle",
+                    "Manage ZIP Recovery",
+                    () => ManageZipRecoveryAsync(target)));
+            }
+
             // Revoke remains available for a recorded approval even when the
             // manifest source changed or the extracted files no longer match.
             // It changes only plugin approval metadata, not game files.
