@@ -81,6 +81,88 @@ namespace PersonalCloudLibrarySource
             return ids;
         }
 
+        // A stale approval remains revocable after the manifest/source changes.
+        // This checks only the exact game's approval identity; it does not
+        // adopt, modify, or inventory files under the game cache.
+        public bool HasApproval(string gameId, string cacheRoot)
+        {
+            try
+            {
+                ZipLauncherApproval saved;
+                return TryReadApproval(gameId, cacheRoot, out saved);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        // Revoke is a distinct, explicitly confirmed action. It deletes ONLY
+        // one validated approval record in the plugin data directory.
+        // Extracted files, receipts, saves and the original ZIP are preserved.
+        public bool TryRevoke(string gameId, string cacheRoot,
+            bool userConfirmed, out string reason)
+        {
+            reason = "Explicit confirmation is required to revoke the launcher approval.";
+            if (!userConfirmed)
+                return false;
+            try
+            {
+                ZipLauncherApproval saved;
+                if (!TryReadApproval(gameId, cacheRoot, out saved))
+                {
+                    reason = "No valid launcher approval was found for this game and cache.";
+                    return false;
+                }
+                var recordPath = RecordPath(gameId, cacheRoot);
+                // The validated record is deliberately outside the cache.
+                // Never delete a link or use an approval path from JSON.
+                if ((File.GetAttributes(recordPath) & FileAttributes.ReparsePoint) != 0)
+                    return false;
+                File.Delete(recordPath);
+                reason = "Launcher approval revoked. Update Game Library to remove the managed ZIP Play action. Extracted files and ownership records were preserved.";
+                return true;
+            }
+            catch (Exception ex) when (ex is IOException ||
+                ex is UnauthorizedAccessException || ex is InvalidOperationException ||
+                ex is ArgumentException || ex is NotSupportedException)
+            {
+                reason = "Launcher approval could not be safely revoked.";
+                return false;
+            }
+        }
+
+        // Source binding is intentionally not checked here: a source change
+        // must not trap an obsolete approval that the user wants to revoke.
+        private bool TryReadApproval(string gameId, string cacheRoot,
+            out ZipLauncherApproval saved)
+        {
+            saved = null;
+            if (string.IsNullOrWhiteSpace(gameId) ||
+                string.IsNullOrWhiteSpace(
+                    ZipManagedExtractionService.ReceiptKeyForGame(gameId)) ||
+                !SafeSeparateStore(cacheRoot))
+                return false;
+            var path = RecordPath(gameId, cacheRoot);
+            if (!File.Exists(path) ||
+                (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+                return false;
+            using (var stream = new FileStream(path, FileMode.Open,
+                FileAccess.Read, FileShare.Read))
+            {
+                if (stream.Length <= 0 || stream.Length > MaxBytes)
+                    return false;
+                using (var reader = new StreamReader(stream, Encoding.UTF8))
+                    saved = new JavaScriptSerializer { MaxJsonLength = MaxBytes }
+                        .Deserialize<ZipLauncherApproval>(reader.ReadToEnd());
+            }
+            return saved != null && saved.Version == 1 &&
+                string.Equals(saved.GameId, gameId, StringComparison.Ordinal) &&
+                !string.IsNullOrWhiteSpace(saved.CacheRoot) &&
+                string.Equals(PathBoundary.Normalize(saved.CacheRoot),
+                    PathBoundary.Normalize(cacheRoot), StringComparison.OrdinalIgnoreCase);
+        }
+
         public bool TryApprove(PersonalCloudLibraryItem item,
             PersonalCloudLibrarySourceSettings settings, string relativeLauncher,
             CacheOwnershipReceiptStore receipts, bool userConfirmed,
