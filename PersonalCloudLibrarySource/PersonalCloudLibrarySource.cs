@@ -72,13 +72,13 @@ namespace PersonalCloudLibrarySource
                 logger.Info($"Personal Cloud Library Source imported {outcome.Games.Count} manifest entries.");
             }
 
-            var imported = ImportExecutionPolicy.Complete(outcome);
-            // An extracted ZIP becomes playable ONLY after a separate explicit
-            // launcher approval and fresh verified provenance. This overlay
-            // never changes pre-existing installed games or Play actions.
-            ApplyExplicitZipLauncherApprovals(imported, outcome.ValidItems,
-                pluginSettings);
-            return imported;
+            // Keep the original typed import failure boundary intact.
+            // The optional ZIP overlay is never allowed to make a failed
+            // manifest appear successful or partially publish game records.
+            if (outcome.Succeeded)
+                ApplyExplicitZipLauncherApprovals(outcome.Games, outcome.ValidItems,
+                    pluginSettings);
+            return ImportExecutionPolicy.Complete(outcome);
         }
 
         private void PublishImportOutcome(
