@@ -112,6 +112,18 @@ namespace PersonalCloudLibrarySource
                     () => CancelZipExtraction(target.Game.Id)));
             }
 
+            if (target.Item != null &&
+                new ZipExtractedLauncherReviewService().HasRecordedExtraction(
+                    settings.GetRuntimeSettingsSnapshot().LocalCacheFolder,
+                    target.Item.Id, new CacheOwnershipReceiptStore(Path.Combine(
+                        GetPluginDataDirectory(), "ownership-receipts"))))
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section, "LOCPLSZipLauncherReviewTitle",
+                    "Review Extracted ZIP Launchers",
+                    () => ReviewExtractedZipLauncherAsync(target)));
+            }
+
             if (availability.CanCancelTransfer)
             {
                 menuItems.Add(CreateGameMenuItem(
