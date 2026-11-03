@@ -109,8 +109,17 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(Directory.Exists(plan.Destination), Is.True);
             Assert.That(Directory.Exists(RecoveryDirectory()), Is.False);
             Assert.That(recovery.HasJournalFootprint(cache, gameId), Is.True);
+            Assert.That(recovery.Inspect(cache, gameId).State,
+                Is.EqualTo(ZipRecoveryState.Restored));
+            var marker = Directory.GetFiles(Path.Combine(root, "journals"),
+                "*.restored").Single();
+            Assert.That(File.ReadAllText(marker).Length, Is.EqualTo(32));
             Assert.That(File.ReadAllText(Path.Combine(plan.Destination, "Game.exe")),
                 Is.EqualTo("original game"));
+            string resumeReason;
+            Assert.That(recovery.TryResumePrepared(cache, gameId, receipts,
+                approvals, true, CancellationToken.None, out resumeReason), Is.False,
+                "A completed restore must not be offered as a pending move.");
             CacheOwnershipReceipt record;
             Assert.That(receipts.TryRead(cache, plan.ReceiptKey, out record), Is.True);
             Assert.That(Restore(), Is.False);
@@ -188,6 +197,22 @@ namespace PersonalCloudLibrarySource.Tests.Services
                 true, CancellationToken.None, out reason), Is.True, reason);
             Assert.That(recovery.Inspect(cache, gameId).State,
                 Is.EqualTo(ZipRecoveryState.Quarantined));
+            Assert.That(File.Exists(Path.Combine(recovered, "Game.exe")), Is.True);
+        }
+
+        [Test]
+        public void ConflictingRestoredMarkerCannotReplayOrOverwriteQuarantine()
+        {
+            Assert.That(Quarantine(), Is.True);
+            var recovered = RecoveryDirectory();
+            File.WriteAllText(Directory.GetFiles(Path.Combine(root, "journals"),
+                "*.json").Single() + ".restored", "invalid-transaction");
+            Assert.That(recovery.Inspect(cache, gameId).State,
+                Is.EqualTo(ZipRecoveryState.Ambiguous));
+            Assert.That(Restore(), Is.False);
+            string reason;
+            Assert.That(recovery.TryResumePrepared(cache, gameId, receipts,
+                approvals, true, CancellationToken.None, out reason), Is.False);
             Assert.That(File.Exists(Path.Combine(recovered, "Game.exe")), Is.True);
         }
 
