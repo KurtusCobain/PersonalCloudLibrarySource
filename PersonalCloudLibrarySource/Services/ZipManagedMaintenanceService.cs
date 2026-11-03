@@ -42,9 +42,9 @@ namespace PersonalCloudLibrarySource
                 string destination, receiptId;
                 if (!TryLocation(cacheRoot, gameId, out destination, out receiptId))
                     return false;
-                CacheOwnershipReceipt record;
                 return Directory.Exists(destination) || File.Exists(destination) ||
-                    (receipts != null && receipts.TryRead(cacheRoot, receiptId, out record));
+                    (receipts != null &&
+                        receipts.HasReceiptFootprint(cacheRoot, receiptId));
             }
             catch (Exception)
             {
@@ -86,6 +86,14 @@ namespace PersonalCloudLibrarySource
                 var hasReceipt = receipts.TryRead(cacheRoot, receiptId, out record);
                 if (!hasReceipt)
                 {
+                    // A stored but unreadable receipt must not become "not
+                    // managed" when its directory is also missing.
+                    if (receipts.HasReceiptFootprint(cacheRoot, receiptId))
+                    {
+                        result.Status = ZipManagedMaintenanceStatus.UnsafeExtraction;
+                        result.Reason = "An unreadable or corrupt managed ZIP receipt exists; preserve files and review manually.";
+                        return result;
+                    }
                     result.Status = Directory.Exists(destination) ||
                                     File.Exists(destination)
                         ? ZipManagedMaintenanceStatus.UntrackedContent
