@@ -70,16 +70,22 @@ jobs:
           # This is an upstream test archive used strictly by CI, not a
           # downloadable game or an embedded production dependency. Failure
           # to retrieve/parse it fails this RAR compatibility gate.
-          $rarFixture = Join-Path $fixture 'sample-rar5.rar'
-          $rarUrl = 'https://raw.githubusercontent.com/adamhathcock/sharpcompress/0.50.3/tests/TestArchives/Rar5.rar'
-          Invoke-WebRequest -Uri $rarUrl -OutFile $rarFixture -MaximumRedirection 3
-          if ((Get-Item -LiteralPath $rarFixture).Length -gt 2097152) {
-            throw 'RAR fixture exceeds CI-only test size bound.'
+          # Pin to a single upstream Git commit (not a moving master/tag).
+          # These are SharpCompress's own archived RAR4 and RAR5 fixtures.
+          $fixtureCommit = '6128ec51eec4ca9f7b7b9f44b77bdb0cd8b3bd97'
+          foreach ($name in @('Rar.rar', 'Rar5.rar')) {
+            $rarFixture = Join-Path $fixture $name
+            $rarUrl = "https://raw.githubusercontent.com/adamhathcock/sharpcompress/$fixtureCommit/tests/TestArchives/Archives/$name"
+            Invoke-WebRequest -Uri $rarUrl -OutFile $rarFixture -MaximumRedirection 3
+            $rarBytes = (Get-Item -LiteralPath $rarFixture).Length
+            if ($rarBytes -lt 8 -or $rarBytes -gt 2097152) {
+              throw "RAR fixture $name failed size bounds."
+            }
+            & $exe $rarFixture
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Write-Host ($name + ' fixture SHA256: ' +
+              (Get-FileHash -LiteralPath $rarFixture -Algorithm SHA256).Hash)
           }
-          & $exe $rarFixture
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Write-Host ('RAR5 upstream fixture SHA256: ' +
-            (Get-FileHash -LiteralPath $rarFixture -Algorithm SHA256).Hash)
 
           $assemblyFiles = @(Get-ChildItem -LiteralPath $built -Filter '*.dll' -File |
             Select-Object -ExpandProperty Name | Sort-Object)
