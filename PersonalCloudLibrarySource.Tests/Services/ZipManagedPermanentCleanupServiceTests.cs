@@ -3,6 +3,7 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 
@@ -224,32 +225,25 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
-        public void ExistingOrMalformedApprovalRecordBlocksRemoval()
+        public void CorruptMatchingLauncherApprovalFootprintBlocksAllDeletion()
         {
-            var file = Path.Combine(root, "approvals");
-            Directory.CreateDirectory(file);
-            var gameHash = new ZipLauncherApprovalService(file);
-            // The usual approval record is bound to game + cache identity.
-            var item = new PersonalCloudLibraryItem
-            {
-                Id = gameId, Title = "Game", SourceType = "file",
-                SourcePath = archive, CachePath = "source/game.zip"
-            };
-            var settings = new PersonalCloudLibrarySourceSettings
-            {
-                Enabled = true, LocalCacheFolder = cache,
-                SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType
-            };
-            string reason;
-            Assert.That(gameHash.TryApprove(item, settings, "Game.exe",
-                receipts, true, CancellationToken.None, out reason), Is.False,
-                "Quarantined content cannot be approved for launch.");
-            // A record that exists even when corrupt conservatively blocks.
-            var jsonPath = Path.Combine(file,
-                Directory.GetFiles(recoveryRoot, "*.json").Length + ".json");
-            // This unrelated JSON does not match the game identity and should not block.
-            File.WriteAllText(jsonPath, "{unrelated}");
-            Assert.That(Purge().Succeeded, Is.True);
+            var folder = Path.Combine(root, "approvals");
+            Directory.CreateDirectory(folder);
+            var identity = Path.GetFullPath(cache).ToUpperInvariant() +
+                "\n" + gameId.ToUpperInvariant();
+            string hash;
+            using (var sha = SHA256.Create())
+                hash = BitConverter.ToString(sha.ComputeHash(
+                    Encoding.UTF8.GetBytes(identity))).Replace("-", "");
+            var record = Path.Combine(folder, hash + ".json");
+            File.WriteAllText(record, "{corrupt approval");
+            Assert.That(approvals.HasApprovalFootprint(gameId, cache), Is.True);
+            Assert.That(Purge().Succeeded, Is.False);
+            Assert.That(File.Exists(Path.Combine(quarantine, "Game.exe")), Is.True);
+            Assert.That(Directory.GetFiles(recoveryRoot, "*.purge.json"), Is.Empty);
+            // The unknown record is not removed by cleanup. The user must
+            // resolve it separately; this test can then finish the fixture.
+            Assert.That(File.ReadAllText(record), Is.EqualTo("{corrupt approval"));
         }
 
         [Test]
