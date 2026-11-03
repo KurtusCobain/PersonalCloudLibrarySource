@@ -25,6 +25,20 @@ namespace PersonalCloudLibrarySource
             try
             {
                 var pluginSettings = settings.GetRuntimeSettingsSnapshot();
+                // Experimental multi-source game IDs are bound to profiles,
+                // not the legacy manifest. Until ZIP approval/recovery records
+                // are source-scoped, do not offer any legacy game commands
+                // (especially destructive cleanup) under multi-source mode.
+                if (pluginSettings == null || !pluginSettings.Enabled)
+                    return menuItems;
+                if (pluginSettings.EnableMultiSourceProfiles)
+                {
+                    menuItems.Add(CreateGameMenuItem(
+                        GetDashboardResource("LOCPLSMenuSection", "Personal Cloud Library"),
+                        "LOCPLSOpenDashboard", "Open Dashboard",
+                        navigationService.OpenDashboard));
+                    return menuItems;
+                }
                 var manifest = LoadValidatedManifest(pluginSettings);
                 var targets = gameCommandService.ResolveTargets(games, manifest.Items, pluginSettings, Id).ToList();
                 var manager = GetTransferManager();
