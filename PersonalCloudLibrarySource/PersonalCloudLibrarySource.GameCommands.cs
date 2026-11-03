@@ -162,6 +162,25 @@ namespace PersonalCloudLibrarySource
                     () => ManageZipRecoveryAsync(target)));
             }
 
+            // Permanent cleanup is intentionally separate from reversible
+            // quarantine and requires TWO explicit confirmations. It appears
+            // only for a quarantined or partially cleaned managed ZIP.
+            if (target.Item != null && menuSnapshot != null &&
+                !activeZipCleanups.ContainsKey(target.Game.Id))
+            {
+                var purgeState = new ZipManagedRecoveryService(Path.Combine(
+                    GetPluginDataDirectory(), "zip-recovery-journals"))
+                    .Inspect(menuSnapshot.LocalCacheFolder, target.Item.Id).State;
+                if (purgeState == ZipRecoveryState.Quarantined ||
+                    purgeState == ZipRecoveryState.CleanupPending)
+                {
+                    menuItems.Add(CreateGameMenuItem(
+                        section, "LOCPLSZipPermanentCleanupTitle",
+                        "Permanently Remove Quarantined ZIP Files",
+                        () => PermanentlyCleanupZipAsync(target)));
+                }
+            }
+
             // Revoke remains available for a recorded approval even when the
             // manifest source changed or the extracted files no longer match.
             // It changes only plugin approval metadata, not game files.
