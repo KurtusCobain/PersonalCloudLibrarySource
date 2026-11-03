@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 
 namespace PersonalCloudLibrarySource
@@ -15,12 +16,21 @@ namespace PersonalCloudLibrarySource
         private const int CopyBufferBytes = 64 * 1024;
         private static readonly uint[] Crc32Table = BuildCrc32Table();
 
+        // Owned file names are not enough to authorize rollback deletion:
+        // another process may have changed a created file in the meantime.
+        private sealed class CreatedFileRecord
+        {
+            public string Path;
+            public long WrittenBytes;
+            public byte[] WrittenSha256;
+        }
+
         public CloudTransferExecutionResult ExtractApprovedZip(
             string archivePath, string cacheRoot, string destinationDirectory,
             Guid jobId, CancellationToken cancellationToken,
             Action<long, long?> progress = null)
         {
-            var createdFiles = new List<string>();
+            var createdFiles = new List<CreatedFileRecord>();
             var createdDirectories = new List<string>();
             string staging = null;
             try
@@ -157,35 +167,51 @@ namespace PersonalCloudLibrarySource
                         }
 
                         EnsurePrivateDirectory(staging, Path.GetDirectoryName(target), createdDirectories);
+                        if (!policy.Authorize(cacheRoot, target, false).Allowed)
+                            throw new IOException("ZIP output path or ancestor became unsafe.");
                         if (File.Exists(target) || Directory.Exists(target))
                             throw new IOException("Archive entry collided with another staged path.");
+                        var created = new CreatedFileRecord { Path = target };
                         using (var input = entry.Open())
                         using (var output = new FileStream(target, FileMode.CreateNew,
                             FileAccess.Write, FileShare.None))
                         {
-                            createdFiles.Add(target);
-                            long copiedEntry = 0;
-                            uint crc = 0xFFFFFFFFu;
-                            int read;
-                            while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                            createdFiles.Add(created);
+                            using (var sha256 = SHA256.Create())
                             {
-                                cancellationToken.ThrowIfCancellationRequested();
-                                if (copiedEntry > observation.UncompressedBytes - read ||
-                                    copiedTotal > ArchiveInspectionPolicy.MaxTotalBytes - read)
-                                    throw new InvalidDataException(
-                                        "Archive output exceeds its declared or permitted size.");
-                                output.Write(buffer, 0, read);
-                                crc = UpdateCrc32(crc, buffer, read);
-                                copiedEntry += read;
-                                copiedTotal += read;
-                                progress?.Invoke(copiedTotal, inspected.TotalUncompressedBytes);
+                                long copiedEntry = 0;
+                                uint crc = 0xFFFFFFFFu;
+                                try
+                                {
+                                    int read;
+                                    while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                                    {
+                                        cancellationToken.ThrowIfCancellationRequested();
+                                        if (copiedEntry > observation.UncompressedBytes - read ||
+                                            copiedTotal > ArchiveInspectionPolicy.MaxTotalBytes - read)
+                                            throw new InvalidDataException(
+                                                "Archive output exceeds its declared or permitted size.");
+                                        output.Write(buffer, 0, read);
+                                        sha256.TransformBlock(buffer, 0, read, buffer, 0);
+                                        created.WrittenBytes += read;
+                                        crc = UpdateCrc32(crc, buffer, read);
+                                        copiedEntry += read;
+                                        copiedTotal += read;
+                                        progress?.Invoke(copiedTotal, inspected.TotalUncompressedBytes);
+                                    }
+                                    if (copiedEntry != observation.UncompressedBytes)
+                                        throw new InvalidDataException(
+                                            "Archive output length differs from the inspected metadata.");
+                                    if (~crc != central[index].ExpectedCrc32)
+                                        throw new InvalidDataException(
+                                            "ZIP member CRC32 differs from central directory; refusing corrupted game.");
+                                }
+                                finally
+                                {
+                                    sha256.TransformFinalBlock(new byte[0], 0, 0);
+                                    created.WrittenSha256 = sha256.Hash;
+                                }
                             }
-                            if (copiedEntry != observation.UncompressedBytes)
-                                throw new InvalidDataException(
-                                    "Archive output length differs from the inspected metadata.");
-                            if (~crc != central[index].ExpectedCrc32)
-                                throw new InvalidDataException(
-                                    "ZIP member CRC32 differs from central directory; refusing corrupted game.");
                         }
                     }
 
@@ -352,17 +378,19 @@ namespace PersonalCloudLibrarySource
         // Only delete files actually created during THIS job and then remove
         // empty directories. Never recursively delete unknown/unowned content.
         private static bool CleanupCreatedStaging(string cacheRoot, string staging,
-            List<string> createdFiles, List<string> createdDirectories)
+            List<CreatedFileRecord> createdFiles, List<string> createdDirectories)
         {
             if (string.IsNullOrWhiteSpace(staging) || createdDirectories.Count == 0)
                 return true;
             var clean = true;
             var policy = new SafeCacheDeletionPolicy();
-            foreach (var file in createdFiles.AsEnumerable().Reverse())
+            foreach (var record in createdFiles.AsEnumerable().Reverse())
             {
                 try
                 {
-                    if (!policy.Authorize(cacheRoot, file, false).Allowed)
+                    var file = record.Path;
+                    if (!policy.Authorize(cacheRoot, file, false).Allowed ||
+                        record.WrittenSha256 == null)
                     {
                         clean = false;
                         continue;
@@ -374,11 +402,28 @@ namespace PersonalCloudLibrarySource
                             clean = false;
                             continue;
                         }
-                        File.Delete(file);
+                        // Content was recorded as bytes were written; an
+                        // unexpected change cancels automatic rollback. Hold
+                        // a read handle that denies ordinary concurrent writes
+                        // until the exact verified file is removed.
+                        using (var input = new FileStream(file, FileMode.Open,
+                            FileAccess.Read, FileShare.Read | FileShare.Delete))
+                        using (var digest = SHA256.Create())
+                        {
+                            if (input.Length != record.WrittenBytes ||
+                                !digest.ComputeHash(input).SequenceEqual(
+                                    record.WrittenSha256))
+                            {
+                                clean = false;
+                                continue;
+                            }
+                            File.Delete(file);
+                        }
                     }
                 }
                 catch (IOException) { clean = false; }
                 catch (UnauthorizedAccessException) { clean = false; }
+                catch (CryptographicException) { clean = false; }
             }
             foreach (var directory in createdDirectories.AsEnumerable().Reverse())
             {
