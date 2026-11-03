@@ -171,6 +171,22 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void TooManyNewSaveDirectoriesFailClosedWithoutChangingFiles()
+        {
+            var saves = Path.Combine(extraction.Destination, "saves");
+            Directory.CreateDirectory(saves);
+            for (var i = 0; i < 257; i++)
+                Directory.CreateDirectory(Path.Combine(saves,
+                    "slot-" + i.ToString("D3")));
+            int extras;
+            Assert.That(Verified(out extras), Is.False,
+                "Mutable directories must not bypass the inventory entry bound.");
+            Assert.That(File.ReadAllText(Path.Combine(extraction.Destination,
+                "Game.exe")), Is.EqualTo("original game executable"));
+            Assert.That(Directory.Exists(Path.Combine(saves, "slot-256")), Is.True);
+        }
+
+        [Test]
         public void NewlyAddedExecutableCannotBeIgnoredEvenUnderSaveDirectory()
         {
             var action = ApproveAndGetAction();
