@@ -328,7 +328,9 @@ namespace PersonalCloudLibrarySource
                     var plan = GetCurrentExperimentalActionPlan(pluginSettings);
                     UninstallController scopedController;
                     if (new MultiSourceControllerFactory().TryPrepareUninstall(
-                        playniteApi, args.Game, Id, plan, out scopedController))
+                        playniteApi, args.Game, Id, plan, out scopedController,
+                        new CacheOwnershipReceiptStore(Path.Combine(
+                            GetPluginDataDirectory(), "ownership-receipts"))))
                         uninstallActions.Add(scopedController);
                     return uninstallActions;
                 }
