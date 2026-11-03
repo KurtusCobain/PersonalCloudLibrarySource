@@ -113,8 +113,10 @@ namespace PersonalCloudLibrarySource
                 var receiptStore = receipts;
                 var approvedPlan = plan;
                 var token = cancellation.Token;
+                var mutableBaseline = new ZipMutableDataBaselineStore(Path.Combine(
+                    GetPluginDataDirectory(), "zip-mutable-data-baselines"));
                 var result = await Task.Run(() => extractor.ExecuteApproved(
-                    approvedPlan, true, receiptStore, token));
+                    approvedPlan, true, receiptStore, token, null, mutableBaseline));
 
                 if (result.Cancelled)
                 {
@@ -136,6 +138,13 @@ namespace PersonalCloudLibrarySource
                         PclsResources.Format("LOCPLSZipExtractUntracked",
                             "ZIP files were extracted to {0}, but an inventory receipt could not be saved. Preserve these files and inspect them manually. The game has NOT been marked installed.",
                             result.Destination),
+                        title);
+                }
+                else if (!result.MutableDataBaselineRecorded)
+                {
+                    playniteApi.Dialogs.ShowMessage(
+                        PclsResources.Get("LOCPLSZipBaselineUnavailable",
+                            "ZIP contents and inventory were recorded, but a supplemental save-data baseline was unavailable. Strict inventory checks remain in force; newly created saves inside the extraction may block launch."),
                         title);
                 }
                 else
@@ -258,6 +267,8 @@ namespace PersonalCloudLibrarySource
                     .ToDictionary(i => i.Key, i => i.First(), StringComparer.Ordinal);
                 var receiptStore = new CacheOwnershipReceiptStore(
                     Path.Combine(GetPluginDataDirectory(), "ownership-receipts"));
+                var mutableBaseline = new ZipMutableDataBaselineStore(Path.Combine(
+                    GetPluginDataDirectory(), "zip-mutable-data-baselines"));
                 var activated = 0;
                 foreach (var id in approvedIds)
                 {
@@ -267,7 +278,7 @@ namespace PersonalCloudLibrarySource
                         !itemById.TryGetValue(id, out item))
                         continue;
                     if (service.TryApply(item, runtimeSettings, metadata,
-                        receiptStore))
+                        receiptStore, CancellationToken.None, mutableBaseline))
                         activated++;
                 }
                 if (activated > 0)
@@ -302,9 +313,12 @@ namespace PersonalCloudLibrarySource
                 var receipts = new CacheOwnershipReceiptStore(Path.Combine(
                     GetPluginDataDirectory(), "ownership-receipts"));
                 var reviewer = new ZipExtractedLauncherReviewService();
+                var mutableBaseline = new ZipMutableDataBaselineStore(Path.Combine(
+                    GetPluginDataDirectory(), "zip-mutable-data-baselines"));
                 var inspected = await Task.Run(() => reviewer.Inspect(
                     snapshot.LocalCacheFolder, current.Item.Id,
-                    current.Item.Title, receipts));
+                    current.Item.Title, receipts, CancellationToken.None,
+                    mutableBaseline));
                 if (!inspected.InventoryVerified)
                 {
                     playniteApi.Dialogs.ShowMessage(
@@ -369,7 +383,8 @@ namespace PersonalCloudLibrarySource
                         string reason;
                         return service.TryApprove(updated.Item, latest,
                             choice.RelativePath, receipts, true,
-                            CancellationToken.None, out reason);
+                            CancellationToken.None, out reason,
+                            mutableBaseline);
                     });
                     playniteApi.Dialogs.ShowMessage(success
                         ? PclsResources.Get("LOCPLSZipApproveSuccess",
