@@ -72,6 +72,12 @@ namespace PersonalCloudLibrarySource
                 logger.Info($"Personal Cloud Library Source imported {outcome.Games.Count} manifest entries.");
             }
 
+            // Keep the original typed import failure boundary intact.
+            // The optional ZIP overlay is never allowed to make a failed
+            // manifest appear successful or partially publish game records.
+            if (outcome.Succeeded)
+                ApplyExplicitZipLauncherApprovals(outcome.Games, outcome.ValidItems,
+                    pluginSettings);
             return ImportExecutionPolicy.Complete(outcome);
         }
 
@@ -236,6 +242,19 @@ namespace PersonalCloudLibrarySource
                         continue;
                     }
 
+                    // Managed ZIP extraction has a separate provenance namespace
+                    // and must never fall through the legacy manifest cache-file
+                    // uninstall controller. The controller also rechecks at
+                    // execution time to close a stale-menu window.
+                    var receipts = new CacheOwnershipReceiptStore(Path.Combine(
+                        GetPluginDataDirectory(), "ownership-receipts"));
+                    if (new ZipManagedMaintenanceService().HasManagedFootprint(
+                        pluginSettings.LocalCacheFolder, item.Id, receipts))
+                    {
+                        logger.Info("PCLS legacy uninstall withheld for managed ZIP: " + item.Id);
+                        return uninstallActions;
+                    }
+
                     var workflow = new GameWorkflowPolicyService().Evaluate(item, pluginSettings);
                     var launchExists = workflow.State.HasPlayAction;
                     var installDirectoryExists = workflow.State.IsCached && !launchExists;
@@ -251,7 +270,9 @@ namespace PersonalCloudLibrarySource
                         return uninstallActions;
                     }
 
-                    uninstallActions.Add(new PersonalCloudLibraryUninstallController(playniteApi, args.Game, item, pluginSettings));
+                    uninstallActions.Add(new PersonalCloudLibraryUninstallController(
+                        playniteApi, args.Game, item, pluginSettings,
+                        ownershipReceipts: receipts));
                     logger.Info($"Personal Cloud Library Source uninstall action returned for {item.Id}.");
                     return uninstallActions;
                 }

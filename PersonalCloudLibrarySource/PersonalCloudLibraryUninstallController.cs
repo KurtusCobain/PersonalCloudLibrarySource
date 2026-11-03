@@ -15,6 +15,7 @@ namespace PersonalCloudLibrarySource
         private readonly SafeCacheDeletionExecutor deletionExecutor;
         private readonly GameWorkflowNotificationService workflowNotifications;
         private readonly bool hasPlayniteHost;
+        private readonly CacheOwnershipReceiptStore ownershipReceipts;
 
         public PersonalCloudLibraryUninstallController(
             IPlayniteAPI playniteApi,
@@ -22,18 +23,35 @@ namespace PersonalCloudLibrarySource
             PersonalCloudLibraryItem item,
             PersonalCloudLibrarySourceSettings settings,
             GameWorkflowNotificationService workflowNotifications = null,
-            SafeCacheDeletionExecutor deletionExecutor = null) : base(game)
+            SafeCacheDeletionExecutor deletionExecutor = null,
+            CacheOwnershipReceiptStore ownershipReceipts = null) : base(game)
         {
             hasPlayniteHost = playniteApi != null;
             this.item = item;
             this.settings = settings;
             this.workflowNotifications = workflowNotifications ?? CreateNotifications(playniteApi);
             this.deletionExecutor = deletionExecutor ?? new SafeCacheDeletionExecutor();
+            this.ownershipReceipts = ownershipReceipts;
             Name = PclsResources.Get("LOCPLSUninstallControllerName", "Remove cached copy");
         }
 
         public override void Uninstall(UninstallActionArgs args)
         {
+            // A controller may have been created before managed ZIP extraction.
+            // Recheck the distinct managed namespace at the moment of uninstall.
+            // Legacy file-only deletion must never silently remove the ZIP
+            // source or claim this separately extracted package.
+            if (ownershipReceipts != null && item != null && settings != null &&
+                new ZipManagedMaintenanceService().HasManagedFootprint(
+                    settings.LocalCacheFolder, item.Id, ownershipReceipts))
+            {
+                const string reason = "Managed ZIP extraction exists. Use Review Managed ZIP Maintenance; automatic removal is disabled to protect saves and ownership evidence.";
+                logger.Warn("PCLS refused legacy uninstall for managed ZIP game " + Game.GameId);
+                workflowNotifications.Failure("uninstall", Game.GameId,
+                    PclsResources.Get("LOCPLSZipLegacyUninstallRefused", reason));
+                throw new InvalidOperationException(reason);
+            }
+
             var launchPath = PersonalCloudLibrarySource.ResolveLaunchPath(item, settings);
             var installDirectory = PersonalCloudLibrarySource.ResolveInstallDirectory(item, settings, launchPath);
             var behavior = NormalizeUninstallBehavior(settings.UninstallBehavior);

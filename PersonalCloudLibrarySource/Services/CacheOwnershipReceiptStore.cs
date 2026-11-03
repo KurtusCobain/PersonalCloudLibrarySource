@@ -43,6 +43,25 @@ namespace PersonalCloudLibrarySource
             }
         }
 
+        // Presence is a conservative uninstall guard, NOT an ownership claim.
+        // An unreadable/corrupt record is still evidence that ZIP maintenance
+        // may have taken place and must not unblock legacy deletion.
+        public bool HasReceiptFootprint(string cacheRoot, string itemId)
+        {
+            try
+            {
+                if (PathBoundary.IsContained(cacheRoot, storeRoot) ||
+                    PathBoundary.IsContained(storeRoot, cacheRoot))
+                    return false;
+                var path = ReceiptFile(cacheRoot, itemId);
+                return File.Exists(path) || Directory.Exists(path);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         public bool TryRead(string cacheRoot, string itemId, out CacheOwnershipReceipt receipt)
         {
             receipt = null;
@@ -115,7 +134,8 @@ namespace PersonalCloudLibrarySource
         // Inventory comparison is strictly diagnostic. V1 receipts remain valid
         // for legacy display but never gain a fingerprint by inference.
         public bool TryCompareInventory(string cacheRoot, string itemId,
-            string destination, out bool matches)
+            string destination, out bool matches,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             matches = false;
             try
@@ -129,7 +149,8 @@ namespace PersonalCloudLibrarySource
                     !string.Equals(PathBoundary.Normalize(destination),
                         PathBoundary.Normalize(receipt.Destination), StringComparison.OrdinalIgnoreCase))
                     return false;
-                var current = new CacheTreeInventoryScanner().Scan(cacheRoot, destination);
+                var current = new CacheTreeInventoryScanner().Scan(
+                    cacheRoot, destination, cancellationToken);
                 matches = current.FileCount == receipt.InventoryFileCount &&
                     current.DirectoryCount == receipt.InventoryDirectoryCount &&
                     string.Equals(current.Fingerprint, receipt.InventoryFingerprint,
@@ -151,10 +172,22 @@ namespace PersonalCloudLibrarySource
         public void RecordCompletedWithInventory(string cacheRoot, string itemId,
             string destination, CancellationToken cancellationToken)
         {
-            // A cancelled scan must not leave a new ownership record.
-            var snapshot = new CacheTreeInventoryScanner().Scan(cacheRoot, destination, cancellationToken);
+            RecordCompletedWithInventorySnapshot(cacheRoot, itemId,
+                destination, cancellationToken);
+        }
+
+        // Return exactly the file inventory that was committed in the receipt.
+        // It can be used to create a supplemental path baseline without a
+        // race-prone second scan that might observe later game save files.
+        public CacheTreeInventory RecordCompletedWithInventorySnapshot(
+            string cacheRoot, string itemId, string destination,
+            CancellationToken cancellationToken)
+        {
+            var snapshot = new CacheTreeInventoryScanner().Scan(
+                cacheRoot, destination, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             RecordCompletedCore(cacheRoot, itemId, destination, snapshot, cancellationToken);
+            return snapshot;
         }
 
         public void RecordCompleted(string cacheRoot, string itemId, string destination)
