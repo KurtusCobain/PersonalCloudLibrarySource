@@ -102,6 +102,7 @@
     <Compile Include="Services\ArchiveInspectionPolicy.cs" />
     <Compile Include="Services\GameLauncherCandidatePolicy.cs" />
     <Compile Include="Services\ZipGameReviewTargetPolicy.cs" />
+    <Compile Include="Services\ZipExtractedLauncherReviewService.cs" />
     <Compile Include="Transfers\ZipPackageStagingExtractor.cs" />
     <Compile Include="Transfers\ZipPackageReviewService.cs" />
     <Compile Include="Transfers\ZipManagedExtractionService.cs" />
