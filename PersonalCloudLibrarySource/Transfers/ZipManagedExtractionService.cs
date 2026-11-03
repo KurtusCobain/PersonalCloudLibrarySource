@@ -47,9 +47,7 @@ namespace PersonalCloudLibrarySource
         {
             if (reviewed == null || !reviewed.PassedPreflight ||
                 receipts == null || string.IsNullOrWhiteSpace(gameId) ||
-                gameId.Length > 256 || gameId != gameId.Trim() ||
-                gameId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
-                gameId == "." || gameId == ".." ||
+                string.IsNullOrWhiteSpace(ReceiptKeyForGame(gameId)) ||
                 string.IsNullOrWhiteSpace(archivePath) ||
                 string.IsNullOrWhiteSpace(cacheRoot))
                 return null;
@@ -65,7 +63,7 @@ namespace PersonalCloudLibrarySource
                 // The folder name is identity-derived, never a manifest path.
                 // Direct child of the pre-existing cache root so extraction
                 // cannot create arbitrary parents or overwrite other content.
-                var key = "pcls-zip-" + Hash(gameId.ToUpperInvariant());
+                var key = ReceiptKeyForGame(gameId);
                 var destination = Path.Combine(normalizedCache, key);
                 if (!new SafeCacheDeletionPolicy()
                     .Authorize(normalizedCache, destination, false).Allowed ||
@@ -173,6 +171,18 @@ namespace PersonalCloudLibrarySource
                     Reason = "ZIP extraction could not be safely prepared."
                 };
             }
+        }
+
+        // Stable receipt namespace used by both the extraction writer and
+        // read-only launcher review. Separate from normal game install receipts.
+        public static string ReceiptKeyForGame(string gameId)
+        {
+            if (string.IsNullOrWhiteSpace(gameId) ||
+                gameId.Length > 256 || gameId != gameId.Trim() ||
+                gameId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
+                gameId == "." || gameId == "..")
+                return string.Empty;
+            return "pcls-zip-" + Hash(gameId.ToUpperInvariant());
         }
 
         private static string Hash(string value)
