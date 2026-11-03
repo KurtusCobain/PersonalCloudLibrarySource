@@ -22,35 +22,48 @@ namespace PersonalCloudLibrarySource
         // location changes, not only paths under the current configured root.
         public bool IsManagedAction(Guid pluginId, Game game, GameAction action)
         {
-            if (game == null || action == null || pluginId == Guid.Empty ||
-                game.PluginId != pluginId || string.IsNullOrWhiteSpace(game.GameId) ||
-                string.IsNullOrWhiteSpace(action.Path))
+            if (game == null || pluginId == Guid.Empty ||
+                game.PluginId != pluginId || string.IsNullOrWhiteSpace(game.GameId))
                 return false;
             try
             {
                 var key = ZipManagedExtractionService.ReceiptKeyForGame(game.GameId);
-                if (string.IsNullOrWhiteSpace(key) ||
-                    !Path.IsPathRooted(action.Path))
+                if (string.IsNullOrWhiteSpace(key))
                     return false;
-                var path = Path.GetFullPath(action.Path);
-                var current = Path.GetDirectoryName(path);
-                for (var i = 0; i < 128 && !string.IsNullOrWhiteSpace(current); i++)
-                {
-                    if (string.Equals(Path.GetFileName(current), key,
-                        StringComparison.OrdinalIgnoreCase))
-                        return true;
-                    var parent = Path.GetDirectoryName(current);
-                    if (string.IsNullOrWhiteSpace(parent) ||
-                        string.Equals(parent, current, StringComparison.OrdinalIgnoreCase))
-                        break;
-                    current = parent;
-                }
-                return false;
+
+                // Detect a stale managed install even when its File action has
+                // been replaced with a relative path, script, or controller.
+                // The original managed InstallDirectory still identifies it.
+                if (HasManagedAncestor(game.InstallDirectory, key, true))
+                    return true;
+                return action != null &&
+                    HasManagedAncestor(action.Path, key, false);
             }
             catch (Exception)
             {
                 return false;
             }
+        }
+
+        private static bool HasManagedAncestor(string path,
+            string identityKey, bool includeSelf)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path))
+                return false;
+            var normalized = Path.GetFullPath(path);
+            var current = includeSelf ? normalized : Path.GetDirectoryName(normalized);
+            for (var i = 0; i < 128 && !string.IsNullOrWhiteSpace(current); i++)
+            {
+                if (string.Equals(Path.GetFileName(current), identityKey,
+                    StringComparison.OrdinalIgnoreCase))
+                    return true;
+                var parent = Path.GetDirectoryName(current);
+                if (string.IsNullOrWhiteSpace(parent) ||
+                    string.Equals(parent, current, StringComparison.OrdinalIgnoreCase))
+                    break;
+                current = parent;
+            }
+            return false;
         }
 
         public ZipManagedLaunchDecision Evaluate(Guid pluginId, Game game,
@@ -67,6 +80,7 @@ namespace PersonalCloudLibrarySource
             {
                 if (settings == null || !settings.Enabled ||
                     currentItem == null || receipts == null || approvals == null ||
+                    selectedAction == null ||
                     !string.Equals(currentItem.Id, game.GameId,
                         StringComparison.Ordinal) ||
                     selectedAction.Type != GameActionType.File ||
