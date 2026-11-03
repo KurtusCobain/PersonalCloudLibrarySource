@@ -46,7 +46,8 @@ namespace PersonalCloudLibrarySource
 
         public ZipExtractedLauncherReview Inspect(string cacheRoot, string gameId,
             string gameTitle, CacheOwnershipReceiptStore receipts,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default(CancellationToken),
+            ZipMutableDataBaselineStore mutableBaseline = null)
         {
             var refused = new ZipExtractedLauncherReview
             {
@@ -70,9 +71,18 @@ namespace PersonalCloudLibrarySource
                 // Compare all contents to the original extraction inventory.
                 // Any added save/mod/installer, removed file, link or changed
                 // bytes quarantines the preview rather than being adopted.
-                bool matched;
-                if (!receipts.TryCompareInventory(cacheRoot, key, destination,
-                        out matched) || !matched)
+                // Prefer the supplemental original-entry baseline. It can
+                // ignore only narrowly permitted NEW .sav/.save data. Without
+                // a valid baseline, preserve the original strict V2 check.
+                var matched = false;
+                int ignoredSaveFiles;
+                if (mutableBaseline != null)
+                    matched = mutableBaseline.TryVerify(
+                        cacheRoot, gameId, destination, receipts,
+                        cancellationToken, out ignoredSaveFiles);
+                if (!matched &&
+                    (!receipts.TryCompareInventory(cacheRoot, key, destination,
+                        out matched, cancellationToken) || !matched))
                 {
                     refused.Reason = "Extracted files changed since the ownership inventory was captured.";
                     return refused;
