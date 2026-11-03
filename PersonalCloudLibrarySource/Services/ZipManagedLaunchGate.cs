@@ -2,6 +2,7 @@ using Playnite.SDK.Models;
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading;
 
 namespace PersonalCloudLibrarySource
 {
@@ -69,7 +70,9 @@ namespace PersonalCloudLibrarySource
         public ZipManagedLaunchDecision Evaluate(Guid pluginId, Game game,
             GameAction selectedAction, PersonalCloudLibraryItem currentItem,
             PersonalCloudLibrarySourceSettings settings,
-            CacheOwnershipReceiptStore receipts, ZipLauncherApprovalService approvals)
+            CacheOwnershipReceiptStore receipts, ZipLauncherApprovalService approvals,
+            CancellationToken cancellationToken = default(CancellationToken),
+            ZipMutableDataBaselineStore mutableBaseline = null)
         {
             var decision = new ZipManagedLaunchDecision();
             if (!IsManagedAction(pluginId, game, selectedAction))
@@ -96,7 +99,7 @@ namespace PersonalCloudLibrarySource
                     IsInstalled = false
                 };
                 if (!approvals.TryApply(currentItem, settings,
-                    approved, receipts) ||
+                    approved, receipts, cancellationToken, mutableBaseline) ||
                     approved.GameActions == null ||
                     approved.GameActions.Count != 1)
                     return decision;
