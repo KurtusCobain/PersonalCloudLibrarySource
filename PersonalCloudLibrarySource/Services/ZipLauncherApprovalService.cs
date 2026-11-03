@@ -166,7 +166,8 @@ namespace PersonalCloudLibrarySource
         public bool TryApprove(PersonalCloudLibraryItem item,
             PersonalCloudLibrarySourceSettings settings, string relativeLauncher,
             CacheOwnershipReceiptStore receipts, bool userConfirmed,
-            CancellationToken cancellationToken, out string reason)
+            CancellationToken cancellationToken, out string reason,
+            ZipMutableDataBaselineStore mutableBaseline = null)
         {
             reason = "Explicit approval and verified extracted files are required.";
             if (!userConfirmed || !Eligible(item, settings) || receipts == null ||
@@ -187,7 +188,7 @@ namespace PersonalCloudLibrarySource
                 }
                 var review = new ZipExtractedLauncherReviewService().Inspect(
                     settings.LocalCacheFolder, item.Id, item.Title,
-                    receipts, cancellationToken);
+                    receipts, cancellationToken, mutableBaseline);
                 if (!review.InventoryVerified)
                 {
                     reason = "Extracted files are unverified or have changed.";
@@ -268,7 +269,8 @@ namespace PersonalCloudLibrarySource
         public bool TryApply(PersonalCloudLibraryItem item,
             PersonalCloudLibrarySourceSettings settings, GameMetadata game,
             CacheOwnershipReceiptStore receipts,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default(CancellationToken),
+            ZipMutableDataBaselineStore mutableBaseline = null)
         {
             if (!Eligible(item, settings) || game == null || receipts == null ||
                 game.IsInstalled ||
@@ -318,7 +320,7 @@ namespace PersonalCloudLibrarySource
                     return false;
                 var review = new ZipExtractedLauncherReviewService().Inspect(
                     settings.LocalCacheFolder, item.Id, item.Title,
-                    receipts, cancellationToken);
+                    receipts, cancellationToken, mutableBaseline);
                 if (!review.InventoryVerified ||
                     !string.Equals(PathBoundary.Normalize(review.ExtractedDirectory),
                         PathBoundary.Normalize(expected), StringComparison.OrdinalIgnoreCase))
