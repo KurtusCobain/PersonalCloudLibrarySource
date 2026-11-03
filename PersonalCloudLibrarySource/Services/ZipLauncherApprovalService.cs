@@ -36,6 +36,51 @@ namespace PersonalCloudLibrarySource
             this.storeRoot = Path.GetFullPath(storeRoot);
         }
 
+        // Bound candidate discovery so a large manifest does not trigger
+        // thousands of filesystem probes on every Playnite library refresh.
+        // IDs from these files are untrusted until TryApply revalidates them.
+        public IReadOnlyCollection<string> ApprovedGameIds()
+        {
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            try
+            {
+                if (!Directory.Exists(storeRoot)) return ids;
+                var files = Directory.EnumerateFiles(storeRoot, "*.json",
+                    SearchOption.TopDirectoryOnly).Take(257).ToList();
+                if (files.Count > 256) return ids;
+                foreach (var file in files)
+                {
+                    if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)
+                        continue;
+                    using (var input = new FileStream(file, FileMode.Open,
+                        FileAccess.Read, FileShare.Read))
+                    {
+                        if (input.Length <= 0 || input.Length > MaxBytes) continue;
+                        using (var reader = new StreamReader(input, Encoding.UTF8))
+                        {
+                            var record = new JavaScriptSerializer
+                            {
+                                MaxJsonLength = MaxBytes
+                            }.Deserialize<ZipLauncherApproval>(reader.ReadToEnd());
+                            if (record != null && record.Version == 1 &&
+                                !string.IsNullOrWhiteSpace(record.GameId) &&
+                                !string.IsNullOrWhiteSpace(
+                                    ZipManagedExtractionService.ReceiptKeyForGame(record.GameId)))
+                                ids.Add(record.GameId);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex) when (ex is IOException ||
+                ex is UnauthorizedAccessException || ex is InvalidOperationException ||
+                ex is ArgumentException || ex is NotSupportedException)
+            {
+                // Partial or unreadable approval stores grant no authority.
+                return new string[0];
+            }
+            return ids;
+        }
+
         public bool TryApprove(PersonalCloudLibraryItem item,
             PersonalCloudLibrarySourceSettings settings, string relativeLauncher,
             CacheOwnershipReceiptStore receipts, bool userConfirmed,
