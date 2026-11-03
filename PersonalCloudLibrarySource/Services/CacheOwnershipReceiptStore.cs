@@ -43,6 +43,25 @@ namespace PersonalCloudLibrarySource
             }
         }
 
+        // Presence is a conservative uninstall guard, NOT an ownership claim.
+        // An unreadable/corrupt record is still evidence that ZIP maintenance
+        // may have taken place and must not unblock legacy deletion.
+        public bool HasReceiptFootprint(string cacheRoot, string itemId)
+        {
+            try
+            {
+                if (PathBoundary.IsContained(cacheRoot, storeRoot) ||
+                    PathBoundary.IsContained(storeRoot, cacheRoot))
+                    return false;
+                var path = ReceiptFile(cacheRoot, itemId);
+                return File.Exists(path) || Directory.Exists(path);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         public bool TryRead(string cacheRoot, string itemId, out CacheOwnershipReceipt receipt)
         {
             receipt = null;
