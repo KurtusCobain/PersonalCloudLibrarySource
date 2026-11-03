@@ -39,7 +39,8 @@ namespace PersonalCloudLibrarySource
         }
 
         public bool TryPrepareUninstall(IPlayniteAPI api, Game game, Guid expectedPluginId,
-            MultiSourceRuntimePlan plan, out UninstallController controller)
+            MultiSourceRuntimePlan plan, out UninstallController controller,
+            CacheOwnershipReceiptStore receipts = null)
         {
             controller = null;
             SourceScopedGameAction route;
@@ -49,6 +50,19 @@ namespace PersonalCloudLibrarySource
             var item = route.CreateItemSnapshot();
             var sourceSettings = route.CreateSettingsSnapshot();
 
+            // Multi-source routing cannot resurrect the legacy uninstall for
+            // an extracted ZIP. Check both the source manifest ID and scoped
+            // game identity: historic cache records may use either namespace.
+            if (receipts != null)
+            {
+                var maintenance = new ZipManagedMaintenanceService();
+                if (maintenance.HasManagedFootprint(
+                        sourceSettings.LocalCacheFolder, item.Id, receipts) ||
+                    maintenance.HasManagedFootprint(
+                        sourceSettings.LocalCacheFolder, route.GameId, receipts))
+                    return false;
+            }
+
             // Multi-source mode never inherits external-cache deletion opt-ins,
             // and recursive folder deletion remains disabled by existing policy.
             if (!sourceSettings.Enabled ||
@@ -57,7 +71,7 @@ namespace PersonalCloudLibrarySource
                 return false;
 
             controller = new PersonalCloudLibraryUninstallController(
-                api, game, item, sourceSettings);
+                api, game, item, sourceSettings, ownershipReceipts: receipts);
             return true;
         }
 
