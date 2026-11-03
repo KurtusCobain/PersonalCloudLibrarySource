@@ -72,7 +72,13 @@ namespace PersonalCloudLibrarySource
                 logger.Info($"Personal Cloud Library Source imported {outcome.Games.Count} manifest entries.");
             }
 
-            return ImportExecutionPolicy.Complete(outcome);
+            var imported = ImportExecutionPolicy.Complete(outcome);
+            // An extracted ZIP becomes playable ONLY after a separate explicit
+            // launcher approval and fresh verified provenance. This overlay
+            // never changes pre-existing installed games or Play actions.
+            ApplyExplicitZipLauncherApprovals(imported, outcome.ValidItems,
+                pluginSettings);
+            return imported;
         }
 
         private void PublishImportOutcome(
