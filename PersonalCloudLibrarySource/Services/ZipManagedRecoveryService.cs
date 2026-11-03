@@ -13,6 +13,8 @@ namespace PersonalCloudLibrarySource
         Prepared,
         Quarantined,
         Restored,
+        CleanupPending,
+        Purged,
         Ambiguous
     }
 
@@ -22,6 +24,7 @@ namespace PersonalCloudLibrarySource
         public string Reason { get; internal set; } = string.Empty;
         public string OriginalDirectory { get; internal set; } = string.Empty;
         public string RecoveryDirectory { get; internal set; } = string.Empty;
+        public string TransactionId { get; internal set; } = string.Empty;
         public bool CanDeleteUnattended => false;
     }
 
@@ -92,6 +95,28 @@ namespace PersonalCloudLibrarySource
                 ZipRecoveryJournalEntry entry;
                 if (!TryReadJournal(cacheRoot, gameId, out entry))
                     return result;
+                result.TransactionId = entry.TransactionId;
+                var purgeFootprint = journal + ".purge.json";
+                var purgedMarker = journal + ".purged";
+                if (File.Exists(purgedMarker) || Directory.Exists(purgedMarker))
+                {
+                    if (!TryReadRestoredMarker(purgedMarker, entry.TransactionId) ||
+                        File.Exists(original) || Directory.Exists(original) ||
+                        File.Exists(recovery) || Directory.Exists(recovery))
+                    {
+                        result.Reason = "Permanent cleanup completion marker conflicts with folder state.";
+                        return result;
+                    }
+                    result.State = ZipRecoveryState.Purged;
+                    result.Reason = "All recorded managed ZIP files were permanently removed and cleanup finalized.";
+                    return result;
+                }
+                if (File.Exists(purgeFootprint) || Directory.Exists(purgeFootprint))
+                {
+                    result.State = ZipRecoveryState.CleanupPending;
+                    result.Reason = "Permanent cleanup has a durable progress manifest; use the cleanup action to resume or inspect it.";
+                    return result;
+                }
                 var marker = journal + ".restored";
                 var markerExists = File.Exists(marker) || Directory.Exists(marker);
                 if (markerExists && !TryReadRestoredMarker(marker, entry.TransactionId))
@@ -233,6 +258,9 @@ namespace PersonalCloudLibrarySource
                     out recovery, out journal)) return false;
                 ZipRecoveryJournalEntry entry;
                 if (!TryReadJournal(cacheRoot, gameId, out entry) ||
+                    File.Exists(journal + ".purge.json") ||
+                    Directory.Exists(journal + ".purge.json") ||
+                    File.Exists(journal + ".purged") ||
                     File.Exists(journal + ".restored") ||
                     Directory.Exists(journal + ".restored") ||
                     !Directory.Exists(original) || File.Exists(recovery) ||
