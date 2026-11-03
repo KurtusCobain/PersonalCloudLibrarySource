@@ -165,6 +165,72 @@ namespace PersonalCloudLibrarySource
             }
         }
 
+        // Preview only; there is deliberately NO Play action, launcher execution
+        // or installed-state update attached to the candidate ranking.
+        private async void ReviewExtractedZipLauncherAsync(GameCommandTarget selected)
+        {
+            var title = PclsResources.Get("LOCPLSZipLauncherReviewTitle",
+                "Review Extracted ZIP Launchers");
+            try
+            {
+                if (selected?.Game == null || selected.Game.PluginId != Id)
+                    return;
+                var snapshot = settings.GetRuntimeSettingsSnapshot();
+                if (snapshot == null || !snapshot.Enabled)
+                    return;
+                var manifest = LoadValidatedManifest(snapshot);
+                var current = gameCommandService.ResolveTargets(
+                    new[] { selected.Game }, manifest.Items, snapshot, Id).Single();
+                if (current.Item == null)
+                    return;
+                var receipts = new CacheOwnershipReceiptStore(Path.Combine(
+                    GetPluginDataDirectory(), "ownership-receipts"));
+                var policy = new ZipExtractedLauncherReviewService();
+                if (!policy.HasRecordedExtraction(snapshot.LocalCacheFolder,
+                        current.Item.Id, receipts))
+                {
+                    playniteApi.Dialogs.ShowMessage(
+                        PclsResources.Get("LOCPLSZipLauncherReviewUnavailable",
+                            "No managed extracted ZIP and matching inventory receipt were found."),
+                        title);
+                    return;
+                }
+
+                var result = await Task.Run(() => policy.Inspect(
+                    snapshot.LocalCacheFolder, current.Item.Id,
+                    current.Item.Title, receipts));
+                if (!result.InventoryVerified)
+                {
+                    playniteApi.Dialogs.ShowMessage(
+                        PclsResources.Get("LOCPLSZipLauncherReviewRefused",
+                            "Extracted files or their ownership inventory have changed. No launcher is approved. Review the files manually."),
+                        title);
+                    return;
+                }
+
+                var top = result.Launchers.Candidates.Take(6)
+                    .Select(candidate => "  " + candidate.RelativePath + " — " +
+                        candidate.Kind).ToList();
+                var preview = top.Count == 0
+                    ? PclsResources.Get("LOCPLSZipLauncherReviewEmpty",
+                        "No supported Windows launcher candidates were found.")
+                    : string.Join(Environment.NewLine, top);
+                playniteApi.Dialogs.ShowMessage(
+                    PclsResources.Format("LOCPLSZipLauncherReviewCompleted",
+                        "Verified extracted ZIP inventory:{0}{1}{0}{0}Candidate launchers (first six):{0}{2}{0}{0}These are only suggestions. No launcher or installer has been approved or executed. Playnite install state and game actions are unchanged.",
+                        Environment.NewLine, result.ExtractedDirectory, preview),
+                    title);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn(ex, "PCLS could not verify extracted ZIP launcher candidates.");
+                playniteApi.Dialogs.ShowMessage(
+                    PclsResources.Get("LOCPLSZipLauncherReviewFailed",
+                        "Launcher review could not be completed. No files were changed."),
+                    title);
+            }
+        }
+
         private void CancelZipExtraction(Guid gameId)
         {
             CancellationTokenSource cancellation;
