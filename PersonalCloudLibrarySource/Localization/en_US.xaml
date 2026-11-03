@@ -15,6 +15,12 @@
     <sys:String x:Key="LOCPLSZipReviewFailed">ZIP review could not be completed. No files were changed.</sys:String>
     <sys:String x:Key="LOCPLSZipExtractTitle">Extract ZIP to Separate Cache Folder</sys:String>
     <sys:String x:Key="LOCPLSZipExtractCancelMenu">Cancel ZIP Extraction</sys:String>
+    <sys:String x:Key="LOCPLSZipLauncherReviewTitle">Review Extracted ZIP Launchers</sys:String>
+    <sys:String x:Key="LOCPLSZipLauncherReviewUnavailable">No managed extracted ZIP and matching inventory receipt were found.</sys:String>
+    <sys:String x:Key="LOCPLSZipLauncherReviewRefused">Extracted files or their ownership inventory have changed. No launcher is approved. Review the files manually.</sys:String>
+    <sys:String x:Key="LOCPLSZipLauncherReviewEmpty">No supported Windows launcher candidates were found.</sys:String>
+    <sys:String x:Key="LOCPLSZipLauncherReviewCompleted">Verified extracted ZIP inventory:{0}{1}{0}{0}Candidate launchers (first six):{0}{2}{0}{0}These are only suggestions. No launcher or installer has been approved or executed. Playnite install state and game actions are unchanged.</sys:String>
+    <sys:String x:Key="LOCPLSZipLauncherReviewFailed">Launcher review could not be completed. No files were changed.</sys:String>
     <sys:String x:Key="LOCPLSZipExtractConfirmation">Keep the current ZIP (No), or extract its verified contents to this new folder (Yes)?{0}{0}{1}{0}{0}No existing files will be overwritten. No executable or installer will run. Playnite installed state and game launch settings will NOT change. The result is a separate managed-cache extraction.</sys:String>
     <sys:String x:Key="LOCPLSZipExtractUnavailable">Extraction is unavailable: the destination is unsafe, already occupied or already recorded. No files were changed.</sys:String>
     <sys:String x:Key="LOCPLSZipExtractCancelled">ZIP extraction was cancelled. Existing source and game files were preserved.</sys:String>
