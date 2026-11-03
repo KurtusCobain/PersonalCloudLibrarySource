@@ -81,10 +81,17 @@ jobs:
             if ($rarBytes -lt 8 -or $rarBytes -gt 2097152) {
               throw "RAR fixture $name failed size bounds."
             }
+            $expectedHashes = @{
+              'Rar.rar' = '60DB161DE57DC59AA12E0C45B1B70D78904DA3D104E74748972AC38643F12802'
+              'Rar5.rar' = '3319DE3E8A91A58D08D8A83F48EBAE7E6B022C542B4A58775BAB64F4063988A9'
+            }
+            $hash = (Get-FileHash -LiteralPath $rarFixture -Algorithm SHA256).Hash
+            if ($hash -ne $expectedHashes[$name]) {
+              throw "Upstream archive fixture checksum changed: $name. Do not trust or execute it."
+            }
             & $exe $rarFixture
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            Write-Host ($name + ' fixture SHA256: ' +
-              (Get-FileHash -LiteralPath $rarFixture -Algorithm SHA256).Hash)
+            Write-Host ($name + ' immutable fixture SHA256: ' + $hash)
           }
 
           $assemblyFiles = @(Get-ChildItem -LiteralPath $built -Filter '*.dll' -File |
