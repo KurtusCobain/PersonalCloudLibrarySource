@@ -469,6 +469,61 @@ namespace PersonalCloudLibrarySource
             }
         }
 
+        private async void ReviewManagedZipMaintenanceAsync(GameCommandTarget selected)
+        {
+            var title = PclsResources.Get("LOCPLSZipMaintenanceTitle",
+                "Review Managed ZIP Maintenance");
+            try
+            {
+                if (selected?.Game == null || selected.Game.PluginId != Id)
+                    return;
+                var snapshot = settings.GetRuntimeSettingsSnapshot();
+                if (snapshot == null || !snapshot.Enabled)
+                    return;
+                var currentManifest = LoadValidatedManifest(snapshot);
+                var target = gameCommandService.ResolveTargets(
+                    new[] { selected.Game }, currentManifest.Items,
+                    snapshot, Id).Single();
+                if (target.Item == null ||
+                    !string.Equals(target.Item.Id, selected.Game.GameId,
+                        StringComparison.Ordinal))
+                    return;
+
+                var root = snapshot.LocalCacheFolder;
+                var itemId = target.Item.Id;
+                var receiptStore = new CacheOwnershipReceiptStore(Path.Combine(
+                    GetPluginDataDirectory(), "ownership-receipts"));
+                var approvals = new ZipLauncherApprovalService(Path.Combine(
+                    GetPluginDataDirectory(), "zip-launcher-approvals"));
+                var maintenance = new ZipManagedMaintenanceService();
+                var report = await Task.Run(() => maintenance.Assess(
+                    root, itemId, receiptStore, approvals));
+
+                // A completed read-only review must not be presented as a
+                // current safe-delete permit. Even Clean is informational.
+                playniteApi.Dialogs.ShowMessage(
+                    PclsResources.Format("LOCPLSZipMaintenanceCompleted",
+                        "Managed ZIP maintenance review:{0}{0}Status: {1}{0}Extracted files recorded: {2}{0}Folders recorded: {3}{0}Inventory verified: {4}{0}{0}{5}{0}{0}No files were changed. Automatic repair and recursive removal are disabled. If files differ, preserve game saves and review them manually.",
+                        Environment.NewLine,
+                        report.Status.ToString(),
+                        report.RecordedFileCount,
+                        report.RecordedDirectoryCount,
+                        report.HasVerifiedInventory
+                            ? PclsResources.Get("LOCPLSZipMaintenanceYes", "Yes")
+                            : PclsResources.Get("LOCPLSZipMaintenanceNo", "No"),
+                        report.Reason),
+                    title);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn(ex, "PCLS managed ZIP maintenance review failed.");
+                playniteApi.Dialogs.ShowMessage(
+                    PclsResources.Get("LOCPLSZipMaintenanceFailed",
+                        "Managed ZIP maintenance could not be safely reviewed. No files were changed."),
+                    title);
+            }
+        }
+
         private void CancelZipExtraction(Guid gameId)
         {
             CancellationTokenSource cancellation;
