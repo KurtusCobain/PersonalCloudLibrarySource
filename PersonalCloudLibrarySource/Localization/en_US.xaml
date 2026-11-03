@@ -41,6 +41,7 @@
     <sys:String x:Key="LOCPLSZipRecoveryTitle">Manage ZIP Recovery</sys:String>
     <sys:String x:Key="LOCPLSZipRecoveryBusy">Finish or cancel active transfers before moving a managed ZIP.</sys:String>
     <sys:String x:Key="LOCPLSZipRecoveryAmbiguous">ZIP recovery journal or folder locations are inconsistent. No files were changed. Preserve both folders and the journal for manual recovery.</sys:String>
+    <sys:String x:Key="LOCPLSZipRecoveryAlreadyRestored">This ZIP recovery was already restored and finalized. The original files remain in place; no further recovery move is available for this journal.</sys:String>
     <sys:String x:Key="LOCPLSZipRecoveryNotClean">A managed ZIP can be moved to recovery only when its original inventory is unchanged and its launcher approval has been revoked. Any saves or modified content must be preserved and reviewed manually.</sys:String>
     <sys:String x:Key="LOCPLSZipRecoveryQuarantineConfirm">Move this verified, unapproved ZIP extraction to a reversible recovery folder?{0}{0}From: {1}{0}To: {2}{0}{0}Yes moves the entire folder without deleting files. No keeps it. Revoke launcher approval first and refresh Playnite afterward.</sys:String>
     <sys:String x:Key="LOCPLSZipRecoveryRestoreConfirm">Restore this ZIP from its recovery folder?{0}{0}From: {1}{0}To: {2}{0}{0}Yes moves the intact verified folder back without deleting files. No keeps it in recovery. Launcher approval is NOT recreated.</sys:String>
