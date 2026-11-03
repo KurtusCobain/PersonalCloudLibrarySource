@@ -45,6 +45,44 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Analyze C# source and upload results
+        id: codeql
         uses: github/codeql-action/analyze@v4
         with:
           category: "/language:csharp/v1-integration"
+          output: codeql-results
+
+      - name: Fail on ZIP Slip findings in this scan
+        shell: pwsh
+        run: |
+          $sarifFiles = @(Get-ChildItem -LiteralPath 'codeql-results' -Filter '*.sarif' -Recurse -File)
+          if ($sarifFiles.Count -eq 0) {
+            throw 'CodeQL did not produce SARIF; cannot assert ZIP Slip clearance.'
+          }
+          $findings = @()
+          foreach ($file in $sarifFiles) {
+            $report = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
+            foreach ($run in @($report.runs)) {
+              foreach ($result in @($run.results)) {
+                $rule = [string]$result.ruleId
+                if ($rule -match '(?i)(zipslip|zip.slip|archive.extraction)') {
+                  $location = [string]$result.locations[0].physicalLocation.artifactLocation.uri
+                  $line = [string]$result.locations[0].physicalLocation.region.startLine
+                  $findings += "$rule at ${location}:${line}"
+                }
+              }
+            }
+          }
+          if ($findings.Count -gt 0) {
+            $findings | ForEach-Object { Write-Error $_ }
+            throw "CodeQL reported $($findings.Count) ZIP Slip / archive extraction finding(s)."
+          }
+          Write-Host 'CodeQL SARIF: zero ZIP Slip / archive extraction findings.'
+
+      - name: Retain private SARIF evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcls-codeql-csharp-${{ github.run_number }}
+          path: codeql-results/**/*.sarif
+          if-no-files-found: warn
+          retention-days: 7
