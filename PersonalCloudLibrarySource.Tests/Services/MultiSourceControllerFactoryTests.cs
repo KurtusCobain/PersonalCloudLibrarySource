@@ -135,6 +135,30 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void MultiSourceUninstallRefusesManagedZipFootprintEvenWithoutValidReceipt()
+        {
+            var plan = Prepare();
+            Assert.That(plan.CanPublish, Is.True, plan.RefusalReason);
+            var cached = Path.Combine(cache, "test-game", "game.exe");
+            Directory.CreateDirectory(Path.GetDirectoryName(cached));
+            File.WriteAllText(cached, "cached game");
+            var managed = Path.Combine(cache,
+                ZipManagedExtractionService.ReceiptKeyForGame("game"));
+            Directory.CreateDirectory(managed);
+            var precious = Path.Combine(managed, "progress.sav");
+            File.WriteAllText(precious, "do not delete");
+            var receipts = new CacheOwnershipReceiptStore(Path.Combine(
+                root, "ownership-receipts"));
+            UninstallController action;
+            Assert.That(new MultiSourceControllerFactory().TryPrepareUninstall(
+                null, Game(), pluginId, plan, out action, receipts), Is.False,
+                "A source-scoped uninstall must not bypass managed ZIP isolation.");
+            Assert.That(action, Is.Null);
+            Assert.That(File.ReadAllText(precious), Is.EqualTo("do not delete"));
+            Assert.That(File.ReadAllText(cached), Is.EqualTo("cached game"));
+        }
+
+        [Test]
         public void NewProfileInstallUsesNamespacedReceiptIdThroughFactory()
         {
             var added = Profile();
