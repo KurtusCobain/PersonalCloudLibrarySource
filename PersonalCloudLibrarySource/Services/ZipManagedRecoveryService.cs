@@ -92,6 +92,13 @@ namespace PersonalCloudLibrarySource
                 ZipRecoveryJournalEntry entry;
                 if (!TryReadJournal(cacheRoot, gameId, out entry))
                     return result;
+                var marker = journal + ".restored";
+                var markerExists = File.Exists(marker) || Directory.Exists(marker);
+                if (markerExists && !TryReadRestoredMarker(marker, entry.TransactionId))
+                {
+                    result.Reason = "Recovery finalization marker is invalid; preserve both folders.";
+                    return result;
+                }
                 var originalExists = File.Exists(original) || Directory.Exists(original);
                 if (File.Exists(original) || File.Exists(recovery) ||
                     (originalExists && recoveryExists))
@@ -101,16 +108,24 @@ namespace PersonalCloudLibrarySource
                 }
                 if (Directory.Exists(recovery))
                 {
+                    if (markerExists)
+                    {
+                        result.Reason = "Restored marker conflicts with a quarantined folder.";
+                        return result;
+                    }
                     result.State = ZipRecoveryState.Quarantined;
                     result.Reason = "Managed ZIP folder is in recoverable quarantine; no data was deleted.";
                 }
                 else if (Directory.Exists(original))
                 {
-                    // We cannot infer from a single immutable journal whether
-                    // this is a prepared transaction or one already restored.
-                    // Both states are recoverable WITHOUT any automatic move.
-                    result.State = ZipRecoveryState.Prepared;
-                    result.Reason = "Original folder exists and recovery folder is absent. An explicit retry may be possible.";
+                    // A completed restore has its own create-only marker.
+                    // Crashes before marker creation remain conservative:
+                    // the original folder must pass a new full verification.
+                    result.State = markerExists
+                        ? ZipRecoveryState.Restored : ZipRecoveryState.Prepared;
+                    result.Reason = markerExists
+                        ? "Managed ZIP was restored and finalization recorded."
+                        : "Original folder exists and recovery folder is absent. An explicit retry may be possible.";
                 }
                 else
                 {
@@ -218,6 +233,8 @@ namespace PersonalCloudLibrarySource
                     out recovery, out journal)) return false;
                 ZipRecoveryJournalEntry entry;
                 if (!TryReadJournal(cacheRoot, gameId, out entry) ||
+                    File.Exists(journal + ".restored") ||
+                    Directory.Exists(journal + ".restored") ||
                     !Directory.Exists(original) || File.Exists(recovery) ||
                     Directory.Exists(recovery) ||
                     approvals.HasApprovalFootprint(gameId, cacheRoot))
@@ -269,6 +286,8 @@ namespace PersonalCloudLibrarySource
                     out recovery, out journal)) return false;
                 ZipRecoveryJournalEntry entry;
                 if (!TryReadJournal(cacheRoot, gameId, out entry) ||
+                    File.Exists(journal + ".restored") ||
+                    Directory.Exists(journal + ".restored") ||
                     File.Exists(original) || Directory.Exists(original) ||
                     !Directory.Exists(recovery) ||
                     approvals.HasApprovalFootprint(gameId, cacheRoot))
@@ -294,7 +313,11 @@ namespace PersonalCloudLibrarySource
                     approvals.HasApprovalFootprint(gameId, cacheRoot))
                     return false;
                 Directory.Move(recovery, original);
-                reason = "Managed ZIP restored to its original cache folder. No files were deleted or launcher approval created.";
+                var finalized = TryWriteRestoredMarker(
+                    journal + ".restored", entry.TransactionId);
+                reason = finalized
+                    ? "Managed ZIP restored and recorded. No files were deleted or launcher approval created."
+                    : "Managed ZIP files were restored safely, but its finalization marker could not be saved. Review recovery state manually.";
                 return true;
             }
             catch (OperationCanceledException)
@@ -331,6 +354,49 @@ namespace PersonalCloudLibrarySource
                 new SafeCacheDeletionPolicy().Authorize(root, directory, false).Allowed &&
                 string.IsNullOrEmpty(
                     SafeCacheDeletionExecutor.GetUnsafeDescendantReason(directory));
+        }
+
+        private bool TryReadRestoredMarker(string path, string transactionId)
+        {
+            if (!File.Exists(path) ||
+                (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+                return false;
+            var info = new FileInfo(path);
+            return info.Length > 0 && info.Length <= 64 &&
+                string.Equals(File.ReadAllText(path, Encoding.ASCII),
+                    transactionId, StringComparison.Ordinal);
+        }
+
+        private bool TryWriteRestoredMarker(string path, string transactionId)
+        {
+            try
+            {
+                if (File.Exists(path) || Directory.Exists(path))
+                    return false;
+                var temp = Path.Combine(storeRoot,
+                    Guid.NewGuid().ToString("N") + ".tmp");
+                try
+                {
+                    using (var output = new FileStream(temp,
+                        FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                    using (var writer = new StreamWriter(output, Encoding.ASCII))
+                        writer.Write(transactionId);
+                    if (File.Exists(path) || Directory.Exists(path))
+                        return false;
+                    File.Move(temp, path);
+                    return true;
+                }
+                finally
+                {
+                    if (File.Exists(temp)) File.Delete(temp);
+                }
+            }
+            catch (Exception ex) when (ex is IOException ||
+                ex is UnauthorizedAccessException || ex is ArgumentException ||
+                ex is NotSupportedException)
+            {
+                return false;
+            }
         }
 
         private bool TryCreateJournal(string journal, ZipRecoveryJournalEntry entry)
