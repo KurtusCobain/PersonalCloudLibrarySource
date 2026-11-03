@@ -82,6 +82,7 @@
     <Compile Include="Services\ArchiveInspectionPolicyTests.cs" />
     <Compile Include="Services\GameLauncherCandidatePolicyTests.cs" />
     <Compile Include="Services\ZipGameReviewTargetPolicyTests.cs" />
+    <Compile Include="Services\ZipExtractedLauncherReviewServiceTests.cs" />
     <Compile Include="Transfers\ZipPackageStagingExtractorTests.cs" />
     <Compile Include="Transfers\ZipPackageReviewServiceTests.cs" />
     <Compile Include="Transfers\ZipManagedExtractionServiceTests.cs" />
