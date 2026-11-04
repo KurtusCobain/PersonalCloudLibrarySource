@@ -79,10 +79,16 @@ namespace PersonalCloudLibrarySource.Tests.Services
         [TestCase("game/CON.txt")]
         [TestCase("game/trailed./file.exe")]
         [TestCase("game/file.exe:stream")]
-        [TestCase("game/sub\u0001/file.exe")]
         public void UnsafePathIsRejectedBeforeAnyExtraction(string path)
         {
             Assert.That(Check(File(path)).Passed, Is.False, path);
+        }
+
+        [Test]
+        public void ControlCharacterInArchivePathIsRejectedWithoutPuttingItInNUnitXml()
+        {
+            var unsafePath = "game/sub" + (char)1 + "/file.exe";
+            Assert.That(Check(File(unsafePath)).Passed, Is.False);
         }
 
         [Test]
