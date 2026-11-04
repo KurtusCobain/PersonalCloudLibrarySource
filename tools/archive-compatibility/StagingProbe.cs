@@ -159,14 +159,31 @@ namespace PclsArchiveCompatibility
                                             written > MaxFileBytes - count ||
                                             copied > MaxTotalBytes - count)
                                             throw new InvalidDataException("Stream exceeded declared or absolute limit.");
+                                        if (cancellationPoint == CancellationPoint.DuringFirstFile &&
+                                            fileCount == 0 && written == 0)
+                                        {
+                                            // The test fixture must produce a
+                                            // genuinely PARTIAL first file, not
+                                            // merely cancel before closing a
+                                            // fully-written small first chunk.
+                                            if (count < 2 || item.UncompressedBytes < 2)
+                                                throw new InvalidDataException(
+                                                    "Mid-write cancellation fixture is too small.");
+                                            var partial = count / 2;
+                                            output.Write(buffer, 0, partial);
+                                            digest.TransformBlock(buffer, 0, partial, buffer, 0);
+                                            written += partial;
+                                            copied += partial;
+                                            if (written >= item.UncompressedBytes)
+                                                throw new InvalidDataException(
+                                                    "Mid-write cancellation failed to produce incomplete output.");
+                                            throw new OperationCanceledException(
+                                                "Synthetic cancellation after a partial output chunk.");
+                                        }
                                         output.Write(buffer, 0, count);
                                         digest.TransformBlock(buffer, 0, count, buffer, 0);
                                         written += count;
                                         copied += count;
-                                        if (cancellationPoint == CancellationPoint.DuringFirstFile &&
-                                            fileCount == 0 && written > 0)
-                                            throw new OperationCanceledException(
-                                                "Synthetic cancellation during first file stream.");
                                     }
                                     if (written != item.UncompressedBytes)
                                         throw new InvalidDataException("Decoded size differs from inspected header.");
