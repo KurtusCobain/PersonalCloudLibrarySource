@@ -63,7 +63,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
         [Test]
         public void ControlCharactersInMemberPathsFailClosed()
         {
-            foreach (var character in new[] { (char)1, '\\t', '\\n', (char)127 })
+            foreach (var character in new[] { (char)1, (char)9, (char)10, (char)127 })
             {
                 var path = "Game/unsafe" + character + ".exe";
                 var result = new ArchiveInspectionPolicy().Inspect(new[] { File(path) });
