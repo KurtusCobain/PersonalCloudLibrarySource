@@ -29,14 +29,16 @@ namespace PclsArchiveCompatibility
                      args[0] == "--ci-stage-cancel" ||
                      args[0] == "--ci-stage-cancel-midwrite"))
                 {
-                    if (args.Length != 3)
-                        throw new ArgumentException("CI staging proof needs archive and fresh temporary stage path.");
+                    if (args.Length != 5)
+                        throw new ArgumentException(
+                            "CI staging proof requires archive, new stage path, reviewed SHA-256 and reviewed source path.");
                     var cancellationPoint = args[0] == "--ci-stage-cancel-midwrite"
                         ? StagingProbe.CancellationPoint.DuringFirstFile
                         : args[0] == "--ci-stage-cancel"
                             ? StagingProbe.CancellationPoint.AfterCompletedFile
                             : StagingProbe.CancellationPoint.None;
-                    StagingProbe.Run(args[1], args[2], cancellationPoint);
+                    StagingProbe.Run(args[1], args[2], cancellationPoint,
+                        args[3], args[4]);
                     return 0;
                 }
                 if (args.Length == 0)
