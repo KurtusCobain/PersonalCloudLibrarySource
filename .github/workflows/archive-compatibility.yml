@@ -182,6 +182,18 @@ jobs:
           }
           Write-Host 'PASS encrypted-header 7z denied without extraction.'
 
+          # Negative staging must reject BEFORE creating a private output
+          # directory. Signatures and unsupported encrypted metadata cannot
+          # grant write permission.
+          foreach ($bad in @($encrypted, $truncated7z, $truncatedRar)) {
+            $badStage = Join-Path $fixture ('stage-denied-' + [IO.Path]::GetFileName($bad))
+            & $exe '--ci-stage' $bad $badStage 2>$null
+            if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $badStage)) {
+              throw "Unsafe archive was staged or created output: $bad"
+            }
+          }
+          Write-Host 'PASS corrupt and encrypted archives denied before staging.'
+
           $assemblyFiles = @(Get-ChildItem -LiteralPath $built -Filter '*.dll' -File |
             Select-Object -ExpandProperty Name | Sort-Object)
           Write-Host ('Runtime dependency DLLs: ' + ($assemblyFiles -join ', '))
