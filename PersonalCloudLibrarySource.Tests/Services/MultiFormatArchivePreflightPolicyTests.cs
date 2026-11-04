@@ -43,8 +43,6 @@ namespace PersonalCloudLibrarySource.Tests.Services
         [TestCase("Split")]
         [TestCase("Anti")]
         [TestCase("Link")]
-        [TestCase("FirstVolume")]
-        [TestCase("LastVolume")]
         [TestCase("Reparse")]
         [TestCase("UnixLink")]
         [TestCase("Device")]
@@ -58,8 +56,6 @@ namespace PersonalCloudLibrarySource.Tests.Services
                 case "Split": item.IsSplitAfter = true; break;
                 case "Anti": item.IsAntiItem = true; break;
                 case "Link": item.LinkTarget = "../../victim"; break;
-                case "FirstVolume": item.FirstVolume = 1; break;
-                case "LastVolume": item.LastVolume = 1; break;
                 case "Reparse": item.Attributes = 0x400; break;
                 case "UnixLink": item.Attributes = unchecked((int)0xA0000000); break;
                 case "Device": item.Attributes = unchecked((int)0x20000000); break;
@@ -121,6 +117,15 @@ namespace PersonalCloudLibrarySource.Tests.Services
             var reviewed = new MultiFormatArchivePreflightPolicy().Inspect(
                 new[] { entry }, 100);
             Assert.That(reviewed.Passed, Is.False);
+        }
+
+        [Test]
+        public void ActualMultiVolumeArchiveIsRefusedEvenIfEntriesLookComplete()
+        {
+            var policy = new MultiFormatArchivePreflightPolicy();
+            Assert.That(policy.Inspect(new[] { File() }, 512, 2).Passed, Is.False);
+            Assert.That(policy.Inspect(new[] { File() }, 512, 0).Passed, Is.False);
+            Assert.That(policy.Inspect(new[] { File() }, 512, 1).Passed, Is.True);
         }
 
         [Test]
