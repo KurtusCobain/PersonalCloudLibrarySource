@@ -102,6 +102,7 @@
     <Compile Include="Services\ManifestLoader.cs" />
     <Compile Include="Services\ManifestItemMapper.cs" />
     <Compile Include="Services\ArchiveInspectionPolicy.cs" />
+    <Compile Include="Services\MultiFormatArchivePreflightPolicy.cs" />
     <Compile Include="Services\GameLauncherCandidatePolicy.cs" />
     <Compile Include="Services\ZipGameReviewTargetPolicy.cs" />
     <Compile Include="Services\ZipExtractedLauncherReviewService.cs" />
