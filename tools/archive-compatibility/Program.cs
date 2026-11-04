@@ -75,15 +75,13 @@ namespace PclsArchiveCompatibility
                             IsAntiItem = entry is SevenZipArchiveEntry &&
                                 ((SevenZipArchiveEntry)entry).IsAnti,
                             LinkTarget = entry.LinkTarget,
-                            FirstVolume = entry.VolumeIndexFirst,
-                            LastVolume = entry.VolumeIndexLast,
                             Attributes = entry.Attrib,
                             UncompressedBytes = entry.Size,
                             CompressedBytes = entry.CompressedSize,
-                            IsSolid = entry.IsSolid
+                            IsSolid = archive.IsSolid || entry.IsSolid
                         }).ToList();
                     var review = new MultiFormatArchivePreflightPolicy()
-                        .Inspect(metadata, source.Length);
+                        .Inspect(metadata, source.Length, archive.Volumes.Count());
                     if (!review.Passed)
                     {
                         // Diagnostic only, in isolated CI fixtures. Never
@@ -95,7 +93,7 @@ namespace PclsArchiveCompatibility
                                 " split=" + entry.IsSplitAfter +
                                 " anti=" + entry.IsAntiItem +
                                 " linked=" + (!string.IsNullOrWhiteSpace(entry.LinkTarget)) +
-                                " volumes=" + entry.FirstVolume + "/" + entry.LastVolume +
+                                " archiveVolumeCount=" + archive.Volumes.Count() +
                                 " attrib=" + entry.Attributes +
                                 " solid=" + entry.IsSolid +
                                 " size=" + entry.UncompressedBytes +
