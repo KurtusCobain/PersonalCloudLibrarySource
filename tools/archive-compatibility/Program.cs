@@ -22,6 +22,17 @@ namespace PclsArchiveCompatibility
         {
             try
             {
+                // Explicit CI-only proof mode; the shipping Playnite package
+                // neither includes nor invokes this command.
+                if (args.Length > 0 &&
+                    (args[0] == "--ci-stage" || args[0] == "--ci-stage-cancel"))
+                {
+                    if (args.Length != 3)
+                        throw new ArgumentException("CI staging proof needs archive and fresh temporary stage path.");
+                    StagingProbe.Run(args[1], args[2],
+                        args[0] == "--ci-stage-cancel");
+                    return 0;
+                }
                 if (args.Length == 0)
                     throw new ArgumentException("Supply at least one .7z or .rar fixture.");
                 foreach (var path in args)
