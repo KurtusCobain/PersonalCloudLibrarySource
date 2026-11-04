@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using SharpCompress.Archives;
+using SharpCompress.Archives.SevenZip;
+using PersonalCloudLibrarySource;
 
 namespace PclsArchiveCompatibility
 {
@@ -51,9 +53,45 @@ namespace PclsArchiveCompatibility
                 if (read < 7 || !ValidSignature(signature, extension))
                     throw new InvalidDataException("Archive signature does not match extension.");
                 source.Position = 0;
+                string originalDigest;
+                using (var sha = SHA256.Create())
+                    originalDigest = BitConverter.ToString(
+                        sha.ComputeHash(source)).Replace("-", "");
+                source.Position = 0;
 
                 using (var archive = ArchiveFactory.OpenArchive(source))
                 {
+                    // Entire-archive metadata preflight runs BEFORE any
+                    // decompressed content is streamed, using the same pure
+                    // validation policy compiled into the Playnite plugin.
+                    var metadata = archive.Entries.Select(entry =>
+                        new MultiFormatArchiveEntry
+                        {
+                            Path = entry.Key,
+                            IsDirectory = entry.IsDirectory,
+                            IsEncrypted = entry.IsEncrypted,
+                            IsComplete = entry.IsComplete,
+                            IsSplitAfter = entry.IsSplitAfter,
+                            IsAntiItem = entry is SevenZipArchiveEntry &&
+                                ((SevenZipArchiveEntry)entry).IsAnti,
+                            LinkTarget = entry.LinkTarget,
+                            FirstVolume = entry.VolumeIndexFirst,
+                            LastVolume = entry.VolumeIndexLast,
+                            Attributes = entry.Attrib,
+                            UncompressedBytes = entry.Size,
+                            CompressedBytes = entry.CompressedSize,
+                            IsSolid = entry.IsSolid
+                        }).ToList();
+                    var review = new MultiFormatArchivePreflightPolicy()
+                        .Inspect(metadata, source.Length);
+                    if (!review.Passed)
+                        throw new InvalidDataException(
+                            "Shared preflight rejected archive: " + review.Reason);
+                    Console.WriteLine("PASS shared PCLS read-only preflight: " +
+                        review.EntryCount + " entries, " + review.FileCount +
+                        " regular files, " + review.TotalUncompressedBytes +
+                        " declared bytes; extraction remains unauthorized.");
+
                     var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                     var entries = 0;
                     long total = 0;
@@ -102,8 +140,24 @@ namespace PclsArchiveCompatibility
                     }
                     if (files == 0)
                         throw new InvalidDataException("Archive contains no regular files.");
+                    if (files != review.FileCount ||
+                        entries != review.EntryCount ||
+                        total != review.TotalUncompressedBytes)
+                        throw new InvalidDataException(
+                            "Streamed payload disagrees with shared preflight.");
+                    source.Position = 0;
+                    using (var sha = SHA256.Create())
+                    {
+                        var finalDigest = BitConverter.ToString(
+                            sha.ComputeHash(source)).Replace("-", "");
+                        if (!string.Equals(finalDigest, originalDigest,
+                                StringComparison.Ordinal))
+                            throw new InvalidDataException(
+                                "Source archive bytes changed during inspection.");
+                    }
                     Console.WriteLine("PASS " + extension + " entries=" + entries +
-                        " files=" + files + " total=" + total);
+                        " files=" + files + " total=" + total +
+                        " source_sha256=" + originalDigest);
                 }
             }
         }
