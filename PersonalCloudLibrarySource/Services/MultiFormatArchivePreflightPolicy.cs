@@ -63,7 +63,7 @@ namespace PersonalCloudLibrarySource
                     return Reject("Archive contains too many entries.");
                 if (item == null || !item.IsComplete ||
                     item.IsEncrypted || item.IsSplitAfter || item.IsAntiItem ||
-                    !string.IsNullOrWhiteSpace(item.LinkTarget))
+                    item.LinkTarget != null)
                     return Reject("Archive has incomplete, encrypted, split or linked members.");
                 if (item.UncompressedBytes < 0 || item.CompressedBytes < 0 ||
                     item.UncompressedBytes > MaximumFileBytes)
@@ -93,7 +93,7 @@ namespace PersonalCloudLibrarySource
                 {
                     EntryPath = item.Path,
                     IsDirectory = item.IsDirectory,
-                    IsLink = !string.IsNullOrWhiteSpace(item.LinkTarget),
+                    IsLink = item.LinkTarget != null,
                     UncompressedBytes = item.UncompressedBytes,
                     // For solid files, this pure metadata stage cannot assign
                     // shared compressed bytes to individual entries. Use the
