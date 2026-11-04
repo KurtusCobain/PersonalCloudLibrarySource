@@ -25,12 +25,18 @@ namespace PclsArchiveCompatibility
                 // Explicit CI-only proof mode; the shipping Playnite package
                 // neither includes nor invokes this command.
                 if (args.Length > 0 &&
-                    (args[0] == "--ci-stage" || args[0] == "--ci-stage-cancel"))
+                    (args[0] == "--ci-stage" ||
+                     args[0] == "--ci-stage-cancel" ||
+                     args[0] == "--ci-stage-cancel-midwrite"))
                 {
                     if (args.Length != 3)
                         throw new ArgumentException("CI staging proof needs archive and fresh temporary stage path.");
-                    StagingProbe.Run(args[1], args[2],
-                        args[0] == "--ci-stage-cancel");
+                    var cancellationPoint = args[0] == "--ci-stage-cancel-midwrite"
+                        ? StagingProbe.CancellationPoint.DuringFirstFile
+                        : args[0] == "--ci-stage-cancel"
+                            ? StagingProbe.CancellationPoint.AfterCompletedFile
+                            : StagingProbe.CancellationPoint.None;
+                    StagingProbe.Run(args[1], args[2], cancellationPoint);
                     return 0;
                 }
                 if (args.Length == 0)
