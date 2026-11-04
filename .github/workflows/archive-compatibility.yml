@@ -112,6 +112,27 @@ jobs:
           }
           Write-Host 'PASS truncated 7z denied without extraction.'
 
+          # Entry enumeration must reject at the probe's 512-member budget
+          # before accumulating metadata or streaming any member contents.
+          $tooMany = Join-Path $fixture 'too-many'
+          New-Item -ItemType Directory -Path $tooMany -Force | Out-Null
+          for ($i = 0; $i -le 512; $i++) {
+            [IO.File]::WriteAllText((Join-Path $tooMany ('item-{0:d4}.txt' -f $i)), 'synthetic')
+          }
+          $tooManyArchive = Join-Path $fixture 'too-many.7z'
+          Push-Location $fixture
+          try {
+            & $sevenZip a '-t7z' '-mx=1' $tooManyArchive '.\\too-many' | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create oversized entry-list archive.' }
+          } finally { Pop-Location }
+          $tooManyStderr = Join-Path $fixture 'too-many-stderr.txt'
+          $tooManyReject = Start-Process -FilePath (Resolve-Path $exe).Path -ArgumentList @($tooManyArchive) -Wait -PassThru -NoNewWindow -RedirectStandardError $tooManyStderr
+          if ($tooManyReject.ExitCode -eq 0 -or
+              (Get-Content -LiteralPath $tooManyStderr -Raw) -notmatch 'entry count limit') {
+            throw 'Oversized entry list was not denied by the bounded preflight.'
+          }
+          Write-Host 'PASS more than 512 entries rejected before metadata materialization.'
+
           # Header-encrypted 7z must also fail closed. This password is
           # synthetic CI fixture data, never a user credential.
           $encrypted = Join-Path $fixture 'encrypted.7z'
