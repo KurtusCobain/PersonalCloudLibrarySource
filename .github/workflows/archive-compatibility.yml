@@ -66,21 +66,23 @@ jobs:
           }
           & $exe $archive
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $reviewedSevenPath = (Resolve-Path -LiteralPath $archive).Path
+          $reviewedSevenSha = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
 
           # CI-only transactional staging proof: full output bytes, exact
           # tree, and cancellation cleanup. No files are published to PCLS.
           $successfulStage = Join-Path $fixture 'stage-seven-success'
-          & $exe '--ci-stage' $archive $successfulStage
+          & $exe '--ci-stage' $archive $successfulStage $reviewedSevenSha $reviewedSevenPath
           if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $successfulStage)) {
             throw '7z staging proof failed or left an unowned directory.'
           }
           $cancelStage = Join-Path $fixture 'stage-seven-cancel'
-          & $exe '--ci-stage-cancel' $archive $cancelStage
+          & $exe '--ci-stage-cancel' $archive $cancelStage $reviewedSevenSha $reviewedSevenPath
           if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $cancelStage)) {
             throw '7z cancellation failed to clean only verified-owned data.'
           }
           $midwriteStage = Join-Path $fixture 'stage-seven-midwrite'
-          & $exe '--ci-stage-cancel-midwrite' $archive $midwriteStage
+          & $exe '--ci-stage-cancel-midwrite' $archive $midwriteStage $reviewedSevenSha $reviewedSevenPath
           if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $midwriteStage)) {
             throw '7z mid-write cancellation left an unverified staging directory.'
           }
@@ -88,12 +90,37 @@ jobs:
           $existingStage = Join-Path $fixture 'stage-existing'
           New-Item -ItemType Directory -Path $existingStage -Force | Out-Null
           [IO.File]::WriteAllText((Join-Path $existingStage 'sentinel.txt'), 'keep')
-          & $exe '--ci-stage' $archive $existingStage 2>$null
+          & $exe '--ci-stage' $archive $existingStage $reviewedSevenSha $reviewedSevenPath 2>$null
           if ($LASTEXITCODE -eq 0 -or
               [IO.File]::ReadAllText((Join-Path $existingStage 'sentinel.txt')) -ne 'keep') {
             throw 'Existing staging destination was accepted or modified.'
           }
           Write-Host 'PASS existing destination untouched.'
+
+          # A source copied to another path must not inherit the first
+          # archive's review, even when all bytes are identical.
+          $otherSource = Join-Path $fixture 'same-bytes-new-path.7z'
+          Copy-Item -LiteralPath $archive -Destination $otherSource
+          $otherStage = Join-Path $fixture 'stage-wrong-source'
+          & $exe '--ci-stage' $otherSource $otherStage $reviewedSevenSha $reviewedSevenPath 2>$null
+          if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $otherStage)) {
+            throw 'An archive at a different source path reused stale review authorization.'
+          }
+          Write-Host 'PASS identical bytes at unreviewed source path denied.'
+
+          # A changed source at the reviewed path must be rejected before
+          # directory creation. This test mutates only a disposable fixture.
+          $staleSource = Join-Path $fixture 'reviewed-then-mutated.7z'
+          Copy-Item -LiteralPath $archive -Destination $staleSource
+          $stalePath = (Resolve-Path -LiteralPath $staleSource).Path
+          $staleDigest = (Get-FileHash -LiteralPath $staleSource -Algorithm SHA256).Hash
+          [IO.File]::AppendAllText($staleSource, 'changed after review')
+          $staleStage = Join-Path $fixture 'stage-stale-review'
+          & $exe '--ci-stage' $staleSource $staleStage $staleDigest $stalePath 2>$null
+          if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $staleStage)) {
+            throw 'Mutated archive was staged using stale review digest.'
+          }
+          Write-Host 'PASS changed source bytes denied before staging.'
 
           # This is an upstream test archive used strictly by CI, not a
           # downloadable game or an embedded production dependency. Failure
@@ -119,18 +146,19 @@ jobs:
             }
             & $exe $rarFixture
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $reviewedRarPath = (Resolve-Path -LiteralPath $rarFixture).Path
             $rarStage = Join-Path $fixture ('stage-' + $name + '-success')
-            & $exe '--ci-stage' $rarFixture $rarStage
+            & $exe '--ci-stage' $rarFixture $rarStage $hash $reviewedRarPath
             if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $rarStage)) {
               throw "RAR CI staging proof failed or left a directory: $name"
             }
             $rarCancelStage = Join-Path $fixture ('stage-' + $name + '-cancel')
-            & $exe '--ci-stage-cancel' $rarFixture $rarCancelStage
+            & $exe '--ci-stage-cancel' $rarFixture $rarCancelStage $hash $reviewedRarPath
             if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $rarCancelStage)) {
               throw "RAR CI cancellation proof failed or left a directory: $name"
             }
             $rarMidwriteStage = Join-Path $fixture ('stage-' + $name + '-midwrite')
-            & $exe '--ci-stage-cancel-midwrite' $rarFixture $rarMidwriteStage
+            & $exe '--ci-stage-cancel-midwrite' $rarFixture $rarMidwriteStage $hash $reviewedRarPath
             if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $rarMidwriteStage)) {
               throw "RAR CI mid-write cancellation left unverified data: $name"
             }
@@ -197,7 +225,9 @@ jobs:
           # grant write permission.
           foreach ($bad in @($encrypted, $truncated7z, $truncatedRar)) {
             $badStage = Join-Path $fixture ('stage-denied-' + [IO.Path]::GetFileName($bad))
-            & $exe '--ci-stage' $bad $badStage 2>$null
+            $badSha = (Get-FileHash -LiteralPath $bad -Algorithm SHA256).Hash
+            $badPath = (Resolve-Path -LiteralPath $bad).Path
+            & $exe '--ci-stage' $bad $badStage $badSha $badPath 2>$null
             if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $badStage)) {
               throw "Unsafe archive was staged or created output: $bad"
             }
