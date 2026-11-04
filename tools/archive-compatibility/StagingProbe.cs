@@ -26,7 +26,14 @@ namespace PclsArchiveCompatibility
             internal byte[] Digest;
         }
 
-        internal static void Run(string archivePath, string stagePath, bool cancelAfterFirstFile)
+        internal enum CancellationPoint
+        {
+            None,
+            AfterCompletedFile,
+            DuringFirstFile
+        }
+
+        internal static void Run(string archivePath, string stagePath, CancellationPoint cancellationPoint)
         {
             var temp = Environment.GetEnvironmentVariable("RUNNER_TEMP");
             if (string.IsNullOrWhiteSpace(temp))
@@ -138,31 +145,46 @@ namespace PclsArchiveCompatibility
                                 FileAccess.Write, FileShare.None))
                             using (var digest = SHA256.Create())
                             {
+                                // Track a file as soon as CreateNew succeeds. If
+                                // cancellation interrupts its first output chunk,
+                                // cleanup must know that it was created by THIS job.
+                                ownedFiles.Add(record);
                                 long written = 0;
-                                int count;
-                                while ((count = input.Read(buffer, 0, buffer.Length)) > 0)
+                                try
                                 {
-                                    if (written > item.UncompressedBytes - count ||
-                                        written > MaxFileBytes - count ||
-                                        copied > MaxTotalBytes - count)
-                                        throw new InvalidDataException("Stream exceeded declared or absolute limit.");
-                                    output.Write(buffer, 0, count);
-                                    digest.TransformBlock(buffer, 0, count, buffer, 0);
-                                    written += count;
-                                    copied += count;
+                                    int count;
+                                    while ((count = input.Read(buffer, 0, buffer.Length)) > 0)
+                                    {
+                                        if (written > item.UncompressedBytes - count ||
+                                            written > MaxFileBytes - count ||
+                                            copied > MaxTotalBytes - count)
+                                            throw new InvalidDataException("Stream exceeded declared or absolute limit.");
+                                        output.Write(buffer, 0, count);
+                                        digest.TransformBlock(buffer, 0, count, buffer, 0);
+                                        written += count;
+                                        copied += count;
+                                        if (cancellationPoint == CancellationPoint.DuringFirstFile &&
+                                            fileCount == 0 && written > 0)
+                                            throw new OperationCanceledException(
+                                                "Synthetic cancellation during first file stream.");
+                                    }
+                                    if (written != item.UncompressedBytes)
+                                        throw new InvalidDataException("Decoded size differs from inspected header.");
                                 }
-                                digest.TransformFinalBlock(new byte[0], 0, 0);
-                                if (written != item.UncompressedBytes)
-                                    throw new InvalidDataException("Decoded size differs from inspected header.");
-                                record.Length = written;
-                                record.Digest = digest.Hash;
+                                finally
+                                {
+                                    // Calculate a digest even when cancellation
+                                    // interrupts the stream. Only exact matching
+                                    // bytes can be deleted during rollback. A
+                                    // short/failed write without a reliable
+                                    // digest is left for manual inspection.
+                                    digest.TransformFinalBlock(new byte[0], 0, 0);
+                                    record.Length = written;
+                                    record.Digest = digest.Hash;
+                                }
                             }
-                            ownedFiles.Add(record);
                             fileCount++;
-                            // Simulate cancellation only at a closed, verified
-                            // file boundary so cleanup never guesses at the
-                            // contents of a partially written file.
-                            if (cancelAfterFirstFile)
+                            if (cancellationPoint == CancellationPoint.AfterCompletedFile)
                                 throw new OperationCanceledException("Synthetic after-file cancellation.");
                         }
                         if (fileCount != review.FileCount || copied != review.TotalUncompressedBytes)
@@ -182,7 +204,7 @@ namespace PclsArchiveCompatibility
             }
             catch (OperationCanceledException)
             {
-                if (!cancelAfterFirstFile || ownedFiles.Count != 1)
+                if (cancellationPoint == CancellationPoint.None || ownedFiles.Count != 1)
                     throw;
                 expectedCancellation = true;
             }
@@ -194,11 +216,12 @@ namespace PclsArchiveCompatibility
                 if (ownedDirs.Count > 0)
                     CleanupVerifiedStage(stage, ownedFiles, ownedDirs);
             }
-            if (cancelAfterFirstFile)
+            if (cancellationPoint != CancellationPoint.None)
             {
                 if (!expectedCancellation)
                     throw new InvalidDataException("Synthetic cancellation was not exercised.");
-                Console.WriteLine("PASS CI-only cancellation; verified-owned staging cleaned.");
+                Console.WriteLine("PASS CI-only " + cancellationPoint +
+                    " cancellation; verified-owned staging cleaned.");
             }
         }
 
