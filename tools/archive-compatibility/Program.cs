@@ -78,7 +78,12 @@ namespace PclsArchiveCompatibility
                             Attributes = entry.Attrib,
                             UncompressedBytes = entry.Size,
                             CompressedBytes = entry.CompressedSize,
-                            IsSolid = archive.IsSolid || entry.IsSolid
+                            // 7z exposes compressed bytes at folder/archive
+                            // level; SevenZipEntry.CompressedSize is always 0.
+                            // Apply a whole-archive expansion limit instead
+                            // of falsely treating that as a corrupt member.
+                            IsSolid = entry is SevenZipArchiveEntry ||
+                                archive.IsSolid || entry.IsSolid
                         }).ToList();
                     var review = new MultiFormatArchivePreflightPolicy()
                         .Inspect(metadata, source.Length, archive.Volumes.Count());
