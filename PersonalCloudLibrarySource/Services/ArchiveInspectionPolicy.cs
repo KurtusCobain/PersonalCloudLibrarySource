@@ -107,7 +107,8 @@ namespace PersonalCloudLibrarySource
                     path = path.Substring(0, path.Length - 1);
                 if (path.Length == 0 || path.Length > MaxPathCharacters ||
                     Path.IsPathRooted(path) || path.StartsWith("\\", StringComparison.Ordinal) ||
-                    path.Contains(":") || path.Contains("\0"))
+                    path.Contains(":") || path.Contains("\0") ||
+                    path.Any(character => character < 32 || character == 127))
                     return Refuse("Archive contains an unsafe or absolute entry path.");
 
                 var segments = path.Split('\\');
