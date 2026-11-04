@@ -79,6 +79,11 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $cancelStage)) {
             throw '7z cancellation failed to clean only verified-owned data.'
           }
+          $midwriteStage = Join-Path $fixture 'stage-seven-midwrite'
+          & $exe '--ci-stage-cancel-midwrite' $archive $midwriteStage
+          if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $midwriteStage)) {
+            throw '7z mid-write cancellation left an unverified staging directory.'
+          }
           # Existing destination must never be overwritten or deleted.
           $existingStage = Join-Path $fixture 'stage-existing'
           New-Item -ItemType Directory -Path $existingStage -Force | Out-Null
@@ -123,6 +128,11 @@ jobs:
             & $exe '--ci-stage-cancel' $rarFixture $rarCancelStage
             if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $rarCancelStage)) {
               throw "RAR CI cancellation proof failed or left a directory: $name"
+            }
+            $rarMidwriteStage = Join-Path $fixture ('stage-' + $name + '-midwrite')
+            & $exe '--ci-stage-cancel-midwrite' $rarFixture $rarMidwriteStage
+            if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $rarMidwriteStage)) {
+              throw "RAR CI mid-write cancellation left unverified data: $name"
             }
             Write-Host ($name + ' immutable fixture SHA256: ' + $hash)
           }
