@@ -33,8 +33,27 @@ namespace PclsArchiveCompatibility
             DuringFirstFile
         }
 
-        internal static void Run(string archivePath, string stagePath, CancellationPoint cancellationPoint)
+        internal static void Run(string archivePath, string stagePath,
+            CancellationPoint cancellationPoint, string reviewedSha256,
+            string reviewedArchivePath)
         {
+            // Test-only approval binding: caller supplies the canonical source
+            // path and SHA-256 captured by a distinct read-only review. They
+            // are not a signature, user consent, or a game/source ownership
+            // receipt. Both must match before ANY staging directory is made.
+            if (string.IsNullOrWhiteSpace(archivePath) ||
+                string.IsNullOrWhiteSpace(reviewedArchivePath) ||
+                string.IsNullOrWhiteSpace(reviewedSha256) ||
+                reviewedSha256.Length != 64 ||
+                reviewedSha256.Any(ch => !Uri.IsHexDigit(ch)) ||
+                !string.Equals(Path.GetFullPath(archivePath),
+                    Path.GetFullPath(reviewedArchivePath),
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException(
+                    "Source path or reviewed digest is missing or mismatched.");
+            if ((File.GetAttributes(archivePath) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("Linked archive source is not eligible.");
+
             var temp = Environment.GetEnvironmentVariable("RUNNER_TEMP");
             if (string.IsNullOrWhiteSpace(temp))
                 throw new InvalidOperationException("Staging proof is restricted to a CI runner.");
@@ -69,6 +88,11 @@ namespace PclsArchiveCompatibility
                     byte[] originalDigest;
                     using (var sha = SHA256.Create())
                         originalDigest = sha.ComputeHash(source);
+                    if (!string.Equals(
+                        BitConverter.ToString(originalDigest).Replace("-", ""),
+                        reviewedSha256, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidDataException(
+                            "Archive bytes changed after read-only review; staging denied.");
                     source.Position = 0;
 
                     using (var archive = ArchiveFactory.OpenArchive(source))
