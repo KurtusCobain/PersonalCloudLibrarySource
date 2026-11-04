@@ -93,6 +93,7 @@
     <Compile Include="Services\ManifestLoaderTests.cs" />
     <Compile Include="Services\ManifestItemMapperTests.cs" />
     <Compile Include="Services\ArchiveInspectionPolicyTests.cs" />
+    <Compile Include="Services\MultiFormatArchivePreflightPolicyTests.cs" />
     <Compile Include="Services\GameLauncherCandidatePolicyTests.cs" />
     <Compile Include="Services\ZipGameReviewTargetPolicyTests.cs" />
     <Compile Include="Services\ZipExtractedLauncherReviewServiceTests.cs" />
