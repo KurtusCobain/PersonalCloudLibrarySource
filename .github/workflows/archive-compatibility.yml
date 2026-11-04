@@ -112,6 +112,22 @@ jobs:
           }
           Write-Host 'PASS truncated 7z denied without extraction.'
 
+          # Header-encrypted 7z must also fail closed. This password is
+          # synthetic CI fixture data, never a user credential.
+          $encrypted = Join-Path $fixture 'encrypted.7z'
+          Push-Location $fixture
+          try {
+            & $sevenZip a '-t7z' '-mx=1' '-mhe=on' '-pPCLS-test-only' $encrypted '.\sample' | Out-Host
+            if ($LASTEXITCODE -ne 0) {
+              throw 'Could not create synthetic encrypted archive.'
+            }
+          } finally { Pop-Location }
+          $encryptedReject = Start-Process -FilePath (Resolve-Path $exe).Path -ArgumentList @($encrypted) -Wait -PassThru -NoNewWindow -RedirectStandardError (Join-Path $fixture 'encrypted-stderr.txt')
+          if ($encryptedReject.ExitCode -eq 0) {
+            throw 'Header-encrypted 7z unexpectedly passed read-only preflight.'
+          }
+          Write-Host 'PASS encrypted-header 7z denied without extraction.'
+
           $assemblyFiles = @(Get-ChildItem -LiteralPath $built -Filter '*.dll' -File |
             Select-Object -ExpandProperty Name | Sort-Object)
           Write-Host ('Runtime dependency DLLs: ' + ($assemblyFiles -join ', '))
