@@ -52,6 +52,16 @@ Workflow: `.github/workflows/archive-compatibility.yml`
 
 This shared pure policy is only a **preflight gate**. It does not trust, execute, extract or atomically publish an archive, and it does not prove that SharpCompress dependencies load under Playnite's real host without an external `.exe.config` binding-redirect file. PCLS's `packages.config`, release packaging and default single-source mode remain unchanged. Production 7z/RAR extraction still requires adapter packaging, host smoke tests, source identity binding, private transactional staging, strict output and file integrity checks, recorded receipts and opt-in UI confirmation.
 
+## CI-only private staging proof — November 4, 2026
+
+The isolated net462 test executable now has two **explicit CI-only** modes:
+- **--ci-stage** streams a fixture into a fresh runner-temp directory, checks exact decoded sizes, per-file SHA-256, the complete file/directory tree and the original source SHA-256, then removes its own verified files and empty directories.
+- **--ci-stage-cancel** simulates cancellation *after the first completed file* and verifies that only this invocation's byte-identical output is removed.
+
+Both modes require the RUNNER_TEMP environment and refuse an existing destination. Cleanup is intentionally nonrecursive and fails without deleting modified, linked or unexpected content. The test workflow covers synthetic 7z, upstream checksum-pinned RAR4/RAR5 fixtures, existing-destination protection, encrypted-header 7z and truncated signature cases. No real user archive or game file is used.
+
+**This is not a production extractor.** The code lives only under tools/archive-compatibility/, is not compiled into PCLS, has no Playnite install/launch wiring, does not publish game folders or authorize deletion, and never invokes an arbitrary user-installed archive tool. Staging cancellation is tested at a completed-file boundary, **not** during a partially written stream; incomplete-write cleanup, per-entry archive integrity/CRC verification, attacker-induced reparse/rename races, source-bound approval, immutable ownership receipts, Playnite host dependency loading, and safe production publication remain open gates. The CI proof must not be labeled a 1.0 release qualification.
+
 ## Required next coding gates (not yet achieved)
 
 1. Introduce a **read-only multi-format preflight** in the PCLS app. Bind the exact source archive bytes to a review SHA-256; reject encrypted/header-protected, multipart, spanned, linked/reparse-capable, absolute/traversal/ADS/ambiguous Windows path members, excessive entry counts, decompression bombs, inconsistent lengths, unsupported methods and collisions. Do not silently treat RAR or 7z as ZIP.
