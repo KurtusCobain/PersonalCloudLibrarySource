@@ -241,6 +241,10 @@ namespace PersonalCloudLibrarySource
 
         public override void OnApplicationStopped(OnApplicationStoppedEventArgs args)
         {
+            // Cancel active package work before the host disposes its UI.
+            // The extractor owns cleanup of only its private staging files.
+            CancelAllZipExtractions();
+            CancelAllZipCleanups();
             if (!startupActionService.Stop(TimeSpan.FromSeconds(10)))
             {
                 logger.Warn("Personal Cloud Library Source startup work did not stop within the shutdown timeout.");

@@ -25,6 +25,20 @@ namespace PersonalCloudLibrarySource
             try
             {
                 var pluginSettings = settings.GetRuntimeSettingsSnapshot();
+                // Experimental multi-source game IDs are bound to profiles,
+                // not the legacy manifest. Until ZIP approval/recovery records
+                // are source-scoped, do not offer any legacy game commands
+                // (especially destructive cleanup) under multi-source mode.
+                if (pluginSettings == null || !pluginSettings.Enabled)
+                    return menuItems;
+                if (pluginSettings.EnableMultiSourceProfiles)
+                {
+                    menuItems.Add(CreateGameMenuItem(
+                        GetDashboardResource("LOCPLSMenuSection", "Personal Cloud Library"),
+                        "LOCPLSOpenDashboard", "Open Dashboard",
+                        navigationService.OpenDashboard));
+                    return menuItems;
+                }
                 var manifest = LoadValidatedManifest(pluginSettings);
                 var targets = gameCommandService.ResolveTargets(games, manifest.Items, pluginSettings, Id).ToList();
                 var manager = GetTransferManager();
@@ -80,6 +94,128 @@ namespace PersonalCloudLibrarySource
                     "LOCPLSGameInstall",
                     "Install to This Computer",
                     () => playniteApi.InstallGame(target.Game.Id)));
+            }
+
+            // ZIP inspection is a read-only action. It never turns an
+            // archive into an installed game or skips an extraction prompt.
+            if (new ZipGameReviewTargetPolicy().Resolve(
+                    target, settings.GetRuntimeSettingsSnapshot(), Id).Available)
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section,
+                    "LOCPLSGameReviewZip",
+                    "Review ZIP Package Contents",
+                    () => ReviewZipGameTarget(target)));
+                if (settings.GetRuntimeSettingsSnapshot().AllowDownloads &&
+                    !activeZipExtractions.ContainsKey(target.Game.Id))
+                {
+                    menuItems.Add(CreateGameMenuItem(
+                        section,
+                        "LOCPLSZipExtractTitle",
+                        "Extract ZIP to Separate Cache Folder",
+                        () => ExtractZipGameTargetAsync(target)));
+                }
+            }
+
+            if (activeZipExtractions.ContainsKey(target.Game.Id))
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section,
+                    "LOCPLSZipExtractCancelMenu",
+                    "Cancel ZIP Extraction",
+                    () => CancelZipExtraction(target.Game.Id)));
+            }
+
+            if (target.Item != null &&
+                new ZipExtractedLauncherReviewService().HasRecordedExtraction(
+                    settings.GetRuntimeSettingsSnapshot().LocalCacheFolder,
+                    target.Item.Id, new CacheOwnershipReceiptStore(Path.Combine(
+                        GetPluginDataDirectory(), "ownership-receipts"))))
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section, "LOCPLSZipLauncherReviewTitle",
+                    "Review Extracted ZIP Launchers",
+                    () => ReviewExtractedZipLauncherAsync(target)));
+                menuItems.Add(CreateGameMenuItem(
+                    section, "LOCPLSZipApproveTitle",
+                    "Approve Extracted ZIP Launcher",
+                    () => ApproveExtractedZipLauncherAsync(target)));
+            }
+
+            // Show the diagnostic for a managed ZIP folder or ownership
+            // record, even if it was modified or the receipt is missing.
+            var menuSnapshot = settings.GetRuntimeSettingsSnapshot();
+            if (target.Item != null && menuSnapshot != null &&
+                new ZipManagedMaintenanceService().HasManagedFootprint(
+                    menuSnapshot.LocalCacheFolder, target.Item.Id,
+                    new CacheOwnershipReceiptStore(Path.Combine(
+                        GetPluginDataDirectory(), "ownership-receipts"))))
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section, "LOCPLSZipMaintenanceTitle",
+                    "Review Managed ZIP Maintenance",
+                    () => ReviewManagedZipMaintenanceAsync(target)));
+            }
+
+            // A managed ZIP can be reversibly moved to its own recovery
+            // folder, or explicitly restored, without recursive deletion.
+            // The action rechecks the live manifest and ownership on click.
+            if (target.Item != null && menuSnapshot != null &&
+                (new ZipManagedMaintenanceService().HasManagedFootprint(
+                    menuSnapshot.LocalCacheFolder, target.Item.Id,
+                    new CacheOwnershipReceiptStore(Path.Combine(
+                        GetPluginDataDirectory(), "ownership-receipts"))) ||
+                 new ZipManagedRecoveryService(Path.Combine(
+                     GetPluginDataDirectory(), "zip-recovery-journals"))
+                    .HasJournalFootprint(menuSnapshot.LocalCacheFolder,
+                        target.Item.Id)))
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section, "LOCPLSZipRecoveryTitle",
+                    "Manage ZIP Recovery",
+                    () => ManageZipRecoveryAsync(target)));
+            }
+
+            // Permanent cleanup is intentionally separate from reversible
+            // quarantine and requires TWO explicit confirmations. It appears
+            // only for a quarantined or partially cleaned managed ZIP.
+            if (target.Item != null && menuSnapshot != null &&
+                !activeZipCleanups.ContainsKey(target.Game.Id))
+            {
+                var purgeState = new ZipManagedRecoveryService(Path.Combine(
+                    GetPluginDataDirectory(), "zip-recovery-journals"))
+                    .Inspect(menuSnapshot.LocalCacheFolder, target.Item.Id).State;
+                if (purgeState == ZipRecoveryState.Quarantined ||
+                    purgeState == ZipRecoveryState.CleanupPending)
+                {
+                    menuItems.Add(CreateGameMenuItem(
+                        section, "LOCPLSZipPermanentCleanupTitle",
+                        "Permanently Remove Quarantined ZIP Files",
+                        () => PermanentlyCleanupZipAsync(target)));
+                }
+            }
+
+            if (activeZipCleanups.ContainsKey(target.Game.Id))
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section, "LOCPLSZipPermanentCleanupCancel",
+                    "Cancel Permanent ZIP Cleanup",
+                    () => CancelZipCleanup(target.Game.Id)));
+            }
+
+            // Revoke remains available for a recorded approval even when the
+            // manifest source changed or the extracted files no longer match.
+            // It changes only plugin approval metadata, not game files.
+            var currentSettings = settings.GetRuntimeSettingsSnapshot();
+            if (target.Item != null && currentSettings != null &&
+                new ZipLauncherApprovalService(Path.Combine(
+                    GetPluginDataDirectory(), "zip-launcher-approvals"))
+                    .HasApproval(target.Item.Id, currentSettings.LocalCacheFolder))
+            {
+                menuItems.Add(CreateGameMenuItem(
+                    section, "LOCPLSZipRevokeTitle",
+                    "Revoke ZIP Launcher Approval",
+                    () => RevokeZipLauncherApproval(target)));
             }
 
             if (availability.CanCancelTransfer)
@@ -210,6 +346,83 @@ namespace PersonalCloudLibrarySource
                 "LOCPLSOpenDashboard",
                 "Open Dashboard",
                 navigationService.OpenDashboard));
+        }
+
+        private void ReviewZipGameTarget(GameCommandTarget selected)
+        {
+            // The menu snapshot is not authority: read the current manifest and
+            // verify source ownership and file presence when actually clicked.
+            var title = GetDashboardResource("LOCPLSGameReviewZip",
+                "Review ZIP Package Contents");
+            try
+            {
+                if (selected?.Game == null || selected.Game.PluginId != Id)
+                    return;
+                var currentSettings = settings.GetRuntimeSettingsSnapshot();
+                if (currentSettings == null || !currentSettings.Enabled)
+                    return;
+                var currentManifest = LoadValidatedManifest(currentSettings);
+                var refreshed = gameCommandService.ResolveTargets(
+                    new[] { selected.Game }, currentManifest.Items,
+                    currentSettings, Id).Single();
+                var candidate = new ZipGameReviewTargetPolicy()
+                    .Resolve(refreshed, currentSettings, Id);
+                if (!candidate.Available)
+                {
+                    playniteApi.Dialogs.ShowMessage(
+                        PclsResources.Get("LOCPLSZipReviewUnavailable",
+                            "A matching local ZIP is no longer available. No files were changed."),
+                        title);
+                    return;
+                }
+
+                var review = new ZipPackageReviewService().Inspect(
+                    candidate.ArchivePath,
+                    refreshed.Item.Title);
+                if (!review.PassedPreflight)
+                {
+                    playniteApi.Dialogs.ShowMessage(
+                        PclsResources.Format("LOCPLSZipReviewRejected",
+                            "ZIP review was refused: {0}{1}No files were changed.",
+                            review.Reason, Environment.NewLine),
+                        title);
+                    return;
+                }
+
+                var classification = review.Kind == ZipPackageReviewKind.KeepArchiveCandidate
+                    ? PclsResources.Get("LOCPLSZipReviewKeep",
+                        "This may be an emulator-ready ZIP; keep or extract requires review.")
+                    : review.Kind == ZipPackageReviewKind.ExtractCandidate
+                        ? PclsResources.Get("LOCPLSZipReviewExtract",
+                            "Possible game launcher found; extraction requires separate approval.")
+                        : PclsResources.Get("LOCPLSZipReviewAmbiguous",
+                            "Archive contents are ambiguous; review the package manually.");
+                var launcher = review.Launchers.SuggestedRelativePath;
+                var launcherLine = string.IsNullOrWhiteSpace(launcher)
+                    ? string.Empty
+                    : PclsResources.Format("LOCPLSZipReviewLauncher",
+                        "Possible launcher (not approved): {0}{1}",
+                        launcher, Environment.NewLine);
+                var examples = string.Join(Environment.NewLine,
+                    review.MemberPaths.Take(6).Select(path => "  " + path));
+                if (review.FileCount > 6)
+                    examples += Environment.NewLine + "  ...";
+                playniteApi.Dialogs.ShowMessage(
+                    PclsResources.Format("LOCPLSZipReviewCompleted",
+                        "Read-only ZIP inspection complete.{0}Files: {1}{0}Uncompressed bytes: {2}{0}{3}{0}{4}Contents:{0}{5}{0}{0}No files were extracted, executed, installed or removed. The extraction/install workflow still requires an explicit choice.",
+                        Environment.NewLine, review.FileCount,
+                        review.TotalUncompressedBytes, classification,
+                        launcherLine, examples),
+                    title);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn(ex, "PCLS could not inspect the selected ZIP.");
+                playniteApi.Dialogs.ShowMessage(
+                    PclsResources.Get("LOCPLSZipReviewFailed",
+                        "ZIP review could not be completed. No files were changed."),
+                    title);
+            }
         }
 
         private void CancelActiveTransfer(GameCommandTarget target)

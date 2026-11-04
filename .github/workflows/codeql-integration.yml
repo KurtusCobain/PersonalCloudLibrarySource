@@ -1,0 +1,89 @@
+name: CodeQL C# security (v1 integration)
+
+on:
+  push:
+    branches:
+      - feature/v1-combined-integration-20261103
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  analyze-csharp:
+    name: CodeQL C# — Windows .NET Framework build
+    runs-on: windows-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Restore NuGet packages
+        shell: pwsh
+        run: nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: csharp
+          build-mode: manual
+          queries: security-extended
+
+      - name: Build source for CodeQL
+        shell: pwsh
+        run: |
+          msbuild .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln /t:Rebuild /p:Configuration=Debug /p:Platform="Any CPU"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Analyze C# to local SARIF (retain existing default setup)
+        id: codeql
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:csharp/v1-integration"
+          output: codeql-results
+          upload: never
+          upload-database: false
+
+      - name: Fail on ZIP Slip findings in this scan
+        shell: pwsh
+        run: |
+          $sarifFiles = @(Get-ChildItem -LiteralPath 'codeql-results' -Filter '*.sarif' -Recurse -File)
+          if ($sarifFiles.Count -eq 0) {
+            throw 'CodeQL did not produce SARIF; cannot assert ZIP Slip clearance.'
+          }
+          $findings = @()
+          foreach ($file in $sarifFiles) {
+            $report = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
+            foreach ($run in @($report.runs)) {
+              foreach ($result in @($run.results)) {
+                $rule = [string]$result.ruleId
+                if ($rule -match '(?i)(zipslip|zip.slip|archive.extraction)') {
+                  $location = [string]$result.locations[0].physicalLocation.artifactLocation.uri
+                  $line = [string]$result.locations[0].physicalLocation.region.startLine
+                  $findings += "$rule at ${location}:${line}"
+                }
+              }
+            }
+          }
+          if ($findings.Count -gt 0) {
+            $findings | ForEach-Object { Write-Error $_ }
+            throw "CodeQL reported $($findings.Count) ZIP Slip / archive extraction finding(s)."
+          }
+          Write-Host 'CodeQL SARIF: zero ZIP Slip / archive extraction findings.'
+
+      - name: Retain private SARIF evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcls-codeql-csharp-${{ github.run_number }}
+          path: codeql-results/**/*.sarif
+          if-no-files-found: warn
+          retention-days: 7

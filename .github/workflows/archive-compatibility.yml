@@ -1,0 +1,267 @@
+name: Archive backend compatibility (net462)
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - feature/v1-combined-integration-20261103
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  net462-archive-smoke:
+    name: SharpCompress 0.50.7 Windows net462 read-only smoke
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore isolated compatibility project
+        shell: pwsh
+        run: |
+          dotnet restore .\tools\archive-compatibility\ArchiveCompatibility.csproj --force-evaluate
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build .NET Framework 4.6.2 executable
+        shell: pwsh
+        run: |
+          dotnet build .\tools\archive-compatibility\ArchiveCompatibility.csproj --no-restore --configuration Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Create synthetic 7z and test streamed decompression
+        shell: pwsh
+        run: |
+          $sevenZip = @(
+            (Get-Command '7z.exe' -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1),
+            'C:\Program Files\7-Zip\7z.exe',
+            'C:\Program Files (x86)\7-Zip\7z.exe'
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+          if (-not $sevenZip) { throw 'Windows 7z fixture creator unavailable; test must not silently skip.' }
+
+          $fixture = Join-Path $env:RUNNER_TEMP 'pcls-archive-compat'
+          New-Item -ItemType Directory -Path (Join-Path $fixture 'sample') -Force | Out-Null
+          [IO.File]::WriteAllText((Join-Path $fixture 'sample\hello.txt'),
+            'Synthetic 7z fixture for read-only .NET Framework runtime test.')
+          $archive = Join-Path $fixture 'sample.7z'
+          Push-Location $fixture
+          try {
+            & $sevenZip a '-t7z' '-mx=1' $archive '.\sample' | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create synthetic 7z fixture.' }
+          } finally { Pop-Location }
+
+          $built = '.\tools\archive-compatibility\bin\Release\net462'
+          $exe = Join-Path $built 'ArchiveCompatibility.exe'
+          if (-not (Test-Path -LiteralPath $exe)) { throw 'net462 smoke executable absent.' }
+          if (-not (Test-Path -LiteralPath (Join-Path $built 'SharpCompress.dll'))) {
+            throw 'SharpCompress runtime DLL was not copied beside net462 executable.'
+          }
+          & $exe $archive
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $reviewedSevenPath = (Resolve-Path -LiteralPath $archive).Path
+          $reviewedSevenSha = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash
+
+          # CI-only transactional staging proof: full output bytes, exact
+          # tree, and cancellation cleanup. No files are published to PCLS.
+          $successfulStage = Join-Path $fixture 'stage-seven-success'
+          & $exe '--ci-stage' $archive $successfulStage $reviewedSevenSha $reviewedSevenPath
+          if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $successfulStage)) {
+            throw '7z staging proof failed or left an unowned directory.'
+          }
+          $cancelStage = Join-Path $fixture 'stage-seven-cancel'
+          & $exe '--ci-stage-cancel' $archive $cancelStage $reviewedSevenSha $reviewedSevenPath
+          if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $cancelStage)) {
+            throw '7z cancellation failed to clean only verified-owned data.'
+          }
+          $midwriteStage = Join-Path $fixture 'stage-seven-midwrite'
+          & $exe '--ci-stage-cancel-midwrite' $archive $midwriteStage $reviewedSevenSha $reviewedSevenPath
+          if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $midwriteStage)) {
+            throw '7z mid-write cancellation left an unverified staging directory.'
+          }
+          # Existing destination must never be overwritten or deleted.
+          $existingStage = Join-Path $fixture 'stage-existing'
+          New-Item -ItemType Directory -Path $existingStage -Force | Out-Null
+          [IO.File]::WriteAllText((Join-Path $existingStage 'sentinel.txt'), 'keep')
+          & $exe '--ci-stage' $archive $existingStage $reviewedSevenSha $reviewedSevenPath 2>$null
+          if ($LASTEXITCODE -eq 0 -or
+              [IO.File]::ReadAllText((Join-Path $existingStage 'sentinel.txt')) -ne 'keep') {
+            throw 'Existing staging destination was accepted or modified.'
+          }
+          Write-Host 'PASS existing destination untouched.'
+
+          # A source copied to another path must not inherit the first
+          # archive's review, even when all bytes are identical.
+          $otherSource = Join-Path $fixture 'same-bytes-new-path.7z'
+          Copy-Item -LiteralPath $archive -Destination $otherSource
+          $otherStage = Join-Path $fixture 'stage-wrong-source'
+          & $exe '--ci-stage' $otherSource $otherStage $reviewedSevenSha $reviewedSevenPath 2>$null
+          if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $otherStage)) {
+            throw 'An archive at a different source path reused stale review authorization.'
+          }
+          Write-Host 'PASS identical bytes at unreviewed source path denied.'
+
+          # A changed source at the reviewed path must be rejected before
+          # directory creation. This test mutates only a disposable fixture.
+          $staleSource = Join-Path $fixture 'reviewed-then-mutated.7z'
+          Copy-Item -LiteralPath $archive -Destination $staleSource
+          $stalePath = (Resolve-Path -LiteralPath $staleSource).Path
+          $staleDigest = (Get-FileHash -LiteralPath $staleSource -Algorithm SHA256).Hash
+          [IO.File]::AppendAllText($staleSource, 'changed after review')
+          $staleStage = Join-Path $fixture 'stage-stale-review'
+          & $exe '--ci-stage' $staleSource $staleStage $staleDigest $stalePath 2>$null
+          if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $staleStage)) {
+            throw 'Mutated archive was staged using stale review digest.'
+          }
+          Write-Host 'PASS changed source bytes denied before staging.'
+
+          # This is an upstream test archive used strictly by CI, not a
+          # downloadable game or an embedded production dependency. Failure
+          # to retrieve/parse it fails this RAR compatibility gate.
+          # Pin to a single upstream Git commit (not a moving master/tag).
+          # These are SharpCompress's own archived RAR4 and RAR5 fixtures.
+          $fixtureCommit = '6128ec51eec4ca9f7b7b9f44b77bdb0cd8b3bd97'
+          foreach ($name in @('Rar.rar', 'Rar5.rar')) {
+            $rarFixture = Join-Path $fixture $name
+            $rarUrl = "https://raw.githubusercontent.com/adamhathcock/sharpcompress/$fixtureCommit/tests/TestArchives/Archives/$name"
+            Invoke-WebRequest -Uri $rarUrl -OutFile $rarFixture -MaximumRedirection 3
+            $rarBytes = (Get-Item -LiteralPath $rarFixture).Length
+            if ($rarBytes -lt 8 -or $rarBytes -gt 2097152) {
+              throw "RAR fixture $name failed size bounds."
+            }
+            $expectedHashes = @{
+              'Rar.rar' = '60DB161DE57DC59AA12E0C45B1B70D78904DA3D104E74748972AC38643F12802'
+              'Rar5.rar' = '3319DE3E8A91A58D08D8A83F48EBAE7E6B022C542B4A58775BAB64F4063988A9'
+            }
+            $hash = (Get-FileHash -LiteralPath $rarFixture -Algorithm SHA256).Hash
+            if ($hash -ne $expectedHashes[$name]) {
+              throw "Upstream archive fixture checksum changed: $name. Do not trust or execute it."
+            }
+            & $exe $rarFixture
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $reviewedRarPath = (Resolve-Path -LiteralPath $rarFixture).Path
+            $rarStage = Join-Path $fixture ('stage-' + $name + '-success')
+            & $exe '--ci-stage' $rarFixture $rarStage $hash $reviewedRarPath
+            if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $rarStage)) {
+              throw "RAR CI staging proof failed or left a directory: $name"
+            }
+            $rarCancelStage = Join-Path $fixture ('stage-' + $name + '-cancel')
+            & $exe '--ci-stage-cancel' $rarFixture $rarCancelStage $hash $reviewedRarPath
+            if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $rarCancelStage)) {
+              throw "RAR CI cancellation proof failed or left a directory: $name"
+            }
+            $rarMidwriteStage = Join-Path $fixture ('stage-' + $name + '-midwrite')
+            & $exe '--ci-stage-cancel-midwrite' $rarFixture $rarMidwriteStage $hash $reviewedRarPath
+            if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $rarMidwriteStage)) {
+              throw "RAR CI mid-write cancellation left unverified data: $name"
+            }
+            Write-Host ($name + ' immutable fixture SHA256: ' + $hash)
+          }
+
+          # A matching signature alone cannot make a corrupted archive
+          # acceptable. Both truncated formats must be rejected read-only.
+          $truncatedRar = Join-Path $fixture 'truncated.rar'
+          [IO.File]::WriteAllBytes($truncatedRar, [byte[]]@(0x52,0x61,0x72,0x21,0x1A,0x07,0x01,0x00))
+          $rarReject = Start-Process -FilePath (Resolve-Path $exe).Path -ArgumentList @($truncatedRar) -Wait -PassThru -NoNewWindow -RedirectStandardError (Join-Path $fixture 'truncated-rar-stderr.txt')
+          if ($rarReject.ExitCode -eq 0) {
+            throw 'A signature-only truncated RAR was incorrectly accepted.'
+          }
+          Write-Host 'PASS truncated RAR5 denied without extraction.'
+
+          $truncated7z = Join-Path $fixture 'truncated.7z'
+          [IO.File]::WriteAllBytes($truncated7z, [byte[]]@(0x37,0x7A,0xBC,0xAF,0x27,0x1C,0x00,0x00))
+          $sevenReject = Start-Process -FilePath (Resolve-Path $exe).Path -ArgumentList @($truncated7z) -Wait -PassThru -NoNewWindow -RedirectStandardError (Join-Path $fixture 'truncated-7z-stderr.txt')
+          if ($sevenReject.ExitCode -eq 0) {
+            throw 'A signature-only truncated 7z was incorrectly accepted.'
+          }
+          Write-Host 'PASS truncated 7z denied without extraction.'
+
+          # Entry enumeration must reject at the probe's 512-member budget
+          # before accumulating metadata or streaming any member contents.
+          $tooMany = Join-Path $fixture 'too-many'
+          New-Item -ItemType Directory -Path $tooMany -Force | Out-Null
+          for ($i = 0; $i -le 512; $i++) {
+            [IO.File]::WriteAllText((Join-Path $tooMany ('item-{0:d4}.txt' -f $i)), 'synthetic')
+          }
+          $tooManyArchive = Join-Path $fixture 'too-many.7z'
+          Push-Location $fixture
+          try {
+            & $sevenZip a '-t7z' '-mx=1' $tooManyArchive '.\\too-many' | Out-Host
+            if ($LASTEXITCODE -ne 0) { throw 'Could not create oversized entry-list archive.' }
+          } finally { Pop-Location }
+          $tooManyStderr = Join-Path $fixture 'too-many-stderr.txt'
+          $tooManyReject = Start-Process -FilePath (Resolve-Path $exe).Path -ArgumentList @($tooManyArchive) -Wait -PassThru -NoNewWindow -RedirectStandardError $tooManyStderr
+          if ($tooManyReject.ExitCode -eq 0 -or
+              (Get-Content -LiteralPath $tooManyStderr -Raw) -notmatch 'entry count limit') {
+            throw 'Oversized entry list was not denied by the bounded preflight.'
+          }
+          Write-Host 'PASS more than 512 entries rejected before metadata materialization.'
+
+          # Header-encrypted 7z must also fail closed. This password is
+          # synthetic CI fixture data, never a user credential.
+          $encrypted = Join-Path $fixture 'encrypted.7z'
+          Push-Location $fixture
+          try {
+            & $sevenZip a '-t7z' '-mx=1' '-mhe=on' '-pPCLS-test-only' $encrypted '.\sample' | Out-Host
+            if ($LASTEXITCODE -ne 0) {
+              throw 'Could not create synthetic encrypted archive.'
+            }
+          } finally { Pop-Location }
+          $encryptedReject = Start-Process -FilePath (Resolve-Path $exe).Path -ArgumentList @($encrypted) -Wait -PassThru -NoNewWindow -RedirectStandardError (Join-Path $fixture 'encrypted-stderr.txt')
+          if ($encryptedReject.ExitCode -eq 0) {
+            throw 'Header-encrypted 7z unexpectedly passed read-only preflight.'
+          }
+          Write-Host 'PASS encrypted-header 7z denied without extraction.'
+
+          # Negative staging must reject BEFORE creating a private output
+          # directory. Signatures and unsupported encrypted metadata cannot
+          # grant write permission.
+          foreach ($bad in @($encrypted, $truncated7z, $truncatedRar)) {
+            $badStage = Join-Path $fixture ('stage-denied-' + [IO.Path]::GetFileName($bad))
+            $badSha = (Get-FileHash -LiteralPath $bad -Algorithm SHA256).Hash
+            $badPath = (Resolve-Path -LiteralPath $bad).Path
+            & $exe '--ci-stage' $bad $badStage $badSha $badPath 2>$null
+            if ($LASTEXITCODE -eq 0 -or (Test-Path -LiteralPath $badStage)) {
+              throw "Unsafe archive was staged or created output: $bad"
+            }
+          }
+          Write-Host 'PASS corrupt and encrypted archives denied before staging.'
+
+          $assemblyFiles = @(Get-ChildItem -LiteralPath $built -Filter '*.dll' -File |
+            Select-Object -ExpandProperty Name | Sort-Object)
+          Write-Host ('Runtime dependency DLLs: ' + ($assemblyFiles -join ', '))
+          if ($assemblyFiles.Count -lt 1) {
+            throw 'No runtime DLLs in executable output.'
+          }
+
+          # The final native command above is an intentionally rejected
+          # archive and returns nonzero. pwsh's Actions wrapper otherwise
+          # propagates that expected exit code even when all checks passed.
+          # Every rejection assertion and positive native command was checked.
+          $global:LASTEXITCODE = 0
+
+      - name: Confirm release package remains dependency-free
+        shell: pwsh
+        run: |
+          $production = '.\PersonalCloudLibrarySource\packages.config'
+          $config = Get-Content -LiteralPath $production -Raw
+          if ($config -match '(?i)SharpCompress|AsyncInterfaces|Encoding.CodePages') {
+            throw 'Experimental backend leaked into production Playnite dependencies.'
+          }
+          Write-Host 'Production dependency manifest remains unchanged. No 7z/RAR support enabled.'
+
+      - name: Retain isolated compatibility log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pcls-archive-net462-${{ github.run_number }}
+          path: tools/archive-compatibility/obj/project.assets.json
+          if-no-files-found: warn
+          retention-days: 7

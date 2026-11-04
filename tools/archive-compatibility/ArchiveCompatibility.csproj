@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Isolated compatibility gate only. NOT referenced or packaged by PCLS. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net462</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <NoWarn>NU1701</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Compile the EXACT parser-neutral policy shipped in PCLS; no forked logic. -->
+    <Compile Include="../../PersonalCloudLibrarySource/Services/ArchiveInspectionPolicy.cs" Link="ArchiveInspectionPolicy.cs" />
+    <Compile Include="../../PersonalCloudLibrarySource/Services/MultiFormatArchivePreflightPolicy.cs" Link="MultiFormatArchivePreflightPolicy.cs" />
+    <PackageReference Include="SharpCompress" Version="0.50.7" />
+    <!-- Explicit net462 dependency closes indirect System.Memory version drift. -->
+    <PackageReference Include="System.Memory" Version="4.6.3" />
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net462" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+</Project>
