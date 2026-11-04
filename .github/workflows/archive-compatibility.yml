@@ -67,6 +67,29 @@ jobs:
           & $exe $archive
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+          # CI-only transactional staging proof: full output bytes, exact
+          # tree, and cancellation cleanup. No files are published to PCLS.
+          $successfulStage = Join-Path $fixture 'stage-seven-success'
+          & $exe '--ci-stage' $archive $successfulStage
+          if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $successfulStage)) {
+            throw '7z staging proof failed or left an unowned directory.'
+          }
+          $cancelStage = Join-Path $fixture 'stage-seven-cancel'
+          & $exe '--ci-stage-cancel' $archive $cancelStage
+          if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $cancelStage)) {
+            throw '7z cancellation failed to clean only verified-owned data.'
+          }
+          # Existing destination must never be overwritten or deleted.
+          $existingStage = Join-Path $fixture 'stage-existing'
+          New-Item -ItemType Directory -Path $existingStage -Force | Out-Null
+          [IO.File]::WriteAllText((Join-Path $existingStage 'sentinel.txt'), 'keep')
+          & $exe '--ci-stage' $archive $existingStage 2>$null
+          if ($LASTEXITCODE -eq 0 -or
+              [IO.File]::ReadAllText((Join-Path $existingStage 'sentinel.txt')) -ne 'keep') {
+            throw 'Existing staging destination was accepted or modified.'
+          }
+          Write-Host 'PASS existing destination untouched.'
+
           # This is an upstream test archive used strictly by CI, not a
           # downloadable game or an embedded production dependency. Failure
           # to retrieve/parse it fails this RAR compatibility gate.
