@@ -61,6 +61,13 @@ namespace PclsArchiveCompatibility
 
                 using (var archive = ArchiveFactory.OpenArchive(source))
                 {
+                    if (!archive.IsComplete || archive.IsEncrypted)
+                        throw new InvalidDataException(
+                            "Archive is incomplete or encrypted; no extraction is permitted.");
+                    if (archive.Volumes.Count() != 1)
+                        throw new InvalidDataException(
+                            "Multi-volume archive is unsupported; no extraction is permitted.");
+
                     // Entire-archive metadata preflight runs BEFORE any
                     // decompressed content is streamed, using the same pure
                     // validation policy compiled into the Playnite plugin.
