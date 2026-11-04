@@ -71,8 +71,16 @@ namespace PclsArchiveCompatibility
                     // Entire-archive metadata preflight runs BEFORE any
                     // decompressed content is streamed, using the same pure
                     // validation policy compiled into the Playnite plugin.
-                    var metadata = archive.Entries.Select(entry =>
-                        new MultiFormatArchiveEntry
+                    // Enumerate only within the isolated probe's stricter budget.
+                    // A hostile archive must not force an unbounded ToList()
+                    // allocation before the shared metadata preflight runs.
+                    var metadata = new List<MultiFormatArchiveEntry>();
+                    foreach (var entry in archive.Entries)
+                    {
+                        if (metadata.Count >= MaxEntries)
+                            throw new InvalidDataException(
+                                "Archive exceeds read-only probe entry count limit.");
+                        metadata.Add(new MultiFormatArchiveEntry
                         {
                             Path = entry.Key,
                             IsDirectory = entry.IsDirectory,
@@ -91,7 +99,8 @@ namespace PclsArchiveCompatibility
                             // of falsely treating that as a corrupt member.
                             IsSolid = entry is SevenZipArchiveEntry ||
                                 archive.IsSolid || entry.IsSolid
-                        }).ToList();
+                        });
+                    }
                     var review = new MultiFormatArchivePreflightPolicy()
                         .Inspect(metadata, source.Length, archive.Volumes.Count());
                     if (!review.Passed)
