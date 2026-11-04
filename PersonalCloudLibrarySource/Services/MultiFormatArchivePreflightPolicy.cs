@@ -16,8 +16,6 @@ namespace PersonalCloudLibrarySource
         public bool IsSplitAfter { get; set; }
         public bool IsAntiItem { get; set; }
         public string LinkTarget { get; set; }
-        public int FirstVolume { get; set; }
-        public int LastVolume { get; set; }
         public int? Attributes { get; set; }
         public long UncompressedBytes { get; set; }
         public long CompressedBytes { get; set; }
@@ -47,10 +45,14 @@ namespace PersonalCloudLibrarySource
         public const long MaximumExpansionRatio = 1000;
 
         public MultiFormatArchiveReview Inspect(IEnumerable<MultiFormatArchiveEntry> entries,
-            long archiveSizeBytes)
+            long archiveSizeBytes, int archiveVolumeCount = 1)
         {
-            if (entries == null || archiveSizeBytes <= 0)
-                return Reject("Archive entries or archive length are unavailable.");
+            // SharpCompress Entry.VolumeIndexFirst/Last are indexes of entry
+            // file parts, NOT proof of separate physical volumes. The caller
+            // must instead use IArchive.Volumes.Count() here.
+            if (entries == null || archiveSizeBytes <= 0 ||
+                archiveVolumeCount != 1)
+                return Reject("Archive metadata is unavailable or spans multiple volumes.");
 
             var observations = new List<ArchiveEntryObservation>();
             long total = 0;
@@ -61,8 +63,7 @@ namespace PersonalCloudLibrarySource
                     return Reject("Archive contains too many entries.");
                 if (item == null || !item.IsComplete ||
                     item.IsEncrypted || item.IsSplitAfter || item.IsAntiItem ||
-                    !string.IsNullOrWhiteSpace(item.LinkTarget) ||
-                    item.FirstVolume != 0 || item.LastVolume != 0)
+                    !string.IsNullOrWhiteSpace(item.LinkTarget))
                     return Reject("Archive has incomplete, encrypted, split or linked members.");
                 if (item.UncompressedBytes < 0 || item.CompressedBytes < 0 ||
                     item.UncompressedBytes > MaximumFileBytes)
@@ -105,8 +106,8 @@ namespace PersonalCloudLibrarySource
 
             if (files == 0)
                 return Reject("Archive contains no regular files.");
-            if (total > archiveSizeBytes * MaximumExpansionRatio &&
-                archiveSizeBytes < MaximumTotalBytes / MaximumExpansionRatio)
+            if (archiveSizeBytes < MaximumTotalBytes / MaximumExpansionRatio &&
+                total > archiveSizeBytes * MaximumExpansionRatio)
                 return Reject("Archive total expansion ratio is unsafe.");
 
             var common = new ArchiveInspectionPolicy().Inspect(observations);
