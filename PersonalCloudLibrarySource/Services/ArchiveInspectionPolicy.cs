@@ -105,10 +105,12 @@ namespace PersonalCloudLibrarySource
                 // ZIP directory entries conventionally end with one separator.
                 if (entry.IsDirectory && path.EndsWith("\\", StringComparison.Ordinal))
                     path = path.Substring(0, path.Length - 1);
+                // Check invalid/control bytes BEFORE invoking Path APIs,
+                // which can throw ArgumentException on hostile Windows names.
                 if (path.Length == 0 || path.Length > MaxPathCharacters ||
-                    Path.IsPathRooted(path) || path.StartsWith("\\", StringComparison.Ordinal) ||
+                    path.Any(character => character < 32 || character == 127) ||
                     path.Contains(":") || path.Contains("\0") ||
-                    path.Any(character => character < 32 || character == 127))
+                    Path.IsPathRooted(path) || path.StartsWith("\\", StringComparison.Ordinal))
                     return Refuse("Archive contains an unsafe or absolute entry path.");
 
                 var segments = path.Split('\\');
