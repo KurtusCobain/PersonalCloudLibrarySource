@@ -201,6 +201,12 @@ jobs:
             throw 'No runtime DLLs in executable output.'
           }
 
+          # The final native command above is an intentionally rejected
+          # archive and returns nonzero. pwsh's Actions wrapper otherwise
+          # propagates that expected exit code even when all checks passed.
+          # Every rejection assertion and positive native command was checked.
+          $global:LASTEXITCODE = 0
+
       - name: Confirm release package remains dependency-free
         shell: pwsh
         run: |
