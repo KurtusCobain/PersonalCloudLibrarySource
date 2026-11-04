@@ -85,8 +85,24 @@ namespace PclsArchiveCompatibility
                     var review = new MultiFormatArchivePreflightPolicy()
                         .Inspect(metadata, source.Length);
                     if (!review.Passed)
+                    {
+                        // Diagnostic only, in isolated CI fixtures. Never
+                        // print user-provided archive paths in the plugin UI.
+                        foreach (var entry in metadata)
+                            Console.Error.WriteLine("PREFLIGHT_METADATA" +
+                                " encrypted=" + entry.IsEncrypted +
+                                " complete=" + entry.IsComplete +
+                                " split=" + entry.IsSplitAfter +
+                                " anti=" + entry.IsAntiItem +
+                                " linked=" + (!string.IsNullOrWhiteSpace(entry.LinkTarget)) +
+                                " volumes=" + entry.FirstVolume + "/" + entry.LastVolume +
+                                " attrib=" + entry.Attributes +
+                                " solid=" + entry.IsSolid +
+                                " size=" + entry.UncompressedBytes +
+                                " packed=" + entry.CompressedBytes);
                         throw new InvalidDataException(
                             "Shared preflight rejected archive: " + review.Reason);
+                    }
                     Console.WriteLine("PASS shared PCLS read-only preflight: " +
                         review.EntryCount + " entries, " + review.FileCount +
                         " regular files, " + review.TotalUncompressedBytes +
