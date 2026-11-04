@@ -43,6 +43,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
         [TestCase("Split")]
         [TestCase("Anti")]
         [TestCase("Link")]
+        [TestCase("EmptyLink")]
         [TestCase("Reparse")]
         [TestCase("UnixLink")]
         [TestCase("Device")]
@@ -56,6 +57,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
                 case "Split": item.IsSplitAfter = true; break;
                 case "Anti": item.IsAntiItem = true; break;
                 case "Link": item.LinkTarget = "../../victim"; break;
+                case "EmptyLink": item.LinkTarget = ""; break;
                 case "Reparse": item.Attributes = 0x400; break;
                 case "UnixLink": item.Attributes = unchecked((int)0xA0000000); break;
                 case "Device": item.Attributes = unchecked((int)0x20000000); break;
