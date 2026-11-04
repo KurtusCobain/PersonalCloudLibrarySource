@@ -114,6 +114,16 @@ jobs:
             }
             & $exe $rarFixture
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            $rarStage = Join-Path $fixture ('stage-' + $name + '-success')
+            & $exe '--ci-stage' $rarFixture $rarStage
+            if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $rarStage)) {
+              throw "RAR CI staging proof failed or left a directory: $name"
+            }
+            $rarCancelStage = Join-Path $fixture ('stage-' + $name + '-cancel')
+            & $exe '--ci-stage-cancel' $rarFixture $rarCancelStage
+            if ($LASTEXITCODE -ne 0 -or (Test-Path -LiteralPath $rarCancelStage)) {
+              throw "RAR CI cancellation proof failed or left a directory: $name"
+            }
             Write-Host ($name + ' immutable fixture SHA256: ' + $hash)
           }
 
