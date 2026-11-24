@@ -108,7 +108,7 @@ namespace PersonalCloudLibrarySource
                     : transferQueue.EnqueueLocal(
                         Game.Id, string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
                         PersonalCloudLibrarySource.ResolveLocalFolderSourcePath(settings, sourcePath),
-                        destinationPath, providerType, sourceType == "directory");
+                        destinationPath, providerType, sourceType == "directory", settings);
                 activeJobId = job.Id;
                 ObserveCompletionAsync(job.Id, sourceType, launchPath, installDirectory);
             }

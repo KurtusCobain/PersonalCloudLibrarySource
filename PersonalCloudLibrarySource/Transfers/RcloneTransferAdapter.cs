@@ -112,7 +112,8 @@ namespace PersonalCloudLibrarySource
                 var processResult = processRunner.Run(request, cancellationToken, progress);
                 if (!processResult.ProcessExitConfirmed)
                     return CloudTransferExecutionResult.Failure(
-                        "rclone exit was not confirmed. Partial data was preserved; stop the process and review staging before retrying.");
+                        "rclone exit was not confirmed. Partial data was preserved; stop the process and review staging before retrying.",
+                        requiresManualRecovery: true);
 
                 if (processResult.WasCancelled || cancellationToken.IsCancellationRequested)
                 {

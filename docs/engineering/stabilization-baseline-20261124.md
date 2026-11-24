@@ -62,3 +62,7 @@ Verified 13c87a33: 792 passed, zero failures/compiler warnings, two opt-in skips
 ## Bounded manifest reading
 
 Replaced line-based manifest capture with an 8 Ki-character chunk reader that consumes at most the configured character limit plus one. Stderr is drained without retention; process exit and pipe EOF share the bounded retrieval deadline. Tests exercise exact preservation, zero budget and a synthetic million-character line without allocating it. This is a managed reader bound, not a limit on OS pipe buffers or a general process-tree containment proof.
+
+## Queue retry authorization and recovery quarantine
+
+Verified e997bf7b: 797 passed, zero failures/compiler warnings, two opt-in skips; Windows packaging and archive workflows green. Queue captures independent transfer settings, refuses changed provider/cache identity and disabled downloads, and does not combine global multi-source settings with old scoped transfer paths. Unconfirmed subprocess exit is explicitly marked as requiring manual recovery. The queue blocks retry and new overlapping destination/game attempts for the session; this is not durable process containment or restart recovery. Job rows suppress retry for quarantined attempts. Manager Changed observer exceptions cannot interrupt committed state mutations. Legacy manifest content drift, cross-session recovery records and bounded history remain open audit items.

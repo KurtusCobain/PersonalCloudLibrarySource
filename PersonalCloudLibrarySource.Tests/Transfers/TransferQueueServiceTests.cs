@@ -256,6 +256,57 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void Retry_RejectsChangedRemoteAndDisabledDownloads()
+        {
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager, new ThrowingExecutor()))
+            {
+                var original = new PersonalCloudLibrarySourceSettings
+                {
+                    SourceProviderType = PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
+                    RcloneRemoteName = "original", LocalCacheFolder = "cache"
+                };
+                var job = queue.EnqueueRclone(Guid.NewGuid(), "Game", "source", "dest",
+                    original.SourceProviderType, false, original);
+                Assert.That(queue.GetCompletion(job.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                // Mutating the caller's object cannot change the saved identity.
+                original.RcloneRemoteName = "replacement";
+                Assert.Throws<TransferRetryRefusedException>(() => queue.Retry(job.Id, original));
+                original.RcloneRemoteName = "original";
+                original.AllowDownloads = false;
+                Assert.Throws<TransferRetryRefusedException>(() => queue.Retry(job.Id, original));
+                Assert.That(manager.Jobs.Count, Is.EqualTo(1));
+            }
+        }
+
+        [Test]
+        public void RecoveryRequired_BlocksRetryAndNewAttempt()
+        {
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager, new RecoveryRequiredExecutor()))
+            {
+                var game = Guid.NewGuid();
+                var job = queue.EnqueueLocal(game, "Game", "source", "dest", "LocalFolder", false);
+                Assert.That(queue.GetCompletion(job.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                Assert.That(job.RequiresManualRecovery, Is.True);
+                Assert.That(job.CanRetry, Is.False);
+                Assert.That(manager.GetLatestRetryableJobForGame(game), Is.Null);
+                Assert.Throws<TransferRetryRefusedException>(() => queue.Retry(job.Id));
+                Assert.Throws<TransferRetryRefusedException>(() =>
+                    queue.EnqueueLocal(game, "Game", "source", "dest", "LocalFolder", false));
+                Assert.That(manager.Jobs.Count, Is.EqualTo(1));
+            }
+        }
+
+        private sealed class RecoveryRequiredExecutor : ICloudTransferExecutor
+        {
+            public CloudTransferExecutionResult ExecuteLocal(Guid jobId, bool isDirectory)
+                => CloudTransferExecutionResult.Failure("unconfirmed exit", requiresManualRecovery: true);
+            public CloudTransferExecutionResult ExecuteRclone(Guid jobId, PersonalCloudLibrarySourceSettings settings)
+                => ExecuteLocal(jobId, false);
+        }
+
+        [Test]
         public void Shutdown_IsBoundedIdempotentCancelsActiveAndRejectsNewWork()
         {
             var manager = new CloudTransferManager(1);

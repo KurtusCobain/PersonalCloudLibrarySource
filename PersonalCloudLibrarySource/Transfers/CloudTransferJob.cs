@@ -96,6 +96,12 @@ namespace PersonalCloudLibrarySource
             private set => SetValue(ref completedAt, value);
         }
 
+        // Session-local quarantine. No automatic reset or retry of an
+        // operation whose process may still own its staging files.
+        public bool RequiresManualRecovery { get; internal set; }
+        public bool CanRetry => !RequiresManualRecovery &&
+            (State == CloudTransferState.Failed || State == CloudTransferState.Cancelled);
+
         public bool IsTerminal =>
             State == CloudTransferState.Completed ||
             State == CloudTransferState.Cancelled ||

@@ -459,7 +459,14 @@ namespace PersonalCloudLibrarySource
             }
 
             var settingsSnapshot = settings.GetRuntimeSettingsSnapshot();
-            GetTransferQueue().Retry(previous.Id, settingsSnapshot);
+            try
+            {
+                GetTransferQueue().Retry(previous.Id, settingsSnapshot);
+            }
+            catch (TransferRetryRefusedException ex)
+            {
+                playniteApi.Dialogs.ShowMessage(ex.Message);
+            }
         }
 
         private GameMenuItem CreateGameMenuItem(

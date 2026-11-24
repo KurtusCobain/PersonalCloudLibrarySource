@@ -8,6 +8,19 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
     public class CloudTransferManagerTests
     {
         [Test]
+        public void ChangedObserverFailureDoesNotInterruptCommittedState()
+        {
+            var manager = new CloudTransferManager(1);
+            var observed = 0;
+            manager.Changed += (sender, args) => throw new InvalidOperationException("observer");
+            manager.Changed += (sender, args) => observed++;
+            var job = manager.Enqueue(Guid.NewGuid(), "Game", "source", "dest", "LocalFolder");
+            manager.Transition(job.Id, CloudTransferState.Transferring);
+            Assert.That(job.State, Is.EqualTo(CloudTransferState.Transferring));
+            Assert.That(observed, Is.EqualTo(2));
+        }
+
+        [Test]
         public void Enqueue_StartsOnlyConfiguredNumberOfJobs()
         {
             var manager = new CloudTransferManager(2);

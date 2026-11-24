@@ -16,6 +16,11 @@ namespace PersonalCloudLibrarySource
         public CloudTransferJob Job { get; }
     }
 
+    public sealed class TransferRetryRefusedException : InvalidOperationException
+    {
+        public TransferRetryRefusedException(string message) : base(message) { }
+    }
+
     public sealed class TransferQueueService : ITransferTerminalSource, IDisposable
     {
         private sealed class QueueRequest
@@ -54,9 +59,9 @@ namespace PersonalCloudLibrarySource
             string source,
             string destination,
             string providerType,
-            bool isDirectory)
+            bool isDirectory, PersonalCloudLibrarySourceSettings settings = null)
         {
-            return Enqueue(gameId, displayName, source, destination, providerType, isDirectory, false, null);
+            return Enqueue(gameId, displayName, source, destination, providerType, isDirectory, false, settings);
         }
 
         public CloudTransferJob EnqueueRclone(
@@ -120,11 +125,13 @@ namespace PersonalCloudLibrarySource
                     throw new InvalidOperationException("A transfer attempt is already active for this game.");
                 }
 
+                RefuseBlockedDestination(previous.Job.GameId, previous.Job.Destination);
+                if (previous.Settings != null &&
+                    !MatchesRetryConfiguration(previous.Settings, settingsSnapshot))
+                    throw new TransferRetryRefusedException(
+                        "Transfer source or cache settings changed. Refresh the library and start a new download.");
                 var retry = manager.Retry(failedJobId);
-                AddRequestLocked(
-                    retry,
-                    previous.IsRclone,
-                    settingsSnapshot ?? previous.Settings);
+                AddRequestLocked(retry, previous.IsRclone, settingsSnapshot ?? previous.Settings);
                 signal.Release();
                 return retry;
             }
@@ -188,6 +195,7 @@ namespace PersonalCloudLibrarySource
                     throw new InvalidOperationException("A transfer attempt is already active for this game.");
                 }
 
+                RefuseBlockedDestination(gameId, destination);
                 var job = manager.Enqueue(gameId, displayName, source, destination, providerType, isDirectory);
                 AddRequestLocked(job, isRclone, settings);
                 signal.Release();
@@ -204,7 +212,7 @@ namespace PersonalCloudLibrarySource
             {
                 Job = job,
                 IsRclone = isRclone,
-                Settings = settings,
+                Settings = settings == null ? null : SettingsMigrationService.CloneForEditing(settings),
                 Completion = new TaskCompletionSource<CloudTransferExecutionResult>(
                     TaskCreationOptions.RunContinuationsAsynchronously)
             };
@@ -267,6 +275,7 @@ namespace PersonalCloudLibrarySource
                         : executor.ExecuteLocal(request.Job.Id, request.Job.IsDirectory);
                 }
 
+                if (result.RequiresManualRecovery) request.Job.RequiresManualRecovery = true;
                 EnsureTerminal(request.Job, result);
             }
             catch (Exception ex)
@@ -283,10 +292,11 @@ namespace PersonalCloudLibrarySource
             // committed terminal outcome to installation observers.
             if (request.Job.State == CloudTransferState.Cancelled && !result.Cancelled)
                 result = CloudTransferExecutionResult.CancelledResult();
-            else if (request.Job.State == CloudTransferState.Failed && result.Succeeded)
+            else if (request.Job.State == CloudTransferState.Failed && (result.Succeeded || result.Cancelled))
                 result = CloudTransferExecutionResult.Failure(
                     string.IsNullOrWhiteSpace(request.Job.ErrorSummary)
-                        ? "Transfer failed." : request.Job.ErrorSummary);
+                        ? "Transfer failed." : request.Job.ErrorSummary,
+                    requiresManualRecovery: request.Job.RequiresManualRecovery);
 
             PublishTerminalOnce(request.Job);
             request.Completion.TrySetResult(result);
@@ -346,6 +356,41 @@ namespace PersonalCloudLibrarySource
                 }
             }
         }
+
+        private void RefuseBlockedDestination(Guid gameId, string destination)
+        {
+            foreach (var job in manager.Jobs)
+            {
+                if (!job.RequiresManualRecovery) continue;
+                if (job.GameId == gameId || PathBoundary.IsContained(job.Destination, destination) ||
+                    PathBoundary.IsContained(destination, job.Destination))
+                    throw new TransferRetryRefusedException(
+                        "A prior transfer requires manual recovery. Stop the process and inspect preserved staging before any new attempt.");
+            }
+        }
+
+        // Old paths cannot be combined with new provider credentials or roots.
+        // Scoped multi-source attempts need a fresh source-specific action,
+        // not the globally selected settings from the dashboard.
+        private static bool MatchesRetryConfiguration(PersonalCloudLibrarySourceSettings original,
+            PersonalCloudLibrarySourceSettings current)
+        {
+            if (current == null || !current.Enabled || !current.AllowDownloads ||
+                (current is PersonalCloudLibrarySourceSettingsV3 v3 && v3.EnableMultiSourceProfiles))
+                return false;
+            return Same(original.SourceProviderType, current.SourceProviderType) &&
+                Same(original.LocalManifestPath, current.LocalManifestPath) &&
+                Same(original.LocalLibraryRoot, current.LocalLibraryRoot) &&
+                Same(original.ManifestRelativePath, current.ManifestRelativePath) &&
+                Same(original.LocalCacheFolder, current.LocalCacheFolder) &&
+                Same(original.RcloneExecutablePath, current.RcloneExecutablePath) &&
+                Same(original.RcloneRemoteName, current.RcloneRemoteName) &&
+                Same(original.RcloneManifestPath, current.RcloneManifestPath) &&
+                Same(original.RcloneContentRoot, current.RcloneContentRoot);
+        }
+
+        private static bool Same(string a, string b) =>
+            string.Equals(a, b, StringComparison.Ordinal);
 
         private void ThrowIfStoppingLocked()
         {

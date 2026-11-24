@@ -6,6 +6,7 @@ namespace PersonalCloudLibrarySource
     {
         public bool Succeeded { get; set; }
         public bool Cancelled { get; set; }
+        public bool RequiresManualRecovery { get; set; }
         public string Message { get; set; } = string.Empty;
         public Exception Exception { get; set; }
         public long BytesTransferred { get; set; }
@@ -30,12 +31,14 @@ namespace PersonalCloudLibrarySource
             };
         }
 
-        public static CloudTransferExecutionResult Failure(string message, Exception exception = null)
+        public static CloudTransferExecutionResult Failure(string message, Exception exception = null,
+            bool requiresManualRecovery = false)
         {
             return new CloudTransferExecutionResult
             {
                 Message = message ?? "Transfer failed.",
-                Exception = exception
+                Exception = exception,
+                RequiresManualRecovery = requiresManualRecovery
             };
         }
     }

@@ -128,7 +128,7 @@ namespace PersonalCloudLibrarySource
                     .Select((job, index) => new { Job = job, Index = index })
                     .Where(value =>
                         value.Job.GameId == gameId &&
-                        (value.Job.State == CloudTransferState.Failed || value.Job.State == CloudTransferState.Cancelled))
+                        value.Job.CanRetry)
                     .OrderByDescending(value => value.Job.CompletedAt ?? value.Job.CreatedAt)
                     .ThenByDescending(value => value.Job.CreatedAt)
                     .ThenByDescending(value => value.Index)
@@ -225,8 +225,7 @@ namespace PersonalCloudLibrarySource
             lock (syncRoot)
             {
                 var failedJob = FindJobLocked(failedJobId);
-                if (failedJob.State != CloudTransferState.Failed &&
-                    failedJob.State != CloudTransferState.Cancelled)
+                if (!failedJob.CanRetry)
                 {
                     throw new InvalidOperationException("Only failed or cancelled transfer jobs can be retried.");
                 }
@@ -355,7 +354,17 @@ namespace PersonalCloudLibrarySource
 
         private void OnChanged()
         {
-            Changed?.Invoke(this, EventArgs.Empty);
+            var handlers = Changed;
+            if (handlers == null) return;
+            foreach (EventHandler handler in handlers.GetInvocationList())
+            {
+                try { handler(this, EventArgs.Empty); }
+                catch (Exception)
+                {
+                    // A presentation observer cannot interrupt an already
+                    // committed state change or strand queue-owned work.
+                }
+            }
         }
     }
 }

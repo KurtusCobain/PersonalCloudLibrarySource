@@ -23,9 +23,7 @@ namespace PersonalCloudLibrarySource
             CanCancel = !job.IsTerminal &&
                 job.State != CloudTransferState.Finalizing &&
                 !job.CancellationToken.IsCancellationRequested;
-            retryAvailable = job.State == CloudTransferState.Failed || job.State == CloudTransferState.Cancelled
-                ? 1
-                : 0;
+            retryAvailable = job.CanRetry ? 1 : 0;
             this.retry = retry ?? (() => { });
             CancelCommand = new DelegateCommand(cancel ?? (() => { }), () => CanCancel);
             RetryCommand = new DelegateCommand(ExecuteRetry, () => CanRetry);

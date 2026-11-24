@@ -40,6 +40,10 @@ namespace PersonalCloudLibrarySource
             {
                 queue.Retry(jobId, settingsSnapshotFactory());
             }
+            catch (TransferRetryRefusedException ex)
+            {
+                Playnite.SDK.LogManager.GetLogger().Warn(ex.Message);
+            }
             catch (InvalidOperationException ex) when (
                 string.Equals(ex.Message, DuplicateActiveTransferMessage, StringComparison.Ordinal))
             {
