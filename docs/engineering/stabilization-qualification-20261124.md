@@ -61,10 +61,11 @@
 | [dd632146](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45494210494) | 911 standard pass, 0 fail, 2 standard skips; 0 warnings; 2/2 real-rclone | Restore known-good source-handle rename, retain identity guard; no-follow journal lock and concurrency fixtures pass; archive passed |
 | [1ca69782](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45494280209) | 911 standard pass, 0 fail, 2 standard skips; 0 warnings; 2/2 real-rclone | Reuse local digest buffers; archive passed |
 
+| [2d4d0f03](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45494395197) | 912 standard pass, 0 fail, 2 standard skips; 0 warnings; 2/2 real-rclone | Partial reservation write quarantine; archive passed |
+| [c0ca3dc3](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45494467679) | 913 standard pass, 0 fail, 2 standard skips; 0 warnings; 2/2 real-rclone | Timed local tree correctness fixture; archive passed |
+
 ### Pending candidates (not qualified at this ledger entry)
 
-- [2d4d0f03](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45494395197): uncertain partial reservation write and queue quarantine.
-- [c0ca3dc3](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45494467679): timed real local 256-file tree correctness fixture.
 - [f6006859](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45494563971): invalid UTF-8 and persisted journal-overlap refusal.
 - Later CodeQL conclusions must be read against the exact candidate SHA; no success assumed.
 
@@ -76,6 +77,7 @@ Windows build and CodeQL workflow conclusions are not proof of absence of vulner
 - 2,500 synthetic packages / 7,500 synthetic entries: 55.771 ms at d13d0ed7. Exact item count, identity uniqueness and launch priority checked.
 - 5,000 historical jobs, six reserved, 2,000 reservation snapshot reads: 108.283 ms reference / 0.120 ms indexed at 14e7ff8d, identical counts.
 - 550 sequential synthetic successful transfers, 518 history entries retained, 18.585 ms at 9d563062. Claimed completion remains valid and live reservations are empty. This is not real download throughput.
+- At c0ca3dc3, 256 files/3,145,728 bytes (including 64 empty files), 16 source subdirectories: 1,476.386 ms end-to-end verified copy on hosted Windows. Content and membership assertions passed. One run, no pre/post comparison.
 - These are hosted synthetic measurements, not general application speed, actual disk/NAS throughput, startup latency or memory certifications.
 
 ## Remaining gate register
@@ -92,7 +94,7 @@ Windows build and CodeQL workflow conclusions are not proof of absence of vulner
 | Multi-source | Experimental activation and isolated identity routing; verify real host import/refresh/migration and source disappearance |
 | Archive support | Shipping ZIP path only; 7z/RAR decoder is isolated compatibility evidence; do not claim full support |
 | UI | Localized resource audit passed; keyboard/controller, DPI, theme and genuine screenshot review pending |
-| Performance | Synthetic progress, preview and retention measurements recorded; filesystem identity checks need local/NAS compatibility and large-tree cost qualification. Local digest buffer reuse qualified; 256-file timed correctness fixture pending. Actual library startup, memory and cancellation under I/O faults pending. |
+| Performance | Synthetic progress, preview and retention measurements recorded; filesystem identity checks need local/NAS compatibility and large-tree cost qualification. Local digest buffer reuse qualified; 256-file timed correctness fixture passed; larger mixed workloads and comparative memory/throughput measurements remain pending. Actual library startup, memory and cancellation under I/O faults pending. |
 | Independent review | Grok/Claude review of a frozen internal candidate, resolve findings before acceptance |
 | Native acceptance | Disposable Windows Playnite upgrade/install/uninstall/reinstall, digest-pinned real-rclone fixture gate (2/2 passed on hosted Windows), safe provider fixtures, official Toolbox and package provenance |
 | CH-Rm | Deferred until internal PCLS remediation and review are complete; selective review only, with independent regression after any eventual port |
