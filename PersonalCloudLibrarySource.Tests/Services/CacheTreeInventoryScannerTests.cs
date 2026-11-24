@@ -89,6 +89,71 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void DetailedScan_ReportsOnlyRelativeFilesAndPreservesV2Fingerprint()
+        {
+            var folder = Path.Combine(game, "sub");
+            Directory.CreateDirectory(folder);
+            File.WriteAllText(Path.Combine(game, "tiny.exe"), "tiny");
+            File.WriteAllText(Path.Combine(folder, "save.dat"), "save");
+            var scanner = new CacheTreeInventoryScanner();
+            var original = scanner.Scan(cache, game);
+            var detailed = scanner.ScanDetailed(cache, game, CancellationToken.None);
+
+            Assert.That(original.DetailedEntries, Is.Empty,
+                "Normal V2 receipt scans must not hold extra per-file details.");
+            Assert.That(detailed.Fingerprint, Is.EqualTo(original.Fingerprint));
+            Assert.That(detailed.FileCount, Is.EqualTo(original.FileCount));
+            Assert.That(detailed.DirectoryCount, Is.EqualTo(original.DirectoryCount));
+            Assert.That(detailed.DetailedEntries, Has.Count.EqualTo(3));
+            Assert.That(detailed.DetailedEntries[0].RelativePath, Is.EqualTo("sub"));
+            Assert.That(detailed.DetailedEntries[0].IsDirectory, Is.True);
+            Assert.That(detailed.DetailedEntries[1].RelativePath, Is.EqualTo(
+                Path.Combine("sub", "save.dat")));
+            Assert.That(detailed.DetailedEntries[1].FileBytes, Is.EqualTo(4));
+            Assert.That(detailed.DetailedEntries[1].Sha256, Has.Length.EqualTo(64));
+            Assert.That(detailed.DetailedEntries[2].RelativePath, Is.EqualTo("tiny.exe"));
+            Assert.That(detailed.DetailedEntries[2].FileBytes, Is.EqualTo(4));
+            foreach (var entry in detailed.DetailedEntries)
+                Assert.That(entry.RelativePath.StartsWith(root, StringComparison.OrdinalIgnoreCase),
+                    Is.False, "Detailed inventory must not report absolute cache paths.");
+        }
+
+        [Test]
+        public void DetailedScan_UserAddedSaveAppearsAsSeparateEntryWithoutMutation()
+        {
+            File.WriteAllText(Path.Combine(game, "play.exe"), "original");
+            var scanner = new CacheTreeInventoryScanner();
+            var before = scanner.ScanDetailed(cache, game, CancellationToken.None);
+            var save = Path.Combine(game, "personal.sav");
+            File.WriteAllText(save, "personal changes");
+
+            var after = scanner.ScanDetailed(cache, game, CancellationToken.None);
+
+            Assert.That(after.Fingerprint, Is.Not.EqualTo(before.Fingerprint));
+            Assert.That(before.DetailedEntries, Has.Count.EqualTo(1));
+            Assert.That(after.DetailedEntries, Has.Count.EqualTo(2));
+            Assert.That(after.DetailedEntries[0].RelativePath, Is.EqualTo("personal.sav"));
+            Assert.That(File.ReadAllText(save), Is.EqualTo("personal changes"));
+        }
+
+        [Test]
+        public void DetailedScan_CancelledOrOutsideCacheNeverInspectsOrModifiesFiles()
+        {
+            var original = Path.Combine(game, "keep.txt");
+            File.WriteAllText(original, "keep");
+            using (var cancellation = new CancellationTokenSource())
+            {
+                cancellation.Cancel();
+                Assert.Throws<OperationCanceledException>(() =>
+                    new CacheTreeInventoryScanner().ScanDetailed(cache, game, cancellation.Token));
+            }
+            Assert.Throws<InvalidOperationException>(() =>
+                new CacheTreeInventoryScanner().ScanDetailed(
+                    cache, root, CancellationToken.None));
+            Assert.That(File.ReadAllText(original), Is.EqualTo("keep"));
+        }
+
+        [Test]
         public void EmptyFolderHasDeterministicFingerprint()
         {
             var scanner = new CacheTreeInventoryScanner();

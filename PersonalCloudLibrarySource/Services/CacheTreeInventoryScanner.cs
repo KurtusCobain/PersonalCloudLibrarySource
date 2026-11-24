@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -7,6 +8,15 @@ using System.Threading;
 
 namespace PersonalCloudLibrarySource
 {
+    // Relative, read-only observation; never deletion authority.
+    public sealed class CacheTreeInventoryEntry
+    {
+        public string RelativePath { get; internal set; } = string.Empty;
+        public bool IsDirectory { get; internal set; }
+        public long FileBytes { get; internal set; }
+        public string Sha256 { get; internal set; } = string.Empty;
+    }
+
     // Read-only snapshot for future provenance comparisons. Never authorizes deletion.
     public sealed class CacheTreeInventory
     {
@@ -17,6 +27,9 @@ namespace PersonalCloudLibrarySource
         public IReadOnlyList<string> EntryPaths { get; set; } = new string[0];
         public int IgnoredAddedSaveCount { get; set; }
         public int IgnoredAddedDirectoryCount { get; set; }
+        public bool HasDetailedEntries { get; internal set; }
+        public IReadOnlyList<CacheTreeInventoryEntry> DetailedEntries { get; internal set; }
+            = new CacheTreeInventoryEntry[0];
     }
 
     public sealed class CacheTreeInventoryScanner
@@ -31,7 +44,14 @@ namespace PersonalCloudLibrarySource
 
         public CacheTreeInventory Scan(string cacheRoot, string target, CancellationToken cancellationToken)
         {
-            return ScanCore(cacheRoot, target, null, cancellationToken);
+            return ScanCore(cacheRoot, target, null, cancellationToken, false);
+        }
+
+        // Detailed review must observe ALL files, including later-added saves.
+        public CacheTreeInventory ScanDetailed(string cacheRoot, string target,
+            CancellationToken cancellationToken)
+        {
+            return ScanCore(cacheRoot, target, null, cancellationToken, true);
         }
 
         // A baseline may permit ONLY new .sav/.save data files. It can never
@@ -41,11 +61,11 @@ namespace PersonalCloudLibrarySource
         {
             if (originalEntryPaths == null)
                 throw new ArgumentNullException(nameof(originalEntryPaths));
-            return ScanCore(cacheRoot, target, originalEntryPaths, cancellationToken);
+            return ScanCore(cacheRoot, target, originalEntryPaths, cancellationToken, false);
         }
 
         private CacheTreeInventory ScanCore(string cacheRoot, string target,
-            ISet<string> originalEntryPaths, CancellationToken cancellationToken)
+            ISet<string> originalEntryPaths, CancellationToken cancellationToken, bool includeDetails)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (string.IsNullOrWhiteSpace(cacheRoot) ||
@@ -65,6 +85,7 @@ namespace PersonalCloudLibrarySource
             var result = new CacheTreeInventory();
             var entries = new List<string>();
             var entryPaths = new List<string>();
+            var details = includeDetails ? new List<CacheTreeInventoryEntry>() : null;
             var pending = new Stack<string>();
             var visitedEntries = 0;
             pending.Push(root);
@@ -104,6 +125,8 @@ namespace PersonalCloudLibrarySource
                             result.DirectoryCount++;
                             entries.Add(identifier);
                             entryPaths.Add(identifier);
+                            if (includeDetails)
+                                details.Add(new CacheTreeInventoryEntry { RelativePath = relative, IsDirectory = true });
                         }
                         pending.Push(entry);
                     }
@@ -137,6 +160,8 @@ namespace PersonalCloudLibrarySource
                             sha.TransformFinalBlock(new byte[0], 0, 0);
                             var digest = BitConverter.ToString(sha.Hash).Replace("-", "");
                             entries.Add("F:" + relative + ":" + info.Length + ":" + digest);
+                            if (includeDetails)
+                                details.Add(new CacheTreeInventoryEntry { RelativePath = relative, FileBytes = info.Length, Sha256 = digest });
                         }
                     }
                 }
@@ -144,6 +169,12 @@ namespace PersonalCloudLibrarySource
             entries.Sort(StringComparer.Ordinal);
             entryPaths.Sort(StringComparer.Ordinal);
             result.EntryPaths = entryPaths.AsReadOnly();
+            if (includeDetails)
+            {
+                details.Sort((a, b) => StringComparer.Ordinal.Compare(a.RelativePath, b.RelativePath));
+                result.DetailedEntries = new ReadOnlyCollection<CacheTreeInventoryEntry>(details);
+                result.HasDetailedEntries = true;
+            }
             using (var sha = SHA256.Create())
             {
                 var bytes = Encoding.UTF8.GetBytes(string.Join("\n", entries));
