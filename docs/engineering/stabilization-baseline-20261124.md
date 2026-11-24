@@ -166,3 +166,7 @@ Run 45351838525 at 4f7edc19 completed the repository audit: 332 tracked files, 1
 ## Package creation without recursive staging deletion
 
 Package script now creates a uniquely named invocation staging directory, writes ZIP entries from the exact six shipping-file allowlist, and runs strict release validation before replacing the prior generated package. Fixed dist staging trees are not recursively deleted; failed staging is retained; successful cleanup removes only an empty directory. Optional PDB package remains separate. Version format and ordinary-file/reparse checks are enforced. Existing dist .pext naming, build configuration, identity, public feed and stable release remain unchanged. Native filesystem race and reproducible-build qualification still open. CH-Rm deferred.
+
+### Follow-up qualification corrections
+
+The four-wrapper cleanup produced zero lexical private-member candidates (333 tracked files, 118 production C# files); the full build failed an obsolete source-text assertion referring to the removed wrapper. Update the assertion to check the live validated loader and import mapper, not the obsolete method. The new repository audit also rejected malformed packaging version-guard syntax before execution. Restore the complete guard and package-path assignment. Neither failed candidate is qualified. Standalone generator's four fixtures and release validator's seven cases passed independently. Full requalification required.

@@ -37,7 +37,11 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             var core = Read("PersonalCloudLibrarySource", "PersonalCloudLibrarySource.cs");
             var navigation = Read("PersonalCloudLibrarySource", "PersonalCloudLibrarySource.Navigation.cs");
 
-            StringAssert.Contains("return result.CreateValidatedManifest()", core);
+            var importer = Read("PersonalCloudLibrarySource", "Services", "ImportOutcomeService.cs");
+            StringAssert.Contains("return LoadParsedManifest(pluginSettings).CreateValidatedManifest()", core);
+            StringAssert.Contains("importOutcomeService.Import(pluginSettings", core);
+            StringAssert.Contains("mapper.Map(parse.ValidItems, settings, diagnostics)", importer);
+            StringAssert.Contains("ImportOutcome.Success(source, parse.ValidItems", importer);
             StringAssert.Contains("manifest = LoadParsedManifest(pluginSettings).Manifest", core);
             StringAssert.Contains("manifestLoader.ResolveLocalManifestPath(pluginSettings)", navigation);
             StringAssert.DoesNotContain("ResolveLocalFolderManifestPath", core + navigation);

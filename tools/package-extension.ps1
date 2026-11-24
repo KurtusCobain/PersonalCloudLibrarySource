@@ -39,7 +39,10 @@ if ([string]::IsNullOrWhiteSpace($extensionVersion)) {
 }
 
 $parsedVersion = $null
-if (-not [version]::TryParse($extensionVersion, [ref]$parsedVersion) -or $extensionVersion -notmatch '^\d+\.\d+\.\d+(?:\.\d+)?
+if (-not [version]::TryParse($extensionVersion, [ref]$parsedVersion) -or $extensionVersion -notmatch '^\d+\.\d+\.\d+(?:\.\d+)?$') {
+    throw 'Extension version is not a valid package version.'
+}
+$packagePath = Join-Path $distRoot "PersonalCloudLibrarySource-$extensionVersion.pext"
 $debugPackagePath = Join-Path $distRoot "PersonalCloudLibrarySource-$extensionVersion-debug-symbols.zip"
 
 if ([string]::IsNullOrWhiteSpace($msbuild)) {
