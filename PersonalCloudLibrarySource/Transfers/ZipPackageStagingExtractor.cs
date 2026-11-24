@@ -23,6 +23,7 @@ namespace PersonalCloudLibrarySource
             public string Path;
             public long WrittenBytes;
             public byte[] WrittenSha256;
+            public TransferPartialPathPolicy.FileIdentity? Identity;
         }
 
         public CloudTransferExecutionResult ExtractApprovedZip(
@@ -176,9 +177,10 @@ namespace PersonalCloudLibrarySource
                         var created = new CreatedFileRecord { Path = target };
                         using (var input = entry.Open())
                         using (var output = new FileStream(target, FileMode.CreateNew,
-                            FileAccess.Write, FileShare.None))
+                            FileAccess.ReadWrite, FileShare.None))
                         {
                             createdFiles.Add(created);
+                            created.Identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(output.SafeFileHandle);
                             using (var sha256 = SHA256.Create())
                             {
                                 long copiedEntry = 0;
@@ -272,16 +274,16 @@ namespace PersonalCloudLibrarySource
             foreach (var record in createdFiles)
             {
                 token.ThrowIfCancellationRequested();
-                if (record.WrittenSha256 == null ||
+                if (record.WrittenSha256 == null || !record.Identity.HasValue ||
                     !policy.Authorize(cacheRoot, record.Path, false).Allowed ||
                     !File.Exists(record.Path) ||
                     (File.GetAttributes(record.Path) & FileAttributes.ReparsePoint) != 0)
                     return false;
-                using (var input = new FileStream(record.Path, FileMode.Open,
-                    FileAccess.Read, FileShare.Read))
+                using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(record.Path, false))
                 using (var digest = SHA256.Create())
                 {
-                    if (input.Length != record.WrittenBytes ||
+                    if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(input.SafeFileHandle, record.Identity.Value) ||
+                        input.Length != record.WrittenBytes ||
                         !digest.ComputeHash(input).SequenceEqual(
                             record.WrittenSha256))
                         return false;
@@ -427,7 +429,7 @@ namespace PersonalCloudLibrarySource
                 {
                     var file = record.Path;
                     if (!policy.Authorize(cacheRoot, file, false).Allowed ||
-                        record.WrittenSha256 == null)
+                        record.WrittenSha256 == null || !record.Identity.HasValue)
                     {
                         clean = false;
                         continue;
@@ -439,22 +441,21 @@ namespace PersonalCloudLibrarySource
                             clean = false;
                             continue;
                         }
-                        // Content was recorded as bytes were written; an
-                        // unexpected change cancels automatic rollback. Hold
-                        // a read handle that denies ordinary concurrent writes
-                        // until the exact verified file is removed.
-                        using (var input = new FileStream(file, FileMode.Open,
-                            FileAccess.Read, FileShare.Read | FileShare.Delete))
+                        // Verify identity, link count and bytes on the same
+                        // handle that will be marked for deletion. A same-byte
+                        // replacement is not the originally created object.
+                        using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(file, true))
                         using (var digest = SHA256.Create())
                         {
-                            if (input.Length != record.WrittenBytes ||
+                            if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(input.SafeFileHandle, record.Identity.Value) ||
+                                input.Length != record.WrittenBytes ||
                                 !digest.ComputeHash(input).SequenceEqual(
                                     record.WrittenSha256))
                             {
                                 clean = false;
                                 continue;
                             }
-                            File.Delete(file);
+                            TransferPartialPathPolicy.DeleteVerifiedFileHandle(input.SafeFileHandle);
                         }
                     }
                 }

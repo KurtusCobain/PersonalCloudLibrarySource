@@ -341,6 +341,36 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void SameByteReplacementIsNotPublishedOrDeletedAsOwned()
+        {
+            const string original = "same bytes, distinct file identity";
+            WriteArchive(zip =>
+            {
+                AddFile(zip, "first.txt", original);
+                AddFile(zip, "second.bin", "second entry");
+            });
+            var job = Guid.NewGuid();
+            var stage = TransferPartialPathPolicy.Create(destination, job);
+            var replaced = Path.Combine(stage, "first.txt");
+            var moved = Path.Combine(cache, "preserved-original.txt");
+            var injected = false;
+            var result = new ZipPackageStagingExtractor().ExtractApprovedZip(
+                source, cache, destination, job, CancellationToken.None,
+                (copied, total) =>
+                {
+                    if (injected || copied <= Encoding.UTF8.GetByteCount(original)) return;
+                    injected = true;
+                    File.Move(replaced, moved);
+                    File.Copy(moved, replaced);
+                });
+            Assert.That(injected, Is.True);
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(Directory.Exists(destination), Is.False);
+            Assert.That(File.ReadAllText(replaced), Is.EqualTo(original));
+            Assert.That(File.ReadAllText(moved), Is.EqualTo(original));
+        }
+
+        [Test]
         public void PreviouslyWrittenMemberChangedDuringLaterMemberNeverPublishes()
         {
             const string original = "first immutable file";
