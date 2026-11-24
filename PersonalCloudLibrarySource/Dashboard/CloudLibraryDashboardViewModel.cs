@@ -22,7 +22,9 @@ namespace PersonalCloudLibrarySource
             new List<CloudTransferQueueItemViewModel>().AsReadOnly();
         private IReadOnlyList<DashboardActivityRecord> recentActivity =
             new List<DashboardActivityRecord>().AsReadOnly();
-        private bool transferRefreshPending;
+        private readonly DashboardRefreshPostGate transferRefreshGate = new DashboardRefreshPostGate();
+        private readonly DashboardRefreshPostGate activityRefreshGate = new DashboardRefreshPostGate();
+        private readonly DashboardRefreshPostGate stateRefreshGate = new DashboardRefreshPostGate();
         private bool disposed;
 
         public CloudLibraryDashboardViewModel(
@@ -60,7 +62,8 @@ namespace PersonalCloudLibrarySource
 
             this.transferManager.Changed += TransferManager_Changed;
             this.activityService.Changed += ActivityService_Changed;
-            PostImmediate(RefreshTransferPresentation);
+            RequestRefresh(transferRefreshGate, RefreshTransferPresentation);
+            RequestRefresh(activityRefreshGate, RefreshActivityPresentation);
         }
 
         public CloudLibraryDashboardState State => stateStore.Current;
@@ -106,7 +109,6 @@ namespace PersonalCloudLibrarySource
                 }
 
                 disposed = true;
-                transferRefreshPending = false;
             }
 
             stateStore.PropertyChanged -= StateStore_PropertyChanged;
@@ -141,70 +143,34 @@ namespace PersonalCloudLibrarySource
                 }
                 else
                 {
-                    PostImmediate(RaiseStatePropertiesChanged);
+                    RequestRefresh(stateRefreshGate, RaiseStatePropertiesChanged);
                 }
             }
         }
 
         private void TransferManager_Changed(object sender, EventArgs e)
         {
-            lock (refreshSync)
-            {
-                if (disposed || transferRefreshPending)
-                {
-                    return;
-                }
-
-                transferRefreshPending = true;
-            }
-
-            var accepted = TryPost(() =>
-            {
-                lock (refreshSync)
-                {
-                    transferRefreshPending = false;
-                    if (disposed)
-                    {
-                        return;
-                    }
-                }
-
-                RefreshTransferPresentation();
-            });
-            if (!accepted)
-            {
-                lock (refreshSync)
-                {
-                    transferRefreshPending = false;
-                }
-            }
+            RequestRefresh(transferRefreshGate, RefreshTransferPresentation);
         }
 
         private void ActivityService_Changed(object sender, EventArgs e)
         {
-            PostImmediate(RefreshTransferPresentation);
+            RequestRefresh(activityRefreshGate, RefreshActivityPresentation);
         }
 
-        private void PostImmediate(Action action)
+        private void RequestRefresh(DashboardRefreshPostGate gate, Action action)
         {
             lock (refreshSync)
             {
-                if (disposed)
-                {
-                    return;
-                }
+                if (disposed) return;
             }
 
-            TryPost(() =>
+            gate.RequestAcknowledged(TryPost, () =>
             {
                 lock (refreshSync)
                 {
-                    if (disposed)
-                    {
-                        return;
-                    }
+                    if (disposed) return;
                 }
-
                 action();
             });
         }
@@ -241,7 +207,11 @@ namespace PersonalCloudLibrarySource
                 .AsReadOnly();
 
             TransferQueueItems = jobs;
-            RecentActivity = activityService.Records.ToList().AsReadOnly();
+        }
+
+        private void RefreshActivityPresentation()
+        {
+            RecentActivity = activityService.Records;
         }
 
         private void RaiseStatePropertiesChanged()

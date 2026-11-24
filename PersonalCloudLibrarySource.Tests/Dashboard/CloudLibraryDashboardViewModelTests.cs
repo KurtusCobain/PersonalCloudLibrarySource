@@ -34,7 +34,7 @@ namespace PersonalCloudLibrarySource.Tests.Dashboard
         }
 
         [Test]
-        public void ActivityChange_IsPostedImmediatelyAndUsesNewestFirstCappedHistory()
+        public void ActivityChanges_CoalesceWithoutRebuildingTransferRows()
         {
             var activity = new DashboardActivityService();
             var dispatcher = new QueuedDispatcher();
@@ -42,13 +42,15 @@ namespace PersonalCloudLibrarySource.Tests.Dashboard
             dispatcher.ExecuteAll();
             dispatcher.ResetSubmissionCount();
 
+            var originalRows = viewModel.TransferQueueItems;
             for (var index = 0; index < 55; index++)
             {
                 activity.Add(DashboardActivityKind.Library, "Event " + index);
             }
 
-            Assert.That(dispatcher.SubmissionCount, Is.EqualTo(55));
+            Assert.That(dispatcher.SubmissionCount, Is.EqualTo(1));
             dispatcher.ExecuteAll();
+            Assert.That(viewModel.TransferQueueItems, Is.SameAs(originalRows));
             Assert.That(viewModel.RecentActivity, Has.Count.EqualTo(50));
             Assert.That(viewModel.RecentActivity.First().Message, Is.EqualTo("Event 54"));
             viewModel.Dispose();

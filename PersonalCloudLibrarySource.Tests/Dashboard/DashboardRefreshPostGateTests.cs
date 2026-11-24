@@ -34,6 +34,33 @@ namespace PersonalCloudLibrarySource.Tests.Dashboard
         }
 
         [Test]
+        public void RequestDuringRefreshPostsFollowUp()
+        {
+            var gate = new DashboardRefreshPostGate();
+            var callbacks = new Queue<Action>();
+            var refreshes = 0;
+            gate.Request(callbacks.Enqueue, () =>
+            {
+                refreshes++;
+                gate.Request(callbacks.Enqueue, () => refreshes++);
+            });
+            callbacks.Dequeue()();
+            Assert.That(callbacks.Count, Is.EqualTo(1));
+            callbacks.Dequeue()();
+            Assert.That(refreshes, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void RejectedAcknowledgedPostDoesNotStrandGate()
+        {
+            var gate = new DashboardRefreshPostGate();
+            var refreshes = 0;
+            gate.RequestAcknowledged(action => false, () => refreshes++);
+            gate.RequestAcknowledged(action => { action(); return true; }, () => refreshes++);
+            Assert.That(refreshes, Is.EqualTo(1));
+        }
+
+        [Test]
         public void PendingPost_CoalescesUntilCallbackCompletes()
         {
             var gate = new DashboardRefreshPostGate();

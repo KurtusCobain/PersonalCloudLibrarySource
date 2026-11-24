@@ -10,6 +10,7 @@ namespace PersonalCloudLibrarySource
         private DashboardTransferActivityBridge transferActivityBridge;
         private readonly DashboardRefreshPostGate dashboardTransferRefreshGate = new DashboardRefreshPostGate();
         private bool transferPresentationDisposed;
+        private long lastDashboardTransferRevision = -1;
 
         internal CloudTransferManager GetTransferManager()
         {
@@ -18,6 +19,7 @@ namespace PersonalCloudLibrarySource
                 var concurrency = settings?.GetRuntimeSettingsSnapshot()?.TransferConcurrency ?? 1;
                 transferManager = new CloudTransferManager(concurrency);
                 transferPresentationDisposed = false;
+                lastDashboardTransferRevision = -1;
                 transferManager.Changed += TransferManager_Changed;
             }
 
@@ -110,8 +112,19 @@ namespace PersonalCloudLibrarySource
                         return;
                     }
 
-                    RefreshDashboardState();
-                    UpdateNavigationItemState();
+                    var revision = GetTransferManager().LifecycleRevision;
+                    if (revision != lastDashboardTransferRevision)
+                    {
+                        RefreshDashboardState();
+                        UpdateNavigationItemState();
+                        lastDashboardTransferRevision = revision;
+                    }
+                    else
+                    {
+                        // Byte-only progress does not change library membership
+                        // or require rechecking every cached game on the UI thread.
+                        UpdateSidebarTransferProgress();
+                    }
                 });
         }
 

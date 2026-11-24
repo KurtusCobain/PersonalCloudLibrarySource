@@ -11,6 +11,12 @@ namespace PersonalCloudLibrarySource
         private readonly Dictionary<Guid, CloudTransferJob> jobsById = new Dictionary<Guid, CloudTransferJob>();
         private readonly Dictionary<Guid, List<CloudTransferJob>> jobsByGame = new Dictionary<Guid, List<CloudTransferJob>>();
         private int maxConcurrentTransfers;
+        private long lifecycleRevision;
+
+        public long LifecycleRevision
+        {
+            get { lock (syncRoot) return lifecycleRevision; }
+        }
 
         public CloudTransferManager(int maxConcurrentTransfers)
         {
@@ -93,6 +99,7 @@ namespace PersonalCloudLibrarySource
                     providerType,
                     isDirectory);
                 RegisterJobLocked(job);
+                lifecycleRevision++;
                 StartQueuedJobsLocked();
             }
 
@@ -147,6 +154,7 @@ namespace PersonalCloudLibrarySource
             lock (syncRoot)
             {
                 maxConcurrentTransfers = NormalizeConcurrency(value);
+                lifecycleRevision++;
                 StartQueuedJobsLocked();
             }
 
@@ -176,6 +184,7 @@ namespace PersonalCloudLibrarySource
                 }
 
                 job.SetState(nextState, errorSummary);
+                lifecycleRevision++;
                 if (job.IsTerminal)
                 {
                     StartQueuedJobsLocked();
@@ -244,6 +253,7 @@ namespace PersonalCloudLibrarySource
                     failedJob.IsDirectory,
                     failedJob.Id);
                 RegisterJobLocked(retry);
+                lifecycleRevision++;
                 StartQueuedJobsLocked();
             }
 

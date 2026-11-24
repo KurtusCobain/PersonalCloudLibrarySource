@@ -78,6 +78,22 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void LifecycleRevision_ChangesForTransitionsButNotByteProgress()
+        {
+            var manager = new CloudTransferManager(1);
+            var initial = manager.LifecycleRevision;
+            var job = manager.Enqueue(Guid.NewGuid(), "Game", "source", "dest", "LocalFolder");
+            Assert.That(manager.LifecycleRevision, Is.GreaterThan(initial));
+            manager.Transition(job.Id, CloudTransferState.Transferring);
+            var transferring = manager.LifecycleRevision;
+            manager.UpdateProgress(job.Id, 1, 100);
+            manager.UpdateProgress(job.Id, 2, 100);
+            Assert.That(manager.LifecycleRevision, Is.EqualTo(transferring));
+            manager.Transition(job.Id, CloudTransferState.Completed);
+            Assert.That(manager.LifecycleRevision, Is.GreaterThan(transferring));
+        }
+
+        [Test]
         public void UpdateProgress_AggregatesKnownByteTotals()
         {
             var manager = new CloudTransferManager(2);
