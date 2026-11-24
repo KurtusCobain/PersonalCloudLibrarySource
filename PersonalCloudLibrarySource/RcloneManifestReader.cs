@@ -2,6 +2,8 @@ using System;
 using System.Diagnostics;
 using System.Text;
 using System.Threading;
+using System.IO;
+using System.Threading.Tasks;
 
 namespace PersonalCloudLibrarySource
 {
@@ -31,14 +33,11 @@ namespace PersonalCloudLibrarySource
             }
 
             var remoteManifestPath = $"{remoteName}:{manifestPath}";
-            var timeoutSeconds = settings.RcloneTimeoutSeconds < 5 ? 30 : settings.RcloneTimeoutSeconds;
+            var timeoutSeconds = settings.RcloneTimeoutSeconds < 5 || settings.RcloneTimeoutSeconds > 86400
+                ? 30 : settings.RcloneTimeoutSeconds;
 
             using (var process = new Process())
             {
-                var output = new StringBuilder();
-                var error = new StringBuilder();
-                var oversizedOutput = 0;
-
                 process.StartInfo = new ProcessStartInfo
                 {
                     FileName = executablePath,
@@ -47,25 +46,6 @@ namespace PersonalCloudLibrarySource
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     CreateNoWindow = true
-                };
-
-                process.OutputDataReceived += (sender, args) =>
-                {
-                    if (args.Data == null) return;
-                    lock (output)
-                    {
-                        if (!TryAppendLineWithinLimit(output, args.Data, ManifestParserValidator.MaxManifestCharacters))
-                            Interlocked.Exchange(ref oversizedOutput, 1);
-                    }
-                };
-
-                process.ErrorDataReceived += (sender, args) =>
-                {
-                    if (args.Data == null) return;
-                    lock (error)
-                    {
-                        TryAppendLineWithinLimit(error, args.Data, 4096);
-                    }
                 };
 
                 try
@@ -77,36 +57,42 @@ namespace PersonalCloudLibrarySource
                     throw new InvalidOperationException("Unable to start rclone. Check the rclone executable path.", ex);
                 }
 
-                process.BeginOutputReadLine();
-                process.BeginErrorReadLine();
-
-                var timer = Stopwatch.StartNew();
-                while (!process.WaitForExit(200))
+                string json;
+                try
                 {
-                    if (Volatile.Read(ref oversizedOutput) != 0)
-                    {
-                        StopProcess(process);
-                        throw new InvalidOperationException("Rclone manifest exceeds the 32 million character limit.");
-                    }
+                    var timer = Stopwatch.StartNew();
+                    var output = ReadBoundedAsync(process.StandardOutput,
+                        ManifestParserValidator.MaxManifestCharacters);
+                    var stderr = DrainAsync(process.StandardError);
+                    ObserveFailure(output);
+                    ObserveFailure(stderr);
 
-                    if (timer.Elapsed.TotalSeconds > timeoutSeconds)
+                    // Bound both process exit and pipe completion. Inherited
+                    // pipe handles must not keep this caller blocked forever.
+                    var exited = false;
+                    while (!exited || !output.IsCompleted || !stderr.IsCompleted)
                     {
-                        StopProcess(process);
-                        throw new TimeoutException($"rclone manifest retrieval timed out after {timeoutSeconds} seconds.");
+                        if (output.IsFaulted)
+                            throw new InvalidOperationException("Rclone manifest could not be read within its character limit.");
+                        if (stderr.IsFaulted)
+                            throw new InvalidOperationException("Rclone diagnostic stream could not be drained.");
+                        if (timer.Elapsed.TotalSeconds >= timeoutSeconds)
+                            throw new TimeoutException($"rclone manifest retrieval timed out after {timeoutSeconds} seconds.");
+                        if (!exited) exited = process.WaitForExit(100);
+                        else Thread.Sleep(20);
                     }
+                    json = output.GetAwaiter().GetResult();
+                    stderr.GetAwaiter().GetResult();
+                    if (process.ExitCode != 0)
+                        throw new InvalidOperationException(
+                            $"rclone cat failed with exit code {process.ExitCode}. Check the configured remote and manifest path.");
+                }
+                catch
+                {
+                    StopProcess(process);
+                    throw;
                 }
 
-                process.WaitForExit();
-                if (Volatile.Read(ref oversizedOutput) != 0)
-                    throw new InvalidOperationException("Rclone manifest exceeds the 32 million character limit.");
-
-                if (process.ExitCode != 0)
-                {
-                    throw new InvalidOperationException(
-                        $"rclone cat failed with exit code {process.ExitCode}. Check the configured remote and manifest path.");
-                }
-
-                var json = output.ToString();
                 if (string.IsNullOrWhiteSpace(json))
                 {
                     throw new InvalidOperationException("rclone returned an empty manifest.");
@@ -116,13 +102,37 @@ namespace PersonalCloudLibrarySource
             }
         }
 
-        internal static bool TryAppendLineWithinLimit(StringBuilder buffer, string line, int limit)
+        internal static async Task<string> ReadBoundedAsync(TextReader reader, int limit)
         {
-            if (line == null) return true;
-            if (limit < 0 || line.Length > limit - buffer.Length - Environment.NewLine.Length)
-                return false;
-            buffer.AppendLine(line);
-            return true;
+            if (reader == null) throw new ArgumentNullException(nameof(reader));
+            if (limit < 0) throw new ArgumentOutOfRangeException(nameof(limit));
+            var buffer = new char[8192];
+            var output = new StringBuilder();
+            while (true)
+            {
+                // Read at most the remaining budget plus one character.
+                var count = (int)Math.Min(buffer.Length, (long)limit - output.Length + 1);
+                var read = await reader.ReadAsync(buffer, 0, count).ConfigureAwait(false);
+                if (read == 0) return output.ToString();
+                if (read > limit - output.Length)
+                    throw new InvalidDataException("Rclone manifest exceeds its character limit.");
+                output.Append(buffer, 0, read);
+            }
+        }
+
+        private static async Task DrainAsync(TextReader reader)
+        {
+            var buffer = new char[4096];
+            while (await reader.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false) > 0) { }
+        }
+
+        private static void ObserveFailure(Task task)
+        {
+            // A timed-out caller may dispose its stream while a read remains
+            // outstanding. Observe any late exception without retaining output.
+            task.ContinueWith(failed => { var ignored = failed.Exception; },
+                CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted |
+                TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
 
         private static void StopProcess(Process process)

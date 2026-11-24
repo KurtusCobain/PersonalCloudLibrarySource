@@ -1,7 +1,8 @@
 using NUnit.Framework;
 using System;
+using System.IO;
 using System.Reflection;
-using System.Text;
+using System.Threading.Tasks;
 
 namespace PersonalCloudLibrarySource.Tests.Transfers
 {
@@ -9,43 +10,53 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
     public class RcloneManifestReaderBoundsTests
     {
         [Test]
-        public void StreamBuffer_RejectedLine_DoesNotGrowDestination()
+        public void ChunkReader_PreservesExactTextAndBoundary()
         {
-            var buffer = new StringBuilder();
-            Assert.That(Append(buffer, "short", 20), Is.True);
-            var before = buffer.ToString();
-
-            Assert.That(Append(buffer, new string('x', 25), 20), Is.False);
-            Assert.That(buffer.ToString(), Is.EqualTo(before));
+            var json = "{\n  \"items\": []\r\n}";
+            Assert.That(Read(new StringReader(json), json.Length).GetAwaiter().GetResult(), Is.EqualTo(json));
         }
 
         [Test]
-        public void StreamBuffer_ExactlyAtBoundary_AllowsThenRefusesExtraContent()
+        public void ChunkReader_RejectsOversizedSingleLine()
         {
-            var buffer = new StringBuilder();
-            var line = "abc";
-            var limit = line.Length + Environment.NewLine.Length;
-
-            Assert.That(Append(buffer, line, limit), Is.True);
-            Assert.That(buffer.ToString(), Is.EqualTo(line + Environment.NewLine));
-            Assert.That(Append(buffer, "more", limit), Is.False);
-            Assert.That(buffer.Length, Is.EqualTo(limit));
+            using (var reader = new CountingReader(1000000))
+            {
+                Assert.Throws<InvalidDataException>(() => Read(reader, 10000).GetAwaiter().GetResult());
+                Assert.That(reader.TotalRead, Is.EqualTo(10001));
+                Assert.That(reader.MaxRequest, Is.LessThanOrEqualTo(8192));
+            }
         }
 
         [Test]
-        public void StreamBuffer_NullLine_IsHarmless()
+        public void ChunkReader_HandlesEmptyAndZeroBudget()
         {
-            var buffer = new StringBuilder();
-            Assert.That(Append(buffer, null, 10), Is.True);
-            Assert.That(buffer.Length, Is.Zero);
+            Assert.That(Read(new StringReader(string.Empty), 0).GetAwaiter().GetResult(), Is.Empty);
+            Assert.Throws<InvalidDataException>(() => Read(new StringReader("x"), 0).GetAwaiter().GetResult());
         }
 
-        private static bool Append(StringBuilder buffer, string line, int limit)
+        private static Task<string> Read(TextReader reader, int limit)
         {
             var method = typeof(RcloneManifestReader).GetMethod(
-                "TryAppendLineWithinLimit", BindingFlags.NonPublic | BindingFlags.Static);
-            Assert.That(method, Is.Not.Null, "Expected streamed manifest bound helper.");
-            return (bool)method.Invoke(null, new object[] { buffer, line, limit });
+                "ReadBoundedAsync", BindingFlags.NonPublic | BindingFlags.Static);
+            Assert.That(method, Is.Not.Null);
+            return (Task<string>)method.Invoke(null, new object[] { reader, limit });
+        }
+
+        private sealed class CountingReader : TextReader
+        {
+            private int remaining;
+            public int TotalRead { get; private set; }
+            public int MaxRequest { get; private set; }
+            public CountingReader(int length) { remaining = length; }
+            public override Task<int> ReadAsync(char[] buffer, int index, int count)
+            {
+                MaxRequest = Math.Max(MaxRequest, count);
+                var read = Math.Min(remaining, count);
+                for (var i = 0; i < read; i++) buffer[index + i] = 'x';
+                remaining -= read;
+                TotalRead += read;
+                return Task.FromResult(read);
+            }
         }
     }
 }

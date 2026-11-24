@@ -58,3 +58,7 @@ Compared the content/changed-file lists of eight CH-Rm commits (8ef45f9b, 6630d7
 ## Rclone process lifecycle checkpoint
 
 Verified 13c87a33: 792 passed, zero failures/compiler warnings, two opt-in skips; all three CI workflows green. Adapted the CH-Rm progress-watchdog concept (8ef45f9b) using monotonic elapsed time and advancing byte/total observations. Repeated log lines no longer extend inactivity indefinitely. Listing/check-only activity and provider-specific timeout behavior require real-rclone qualification. Process setup exceptions attempt bounded stop; cancellation before launch does not spawn a process. Output drain is bounded. Unconfirmed exit preserves job staging and is a failure, not clean cancellation. Raw provider stderr is not propagated to manifest error or transfer history. This does not yet bound the framework's individual line buffers, guarantee descendant termination, or sanitize every diagnostic producer.
+
+## Bounded manifest reading
+
+Replaced line-based manifest capture with an 8 Ki-character chunk reader that consumes at most the configured character limit plus one. Stderr is drained without retention; process exit and pipe EOF share the bounded retrieval deadline. Tests exercise exact preservation, zero budget and a synthetic million-character line without allocating it. This is a managed reader bound, not a limit on OS pipe buffers or a general process-tree containment proof.

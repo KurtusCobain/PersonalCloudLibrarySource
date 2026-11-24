@@ -92,74 +92,74 @@ namespace PersonalCloudLibrarySource
                             return RcloneProcessResult.Failure("rclone did not start.");
                         started = true;
                         process.BeginOutputReadLine();
-                    process.BeginErrorReadLine();
+                        process.BeginErrorReadLine();
 
-                    while (!process.WaitForExit(200))
-                    {
-                        if (Volatile.Read(ref callbackFailed) != 0)
-                            return RcloneProcessResult.Failure("rclone progress callback failed.",
-                                processExitConfirmed: TryStop(process));
-                        if (cancellationToken.IsCancellationRequested)
+                        while (!process.WaitForExit(200))
                         {
-                            return TryStop(process)
-                                ? RcloneProcessResult.Cancelled("rclone transfer cancelled.")
-                                : RcloneProcessResult.Failure("rclone cancellation could not stop the child process.",
-                                    processExitConfirmed: false);
-                        }
-
-                        var expiredKind = activityTimeout.GetExpiredKind(epoch + clock.Elapsed);
-                        if (expiredKind != RcloneTimeoutKind.None)
-                        {
-                            if (!TryStop(process))
+                            if (Volatile.Read(ref callbackFailed) != 0)
+                                return RcloneProcessResult.Failure("rclone progress callback failed.",
+                                    processExitConfirmed: TryStop(process));
+                            if (cancellationToken.IsCancellationRequested)
                             {
+                                return TryStop(process)
+                                    ? RcloneProcessResult.Cancelled("rclone transfer cancelled.")
+                                    : RcloneProcessResult.Failure("rclone cancellation could not stop the child process.",
+                                        processExitConfirmed: false);
+                            }
+
+                            var expiredKind = activityTimeout.GetExpiredKind(epoch + clock.Elapsed);
+                            if (expiredKind != RcloneTimeoutKind.None)
+                            {
+                                if (!TryStop(process))
+                                {
+                                    return RcloneProcessResult.Failure(
+                                        "rclone timed out and the child process could not be stopped.",
+                                        GetText(error, syncRoot),
+                                        null,
+                                        -1,
+                                        true, processExitConfirmed: false);
+                                }
+
                                 return RcloneProcessResult.Failure(
-                                    "rclone timed out and the child process could not be stopped.",
+                                    expiredKind == RcloneTimeoutKind.Connect
+                                        ? "rclone did not report activity within " + connectTimeoutSeconds + " seconds."
+                                        : "rclone transfer was inactive for " + inactivityTimeoutSeconds + " seconds.",
                                     GetText(error, syncRoot),
                                     null,
                                     -1,
-                                    true, processExitConfirmed: false);
+                                    true);
                             }
-
-                            return RcloneProcessResult.Failure(
-                                expiredKind == RcloneTimeoutKind.Connect
-                                    ? "rclone did not report activity within " + connectTimeoutSeconds + " seconds."
-                                    : "rclone transfer was inactive for " + inactivityTimeoutSeconds + " seconds.",
-                                GetText(error, syncRoot),
-                                null,
-                                -1,
-                                true);
                         }
-                    }
 
-                    // Bound asynchronous pipe EOF; descendants can retain pipe handles.
-                    var drain = Stopwatch.StartNew();
-                    while (Volatile.Read(ref outputEnded) == 0 || Volatile.Read(ref errorEnded) == 0)
-                    {
-                        if (drain.Elapsed >= TimeSpan.FromSeconds(5) || cancellationToken.IsCancellationRequested)
-                            return RcloneProcessResult.Failure("rclone output drain was not confirmed.",
-                                processExitConfirmed: false);
-                        Thread.Sleep(20);
-                    }
-                    if (Volatile.Read(ref callbackFailed) != 0)
-                        return RcloneProcessResult.Failure("rclone progress callback failed.");
+                        // Bound asynchronous pipe EOF; descendants can retain pipe handles.
+                        var drain = Stopwatch.StartNew();
+                        while (Volatile.Read(ref outputEnded) == 0 || Volatile.Read(ref errorEnded) == 0)
+                        {
+                            if (drain.Elapsed >= TimeSpan.FromSeconds(5) || cancellationToken.IsCancellationRequested)
+                                return RcloneProcessResult.Failure("rclone output drain was not confirmed.",
+                                    processExitConfirmed: false);
+                            Thread.Sleep(20);
+                        }
+                        if (Volatile.Read(ref callbackFailed) != 0)
+                            return RcloneProcessResult.Failure("rclone progress callback failed.");
 
-                    var outputText = GetText(output, syncRoot);
-                    var errorText = GetText(error, syncRoot);
-                    if (cancellationToken.IsCancellationRequested)
-                    {
-                        return RcloneProcessResult.Cancelled("rclone transfer cancelled.");
-                    }
+                        var outputText = GetText(output, syncRoot);
+                        var errorText = GetText(error, syncRoot);
+                        if (cancellationToken.IsCancellationRequested)
+                        {
+                            return RcloneProcessResult.Cancelled("rclone transfer cancelled.");
+                        }
 
-                    if (process.ExitCode == 0)
-                    {
-                        return RcloneProcessResult.Success(outputText);
-                    }
+                        if (process.ExitCode == 0)
+                        {
+                            return RcloneProcessResult.Success(outputText);
+                        }
 
-                    return RcloneProcessResult.Failure(
-                        "rclone stopped with exit code " + process.ExitCode + ".",
-                        errorText,
-                        null,
-                        process.ExitCode);
+                        return RcloneProcessResult.Failure(
+                            "rclone stopped with exit code " + process.ExitCode + ".",
+                            errorText,
+                            null,
+                            process.ExitCode);
                     }
                     catch (Exception)
                     {
