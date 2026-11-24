@@ -25,7 +25,8 @@ namespace PersonalCloudLibrarySource.Tests.Repository
 
             Assert.That(
                 Regex.Matches(source, @"settings\.GetRuntimeSettingsSnapshot\(\)").Count,
-                Is.EqualTo(3));
+                Is.EqualTo(4));
+            Assert.That(source, Does.Contain("IsCurrentExperimentalActionPlan(plan)"));
             Assert.That(source, Does.Not.Contain("var pluginSettings = settings.Settings;"));
         }
 

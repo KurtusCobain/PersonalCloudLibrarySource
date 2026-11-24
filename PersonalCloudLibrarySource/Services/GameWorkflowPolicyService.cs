@@ -119,9 +119,13 @@ namespace PersonalCloudLibrarySource
             {
                 result.UninstallRefusalReason = "Directory cache ownership is unverified; recursive removal is disabled.";
             }
-            else if (!File.Exists(result.UninstallTarget) && !Directory.Exists(result.UninstallTarget))
+            else if (!settings.Enabled)
             {
-                result.UninstallRefusalReason = "The authorized cache target is unavailable.";
+                result.UninstallRefusalReason = "The library source is disabled.";
+            }
+            else if (!File.Exists(result.UninstallTarget) || Directory.Exists(result.UninstallTarget))
+            {
+                result.UninstallRefusalReason = "The authorized cache file is unavailable.";
             }
             else
             {

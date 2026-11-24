@@ -18,6 +18,7 @@ namespace PersonalCloudLibrarySource
         private readonly IImportUiDispatcher uiDispatcher;
         private readonly CacheOwnershipReceiptStore ownershipReceipts;
         private readonly string ownershipReceiptKey;
+        private readonly Func<bool> executionAuthorized;
         private readonly CancellationTokenSource inventoryCancellation = new CancellationTokenSource();
         private Guid activeJobId;
         private volatile bool disposed;
@@ -31,12 +32,14 @@ namespace PersonalCloudLibrarySource
             TransferQueueService transferQueue,
             GameWorkflowNotificationService workflowNotifications = null,
             CacheOwnershipReceiptStore ownershipReceipts = null,
-            string ownershipReceiptKey = null) : base(game)
+            string ownershipReceiptKey = null,
+            Func<bool> executionAuthorized = null) : base(game)
         {
             this.item = item;
             this.settings = settings;
             this.transferQueue = transferQueue ?? throw new ArgumentNullException(nameof(transferQueue));
             this.ownershipReceipts = ownershipReceipts;
+            this.executionAuthorized = executionAuthorized;
             // Existing calls retain the original manifest item key. A new-profile
             // caller must supply its namespaced Playnite game ID explicitly.
             if (string.IsNullOrWhiteSpace(item?.Id))
@@ -59,6 +62,14 @@ namespace PersonalCloudLibrarySource
             if (disposed) return;
             try
             {
+                if (settings == null || !settings.Enabled || !settings.AllowDownloads ||
+                    (executionAuthorized != null && !executionAuthorized()))
+                {
+                    workflowNotifications.Failure("install", Game.GameId,
+                        "Download authorization expired; refresh the library before retrying.");
+                    SignalCancelledIfHosted();
+                    return;
+                }
                 var sourceType = PersonalCloudLibrarySource.GetItemSourceType(item);
                 var launchPath = PersonalCloudLibrarySource.ResolveLaunchPath(item, settings);
                 var installDirectory = PersonalCloudLibrarySource.ResolveInstallDirectory(item, settings, launchPath);

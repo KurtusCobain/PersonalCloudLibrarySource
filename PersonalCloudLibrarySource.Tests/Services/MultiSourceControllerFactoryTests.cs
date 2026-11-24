@@ -193,6 +193,27 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void PreparedUninstallRefusesExpiredPlan()
+        {
+            var plan = Prepare();
+            var cached = Path.Combine(cache, "test-game", "game.exe");
+            Directory.CreateDirectory(Path.GetDirectoryName(cached));
+            File.WriteAllText(cached, "cached game");
+            var receipts = new CacheOwnershipReceiptStore(Path.Combine(root, "ownership-receipts"));
+            var current = true;
+            UninstallController action;
+            Assert.That(new MultiSourceControllerFactory().TryPrepareUninstall(null,
+                Game(), pluginId, plan, out action, receipts, () => current), Is.True);
+            try
+            {
+                current = false;
+                Assert.Throws<InvalidOperationException>(() => action.Uninstall(new UninstallActionArgs()));
+                Assert.That(File.ReadAllText(cached), Is.EqualTo("cached game"));
+            }
+            finally { action.Dispose(); }
+        }
+
+        [Test]
         public void NewProfileInstallUsesNamespacedReceiptIdThroughFactory()
         {
             var added = Profile();

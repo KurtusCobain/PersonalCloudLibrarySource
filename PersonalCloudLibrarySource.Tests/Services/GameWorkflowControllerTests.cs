@@ -47,6 +47,18 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Uninstall_FileReplacedByDirectoryAfterControllerCreation_PreservesContents()
+        {
+            var launch = CreateFile(Path.Combine(cache, "game", "play.exe"));
+            var controller = CreateUninstallController(launch, FileOnlySettings(), new RecordingSink());
+            File.Delete(launch);
+            Directory.CreateDirectory(launch);
+            var save = CreateFile(Path.Combine(launch, "keep.sav"));
+            Assert.Throws<InvalidOperationException>(() => controller.Uninstall(new UninstallActionArgs()));
+            Assert.That(File.ReadAllText(save), Is.EqualTo("stub"));
+        }
+
+        [Test]
         public void Uninstall_UnsafeOutsideTarget_RefusesWithoutDeleteAndNotifies()
         {
             var outside = CreateFile(Path.Combine(root, "outside", "play.exe"));

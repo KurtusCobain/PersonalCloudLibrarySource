@@ -12,12 +12,13 @@ namespace PersonalCloudLibrarySource
     {
         public bool TryPrepareInstall(IPlayniteAPI api, Game game, Guid expectedPluginId,
             MultiSourceRuntimePlan plan, TransferQueueService queue,
-            CacheOwnershipReceiptStore receipts, out InstallController controller)
+            CacheOwnershipReceiptStore receipts, out InstallController controller,
+            Func<bool> planStillCurrent = null)
         {
             controller = null;
             SourceScopedGameAction route;
             if (!TryResolveOwnedGame(game, expectedPluginId, plan, out route) ||
-                queue == null || receipts == null)
+                queue == null || receipts == null || (api != null && planStillCurrent == null))
                 return false;
 
             var item = route.CreateItemSnapshot();
@@ -34,17 +35,19 @@ namespace PersonalCloudLibrarySource
 
             controller = new RcloneInstallController(api, game, item,
                 sourceSettings, queue, ownershipReceipts: receipts,
-                ownershipReceiptKey: explicitReceiptKey);
+                ownershipReceiptKey: explicitReceiptKey,
+                executionAuthorized: BindExecutionGuard(game, expectedPluginId, route.GameId, planStillCurrent));
             return true;
         }
 
         public bool TryPrepareUninstall(IPlayniteAPI api, Game game, Guid expectedPluginId,
             MultiSourceRuntimePlan plan, out UninstallController controller,
-            CacheOwnershipReceiptStore receipts = null)
+            CacheOwnershipReceiptStore receipts = null, Func<bool> planStillCurrent = null)
         {
             controller = null;
             SourceScopedGameAction route;
-            if (receipts == null || !TryResolveOwnedGame(game, expectedPluginId, plan, out route))
+            if (receipts == null || (api != null && planStillCurrent == null) ||
+                !TryResolveOwnedGame(game, expectedPluginId, plan, out route))
                 return false;
 
             var item = route.CreateItemSnapshot();
@@ -68,8 +71,17 @@ namespace PersonalCloudLibrarySource
                 return false;
 
             controller = new PersonalCloudLibraryUninstallController(
-                api, game, item, sourceSettings, ownershipReceipts: receipts);
+                api, game, item, sourceSettings, ownershipReceipts: receipts,
+                executionAuthorized: BindExecutionGuard(game, expectedPluginId, route.GameId, planStillCurrent));
             return true;
+        }
+
+        private static Func<bool> BindExecutionGuard(Game game, Guid pluginId,
+            string gameId, Func<bool> planStillCurrent)
+        {
+            return () => game.PluginId == pluginId &&
+                string.Equals(game.GameId, gameId, StringComparison.Ordinal) &&
+                (planStillCurrent == null || planStillCurrent());
         }
 
         private static bool TryResolveOwnedGame(Game game, Guid expectedPluginId,

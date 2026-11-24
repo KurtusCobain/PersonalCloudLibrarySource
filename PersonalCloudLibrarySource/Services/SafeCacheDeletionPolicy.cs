@@ -130,6 +130,20 @@ namespace PersonalCloudLibrarySource
             return string.Empty;
         }
 
+        // File-only permission must never fall through to recursive removal
+        // when a cached file is missing or has been replaced by a directory.
+        public CacheDeletionAuthorization DeleteFileOnly(string cacheRoot, string targetPath, bool allowOutsideCache)
+        {
+            var authorization = policy.Authorize(cacheRoot, targetPath, allowOutsideCache);
+            if (!authorization.Allowed) return authorization;
+            if (!File.Exists(authorization.TargetPath) || Directory.Exists(authorization.TargetPath))
+                return new CacheDeletionAuthorization { Reason = "file-only uninstall requires an existing regular file" };
+            // No directory callback is reachable, even if the target changes
+            // after the check. Pathname/ancestor races remain a separate gate.
+            deleteFile(authorization.TargetPath);
+            return authorization;
+        }
+
         public CacheDeletionAuthorization Delete(string cacheRoot, string targetPath, bool allowOutsideCache)
         {
             var authorization = policy.Authorize(cacheRoot, targetPath, allowOutsideCache);

@@ -159,6 +159,15 @@ namespace PersonalCloudLibrarySource
             return null;
         }
 
+        // Revalidate at controller invocation, not merely when Playnite asks
+        // for a menu action. A refreshed or invalidated plan expires old actions.
+        private bool IsCurrentExperimentalActionPlan(MultiSourceRuntimePlan expected)
+        {
+            if (expected == null) return false;
+            var current = GetCurrentExperimentalActionPlan(settings.GetRuntimeSettingsSnapshot());
+            return ReferenceEquals(current, expected);
+        }
+
         private void PublishImportOutcome(
             ImportOutcome outcome,
             PersonalCloudLibrarySourceSettings pluginSettings)
@@ -254,7 +263,7 @@ namespace PersonalCloudLibrarySource
                         playniteApi, args.Game, Id, plan, GetTransferQueue(),
                         new CacheOwnershipReceiptStore(Path.Combine(
                             GetPluginDataDirectory(), "ownership-receipts")),
-                        out scopedController))
+                        out scopedController, () => IsCurrentExperimentalActionPlan(plan)))
                         installActions.Add(scopedController);
                     return installActions;
                 }
@@ -330,7 +339,8 @@ namespace PersonalCloudLibrarySource
                     if (new MultiSourceControllerFactory().TryPrepareUninstall(
                         playniteApi, args.Game, Id, plan, out scopedController,
                         new CacheOwnershipReceiptStore(Path.Combine(
-                            GetPluginDataDirectory(), "ownership-receipts"))))
+                            GetPluginDataDirectory(), "ownership-receipts")),
+                        () => IsCurrentExperimentalActionPlan(plan)))
                         uninstallActions.Add(scopedController);
                     return uninstallActions;
                 }

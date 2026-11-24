@@ -46,3 +46,7 @@ Windows build, package inspection and archive compatibility passed at 04c0d7ab (
 ## Inventory scan hardening
 
 The read-only scanner now reuses a single 1 MiB buffer per scan, rather than allocating one per file. The stream's actual length must match the initial stat, reads are bounded to that length and growth/truncation is refused. The existing fingerprint format remains unchanged; mixed-size and empty-file regression fixtures independently compute the legacy fingerprint. This reduces allocation pressure by construction but is not a measured performance benchmark or proof against all filesystem races.
+
+## Execution-bound authority and file-only removal
+
+The multi-source factory binds controller invocation to the currently published and configuration-validated plan and the original Playnite identity. Host-created controllers require a live plan validator. Disabled settings and expired plans refuse new actions; already-running transfers are not retroactively cancelled. Legacy single-source manifest freshness and the gap between a check and filesystem mutation remain qualification items. File-only uninstall now uses an explicit nonrecursive executor path, refusing directory substitution and never invoking the directory callback. This closes a type-confusion path without claiming full handle-bound filesystem safety.

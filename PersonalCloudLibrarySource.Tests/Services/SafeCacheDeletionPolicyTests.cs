@@ -122,6 +122,21 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void FileOnlyExecutor_NeverInvokesDirectoryRemoval()
+        {
+            var replacement = Path.Combine(cacheRoot, "replaced.exe");
+            Directory.CreateDirectory(replacement);
+            var save = Path.Combine(replacement, "keep.sav");
+            File.WriteAllText(save, "keep");
+            var mutation = false;
+            var executor = new SafeCacheDeletionExecutor(new SafeCacheDeletionPolicy(),
+                ignored => mutation = true, ignored => mutation = true);
+            Assert.That(executor.DeleteFileOnly(cacheRoot, replacement, false).Allowed, Is.False);
+            Assert.That(mutation, Is.False);
+            Assert.That(File.ReadAllText(save), Is.EqualTo("keep"));
+        }
+
+        [Test]
         public void Executor_RefusesRecursiveDeleteWhenDescendantIsJunction()
         {
             var original = Path.Combine(testRoot, "original");

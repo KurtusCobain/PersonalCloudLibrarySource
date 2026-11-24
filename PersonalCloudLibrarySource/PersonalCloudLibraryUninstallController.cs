@@ -16,6 +16,7 @@ namespace PersonalCloudLibrarySource
         private readonly GameWorkflowNotificationService workflowNotifications;
         private readonly bool hasPlayniteHost;
         private readonly CacheOwnershipReceiptStore ownershipReceipts;
+        private readonly Func<bool> executionAuthorized;
 
         public PersonalCloudLibraryUninstallController(
             IPlayniteAPI playniteApi,
@@ -24,7 +25,8 @@ namespace PersonalCloudLibrarySource
             PersonalCloudLibrarySourceSettings settings,
             GameWorkflowNotificationService workflowNotifications = null,
             SafeCacheDeletionExecutor deletionExecutor = null,
-            CacheOwnershipReceiptStore ownershipReceipts = null) : base(game)
+            CacheOwnershipReceiptStore ownershipReceipts = null,
+            Func<bool> executionAuthorized = null) : base(game)
         {
             hasPlayniteHost = playniteApi != null;
             this.item = item;
@@ -32,11 +34,20 @@ namespace PersonalCloudLibrarySource
             this.workflowNotifications = workflowNotifications ?? CreateNotifications(playniteApi);
             this.deletionExecutor = deletionExecutor ?? new SafeCacheDeletionExecutor();
             this.ownershipReceipts = ownershipReceipts;
+            this.executionAuthorized = executionAuthorized;
             Name = PclsResources.Get("LOCPLSUninstallControllerName", "Remove cached copy");
         }
 
         public override void Uninstall(UninstallActionArgs args)
         {
+            if (settings == null || !settings.Enabled ||
+                (executionAuthorized != null && !executionAuthorized()))
+            {
+                const string reason = "Uninstall authorization expired; refresh the library before retrying.";
+                workflowNotifications.Failure("uninstall", Game.GameId, reason);
+                throw new InvalidOperationException(reason);
+            }
+
             // A controller may have been created before managed ZIP extraction.
             // Recheck the distinct managed namespace at the moment of uninstall.
             // Legacy file-only deletion must never silently remove the ZIP
@@ -105,7 +116,7 @@ namespace PersonalCloudLibrarySource
 
             try
             {
-                var deletion = deletionExecutor.Delete(
+                var deletion = deletionExecutor.DeleteFileOnly(
                     settings.LocalCacheFolder,
                     targetPath,
                     settings.AllowUninstallOutsideCacheFolder);
