@@ -35,15 +35,31 @@ namespace PersonalCloudLibrarySource
             string remoteManifestPath;
             if (!RcloneCommandBuilder.TryBuildRemoteOperand(remoteName, manifestPath, false, out remoteManifestPath))
                 throw new InvalidOperationException("The configured rclone manifest source is invalid.");
-            var timeoutSeconds = settings.RcloneTimeoutSeconds < 5 || settings.RcloneTimeoutSeconds > 86400
-                ? 30 : settings.RcloneTimeoutSeconds;
+            var json = ReadContainedCommand(executablePath, "cat " + QuoteArgument(remoteManifestPath),
+                settings.RcloneTimeoutSeconds, ManifestParserValidator.MaxManifestCharacters);
+            if (string.IsNullOrWhiteSpace(json))
+                throw new InvalidOperationException("rclone returned an empty manifest.");
+            return json;
+        }
 
+        internal static string ListRemotes(PersonalCloudLibrarySourceSettings settings)
+        {
+            if (settings == null) throw new ArgumentNullException(nameof(settings));
+            var executable = string.IsNullOrWhiteSpace(settings.RcloneExecutablePath)
+                ? "rclone" : settings.RcloneExecutablePath.Trim();
+            return ReadContainedCommand(executable, "listremotes", settings.RcloneTimeoutSeconds, 64 * 1024);
+        }
+
+        private static string ReadContainedCommand(string executablePath, string arguments,
+            int requestedTimeout, int outputLimit)
+        {
+            var timeoutSeconds = requestedTimeout < 5 || requestedTimeout > 86400 ? 30 : requestedTimeout;
             using (var process = new WindowsJobProcessHandle())
             {
                 process.StartInfo = new ProcessStartInfo
                 {
                     FileName = executablePath,
-                    Arguments = "cat " + QuoteArgument(remoteManifestPath),
+                    Arguments = arguments,
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
@@ -69,7 +85,7 @@ namespace PersonalCloudLibrarySource
                     // The native pipes are synchronous handles. Start both
                     // readers independently so one full pipe cannot starve the other.
                     var output = Task.Run(() => ReadBoundedAsync(process.StandardOutput,
-                        ManifestParserValidator.MaxManifestCharacters));
+                        outputLimit));
                     var stderr = Task.Run(() => DrainAsync(process.StandardError));
                     ObserveFailure(output);
                     ObserveFailure(stderr);
@@ -84,14 +100,14 @@ namespace PersonalCloudLibrarySource
                         {
                             if (descendants == null) descendants = Stopwatch.StartNew();
                             if (descendants.Elapsed >= TimeSpan.FromSeconds(5))
-                                throw new InvalidOperationException("Rclone manifest descendants did not finish after root exit.");
+                                throw new InvalidOperationException("Rclone command descendants did not finish after root exit.");
                         }
                         if (output.IsFaulted)
-                            throw new InvalidOperationException("Rclone manifest could not be read within its character limit.");
+                            throw new InvalidOperationException("Rclone command output could not be read within its character limit.");
                         if (stderr.IsFaulted)
                             throw new InvalidOperationException("Rclone diagnostic stream could not be drained.");
                         if (timer.Elapsed.TotalSeconds >= timeoutSeconds)
-                            throw new TimeoutException($"rclone manifest retrieval timed out after {timeoutSeconds} seconds.");
+                            throw new TimeoutException($"rclone command timed out after {timeoutSeconds} seconds.");
                         if (!exited) exited = process.WaitForExit(100);
                         else Thread.Sleep(20);
                     }
@@ -99,17 +115,12 @@ namespace PersonalCloudLibrarySource
                     stderr.GetAwaiter().GetResult();
                     if (process.ExitCode != 0)
                         throw new InvalidOperationException(
-                            $"rclone cat failed with exit code {process.ExitCode}. Check the configured remote and manifest path.");
+                            $"rclone command failed with exit code {process.ExitCode}. Check the executable and remote configuration.");
                 }
                 catch
                 {
                     StopProcess(process);
                     throw;
-                }
-
-                if (string.IsNullOrWhiteSpace(json))
-                {
-                    throw new InvalidOperationException("rclone returned an empty manifest.");
                 }
 
                 return json;

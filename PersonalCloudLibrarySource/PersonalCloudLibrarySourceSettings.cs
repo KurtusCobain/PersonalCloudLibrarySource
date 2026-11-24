@@ -504,82 +504,28 @@ namespace PersonalCloudLibrarySource
         {
             try
             {
-                var executablePath = string.IsNullOrWhiteSpace(Settings.RcloneExecutablePath)
-                    ? "rclone"
-                    : Settings.RcloneExecutablePath.Trim();
-
-                using (var process = new Process())
-                {
-                    var output = new StringBuilder();
-                    var error = new StringBuilder();
-
-                    process.StartInfo = new ProcessStartInfo
-                    {
-                        FileName = executablePath,
-                        Arguments = "listremotes",
-                        UseShellExecute = false,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        CreateNoWindow = true
-                    };
-
-                    process.OutputDataReceived += (sender, args) =>
-                    {
-                        if (args.Data != null)
-                        {
-                            output.AppendLine(args.Data);
-                        }
-                    };
-
-                    process.ErrorDataReceived += (sender, args) =>
-                    {
-                        if (args.Data != null)
-                        {
-                            error.AppendLine(args.Data);
-                        }
-                    };
-
-                    process.Start();
-                    process.BeginOutputReadLine();
-                    process.BeginErrorReadLine();
-
-                    var timeoutSeconds = Settings.RcloneTimeoutSeconds < 5 ? 30 : Settings.RcloneTimeoutSeconds;
-                    if (!process.WaitForExit(timeoutSeconds * 1000))
-                    {
-                        process.Kill();
-                        MessageBox.Show(
-                            PclsResources.Get("LOCPLSRcloneListRemotesTimeout", "rclone listremotes timed out."),
-                            PclsResources.Get("LOCPLSSettingsTitle", "Personal Cloud Library Source"));
-                        return;
-                    }
-
-                    process.WaitForExit();
-                    if (process.ExitCode == 0)
-                    {
-                        MessageBox.Show(
-                            PclsResources.Format(
-                                "LOCPLSRcloneSuccess",
-                                "rclone responded successfully.{0}{0}Configured remotes:{0}{1}",
-                                Environment.NewLine,
-                                output),
-                            PclsResources.Get("LOCPLSSettingsTitle", "Personal Cloud Library Source"));
-                    }
-                    else
-                    {
-                        MessageBox.Show(
-                            PclsResources.Format(
-                                "LOCPLSRcloneListRemotesFailed",
-                                "rclone listremotes failed:{0}{1}",
-                                Environment.NewLine,
-                                RcloneManifestReader.TrimForLog(error.ToString())),
-                            PclsResources.Get("LOCPLSSettingsTitle", "Personal Cloud Library Source"));
-                    }
-                }
+                // Same bounded read-only process lifecycle as manifest loading.
+                // Never display raw provider stderr or wait indefinitely for EOF.
+                var output = RcloneManifestReader.ListRemotes(Settings);
+                MessageBox.Show(
+                    PclsResources.Format(
+                        "LOCPLSRcloneSuccess",
+                        "rclone responded successfully.{0}{0}Configured remotes:{0}{1}",
+                        Environment.NewLine,
+                        output),
+                    PclsResources.Get("LOCPLSSettingsTitle", "Personal Cloud Library Source"));
+            }
+            catch (TimeoutException)
+            {
+                MessageBox.Show(
+                    PclsResources.Get("LOCPLSRcloneListRemotesTimeout", "rclone listremotes timed out."),
+                    PclsResources.Get("LOCPLSSettingsTitle", "Personal Cloud Library Source"));
             }
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    PclsResources.Format("LOCPLSRcloneRunFailed", "Unable to run rclone: {0}", ex.Message),
+                    PclsResources.Format("LOCPLSRcloneListRemotesFailed", "rclone listremotes failed:{0}{1}",
+                        Environment.NewLine, ex.Message),
                     PclsResources.Get("LOCPLSSettingsTitle", "Personal Cloud Library Source"));
             }
         }

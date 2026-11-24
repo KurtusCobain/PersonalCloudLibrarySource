@@ -128,6 +128,9 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
                 settings.RcloneManifestPath = manifest.Replace('\\', '/');
                 Assert.That(new RcloneManifestReader().ReadManifestJson(settings),
                     Is.EqualTo(manifestJson), "Real rclone manifest reads also use the contained launcher.");
+                // Do not inspect or expose the machine's actual configured remotes.
+                // The disposable local-only fixture exercises the read command via
+                // manifest retrieval; listremotes remains a host acceptance case.
                 var adapter = new RcloneTransferAdapter(new RcloneProcessRunner());
                 var result = adapter.Copy(settings, source.Replace('\\', '/'),
                     destination, true, CancellationToken.None, null);
