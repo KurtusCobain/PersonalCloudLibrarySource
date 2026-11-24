@@ -27,6 +27,56 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Generation_RejectsOutputTooLargeInUtf8BeforeWrite()
+        {
+            var method = typeof(ManifestGenerationService).GetMethod(
+                "ValidateSerializedManifest", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.That(method, Is.Not.Null);
+            var text = new string('\u00e9', ManifestParserValidator.MaxManifestCharacters / 2 + 1);
+            var error = Assert.Throws<System.Reflection.TargetInvocationException>(() => method.Invoke(null, new object[] { text }));
+            Assert.That(error.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(error.InnerException.Message, Does.Contain("importer size limit"));
+        }
+
+        [Test]
+        public void Generation_RefusesReportOverwritingManifest()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "PCLS-ManifestCollision-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(root);
+                var target = Path.Combine(root, "catalog.json");
+                File.WriteAllText(target, "existing");
+                File.WriteAllText(Path.Combine(root, "game.nes"), "fixture");
+                Assert.Throws<InvalidOperationException>(() => new ManifestGenerationService().Generate(
+                    new ManifestGenerationOptions { SourceRoot = root, OutputPath = target, ReportPath = target }));
+                Assert.That(File.ReadAllText(target), Is.EqualTo("existing"));
+            }
+            finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+        }
+
+        [Test]
+        public void SafeWriter_RepeatedUpdatesPreserveEveryBackup()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "PCLS-BackupFixture-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(root);
+                var target = Path.Combine(root, "catalog.json");
+                var backups = Path.Combine(root, "backup");
+                var writer = new SafeFileWriteService();
+                writer.WriteAllText(target, "one", backups, true);
+                writer.WriteAllText(target, "two", backups, true);
+                writer.WriteAllText(target, "three", backups, true);
+                Assert.That(File.ReadAllText(target), Is.EqualTo("three"));
+                Assert.That(Directory.GetFiles(backups, "*.bak").Select(File.ReadAllText),
+                    Is.EquivalentTo(new[] { "one", "two" }));
+                Assert.That(Directory.GetFiles(root, "*.tmp"), Is.Empty);
+            }
+            finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+        }
+
+        [Test]
         public void Preview_RealFolder_IsReadOnly_AndUsesSameDiscoveryAsGeneration()
         {
             var root = Path.Combine(Path.GetTempPath(), "PCLS-Preview-" + Guid.NewGuid().ToString("N"));

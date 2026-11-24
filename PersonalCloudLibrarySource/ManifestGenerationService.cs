@@ -358,6 +358,15 @@ namespace PersonalCloudLibrarySource
             if (previewOnly)
                 return report;
 
+            // The local importer imposes a UTF-8 byte limit as well as a
+            // character limit. Validate both before replacing an existing file.
+            var json = Serialization.ToJson(report.Manifest);
+            ValidateSerializedManifest(json);
+            if (!options.NoReport && !string.IsNullOrWhiteSpace(options.ReportPath) &&
+                string.Equals(Path.GetFullPath(options.OutputPath), Path.GetFullPath(options.ReportPath),
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Manifest and report must have different output paths.");
+
             var outputDirectory = Path.GetDirectoryName(options.OutputPath);
             cancellationToken.ThrowIfCancellationRequested();
             if (!string.IsNullOrWhiteSpace(outputDirectory))
@@ -367,7 +376,7 @@ namespace PersonalCloudLibrarySource
 
             safeFileWriteService.WriteAllText(
                 options.OutputPath,
-                Serialization.ToJson(report.Manifest),
+                json,
                 options.BackupDirectory,
                 createBackup: true);
 
@@ -388,6 +397,13 @@ namespace PersonalCloudLibrarySource
             }
 
             return report;
+        }
+
+        internal static void ValidateSerializedManifest(string json)
+        {
+            if (string.IsNullOrEmpty(json) || json.Length > ManifestParserValidator.MaxManifestCharacters ||
+                System.Text.Encoding.UTF8.GetByteCount(json) > ManifestParserValidator.MaxManifestCharacters)
+                throw new InvalidOperationException("Generated manifest exceeds the importer size limit. Choose a smaller library folder.");
         }
 
         internal static void ValidateGeneratedItemCount(int count)

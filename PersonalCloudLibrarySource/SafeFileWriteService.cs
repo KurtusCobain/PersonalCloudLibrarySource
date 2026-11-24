@@ -38,9 +38,17 @@ namespace PersonalCloudLibrarySource
                 targetDirectory,
                 Path.GetFileName(path) + "." + Guid.NewGuid().ToString("N") + ".tmp");
 
+            var ownsTemp = false;
             try
             {
-                File.WriteAllBytes(tempPath, content ?? Array.Empty<byte>());
+                // CreateNew must succeed before this writer owns the staging path.
+                using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    ownsTemp = true;
+                    var bytes = content ?? Array.Empty<byte>();
+                    stream.Write(bytes, 0, bytes.Length);
+                    stream.Flush(true);
+                }
 
                 if (File.Exists(path))
                 {
@@ -48,9 +56,10 @@ namespace PersonalCloudLibrarySource
                     {
                         Directory.CreateDirectory(backupDirectory);
                         var backupFileName =
-                            Path.GetFileName(path) + "." + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + ".bak";
+                            Path.GetFileName(path) + "." + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") +
+                            "." + Guid.NewGuid().ToString("N") + ".bak";
                         var backupPath = Path.Combine(backupDirectory, backupFileName);
-                        File.Copy(path, backupPath, overwrite: true);
+                        File.Copy(path, backupPath, overwrite: false);
                     }
 
                     File.Replace(tempPath, path, null);
@@ -62,11 +71,11 @@ namespace PersonalCloudLibrarySource
             }
             catch
             {
-                TryDeleteTempFile(tempPath);
+                if (ownsTemp) TryDeleteTempFile(tempPath);
                 throw;
             }
-
-            TryDeleteTempFile(tempPath);
+            // Move/Replace consumed the staging file. Do not delete a new
+            // object that may have appeared at the old staging name.
         }
 
         private static void TryDeleteTempFile(string tempPath)
