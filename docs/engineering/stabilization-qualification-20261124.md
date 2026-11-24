@@ -40,10 +40,23 @@
 | [8ca5548e](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45490786306) | 883 pass, 0 fail, 2 skips; 0 warnings | Native ZIP file identity and handle-bound rollback; archive passed |
 | [b21a84c4](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45490884898) | 885 pass, 0 fail, 2 skips; 0 warnings | ZIP hardlink refusal and manual-attention propagation; archive passed |
 
+| [106c0166](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45491005760) | 887 pass, 0 fail, 2 skips; 0 warnings | Local single-file identity and handle rollback |
+| [12b2b455](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45491261571) | 890 pass, 0 fail, 2 skips; 0 warnings | Local exact tree and nonrecursive rollback; archive and CodeQL passed |
+| [3c77cef9](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45491672082) | 892 pass, 0 fail, 2 skips; 0 warnings | Local content digest; archive and CodeQL passed |
+| [e4144e22](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45491757987) | 894 pass, 0 fail, 2 skips; 0 warnings | Local native directory identity; archive and CodeQL passed |
+| [4b58f8fd](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45491961604) | 896 pass, 0 fail, 2 skips; 0 warnings | ZIP directory identity; archive passed |
+| [caa08b87](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45492207582) | 898 pass, 0 fail, 2 skips; 0 warnings | Native launch-time job containment and disposable process-tree tests; archive passed |
+| [a1bddd0a](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45492342444) | 898 pass, 0 fail, 2 skips; 0 warnings | Contained manifest read; archive and CodeQL passed |
+| [3c79cfa7](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45492512888) | 899 pass, 0 fail, 2 skips; 0 warnings | Handle-based file-only uninstall; archive and CodeQL passed |
+| [a8156d35](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45492668561) | 900 pass, 0 fail, 2 skips; 0 warnings | Native no-replace source-handle publication; archive and CodeQL passed |
+| [aa902ac0](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45492796397) | 900 pass, 0 fail, 2 skips; 0 warnings | Bounded contained settings connection test; archive passed |
+| [4a7b644c](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45493002705) | 902 pass, 0 fail, 2 skips; 0 warnings | Originating marker identity and handle completion; archive passed |
+| [9e5bcceb](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45493158781) | 904 pass, 0 fail, 2 skips; 0 warnings | rclone root identity and nonempty directory quarantine; archive passed |
+
 ### Pending candidates (not qualified at this ledger entry)
 
-- [106c0166](https://github.com/KurtusCobain/PersonalCloudLibrarySource/commit/106c01663c2f2769adf3775bb4a8132e4df37306): local single-file identity and handle-bound rollback.
-- [55a00943](https://github.com/KurtusCobain/PersonalCloudLibrarySource/commit/55a009436078f6409368b5200923c29ad64ddab8): local exact staging-tree verification and nonrecursive owned-file rollback.
+- [d1e68d99](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45493288423): post-exit rclone snapshot and exact finalization verification.
+- [b0e594f8](https://github.com/KurtusCobain/PersonalCloudLibrarySource/commit/b0e594f8bf1e962740ca05e8c0f8042264d9b78e): branch-only digest-pinned real-rclone integration gate.
 - Later CodeQL conclusions must be read against the exact candidate SHA; no success assumed.
 
 Windows build and CodeQL workflow conclusions are not proof of absence of vulnerabilities or native Playnite acceptance. A passing archive compatibility workflow only qualifies the isolated decoder probe, not shipping 7z/RAR install behavior. Review current run evidence by exact commit.
@@ -63,16 +76,16 @@ Windows build and CodeQL workflow conclusions are not proof of absence of vulner
 | Main/tag protection and release authorization | Recommendations documented; owner approval required for repository settings |
 | Consolidation | Original branches retained; PR #22 overlap review recorded in ledger; review remaining unique work and preserve history |
 | Semantic source audit | Structural compile inventory and targeted repairs complete; comprehensive member/reference analysis and scripts/configuration review incomplete |
-| Security | Production diagnostic bound qualified; exclusive staging creation and ZIP file identity/handle-bound rollback qualified in Windows fixtures. Local ownership inventory candidates pending; native directory/ancestor identity, atomic publication, rclone process-tree containment, malformed journal and power-loss recovery remain open. No automatic permanent ZIP cleanup or recovery release. |
+| Security | Windows fixtures qualify local/ZIP file and directory identities, local/ZIP no-replace source-handle publication, rclone whole-job launch containment, originating marker identity, and rclone root ownership. Post-exit rclone integrity and real binary gate pending. Full ancestor pinning, create-to-open race, directory/member publication transaction, receipt-bound uninstall, malformed journal and power-loss recovery remain open. No automatic permanent ZIP cleanup or recovery release. |
 | Transfer history | Soft cap verified in Windows fixtures: 512 ordinary terminal attempts, batched pruning, protected unclaimed results/latest retry/fences/quarantine; 550-transfer fixture passed. Native host acceptance pending; protected history may exceed cap. |
 | Runtime settings and retry | Native Playnite database reconciliation and stale controller/action cases require qualification |
-| Recovery | Persistent reservation refusal and read-only path observations implemented and regression-tested; explicit manual resolution remains blocked by process/ownership/handle identity evidence and native host presentation. |
+| Recovery | Originating marker identity enforced; restarted instances remain read-only for completion. Nonempty rclone directory failures/cancellations preserve staging and quarantine the job. Explicit recovery release remains blocked by persistent process/ownership evidence, ancestor identity, and native host presentation. |
 | Multi-source | Experimental activation and isolated identity routing; verify real host import/refresh/migration and source disappearance |
 | Archive support | Shipping ZIP path only; 7z/RAR decoder is isolated compatibility evidence; do not claim full support |
 | UI | Localized resource audit passed; keyboard/controller, DPI, theme and genuine screenshot review pending |
 | Performance | Synthetic progress, preview and retention measurements recorded; filesystem identity checks need local/NAS compatibility and large-tree cost qualification. Actual library startup, memory and cancellation under I/O faults pending. |
 | Independent review | Grok/Claude review of a frozen internal candidate, resolve findings before acceptance |
-| Native acceptance | Disposable Windows Playnite upgrade/install/uninstall/reinstall, real-rclone opt-in, safe provider fixtures, official Toolbox and package provenance |
+| Native acceptance | Disposable Windows Playnite upgrade/install/uninstall/reinstall, digest-pinned real-rclone fixture gate (pending), safe provider fixtures, official Toolbox and package provenance |
 | CH-Rm | Deferred until internal PCLS remediation and review are complete; selective review only, with independent regression after any eventual port |
 | Publication | Separate owner approval after all required gates; no feed or release mutation |
 

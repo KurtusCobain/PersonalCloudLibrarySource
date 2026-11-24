@@ -20,6 +20,8 @@ rclone version
 
 If `rclone` is not on `PATH`, set `RcloneExecutablePath` in the plugin to the full `rclone.exe` path.
 
+> **Unreleased stabilization candidate:** production transfer, manifest and connection-test execution use a native Windows Job Object assigned at launch. Use a supported Windows host and a fully qualified executable path or an absolute PATH entry. If containment cannot be established, the operation refuses rather than falling back to an uncontained process. A failed or cancelled directory download with remaining staging content is retained for Review Transfer Recovery instead of automatically deleted. Do not remove pending records to force a retry. The branch adds a separate, digest-pinned local-only rclone CI gate; native Playnite host acceptance remains required. These changes are not part of published v0.3.2.
+
 ## Create a Remote
 
 Run:
