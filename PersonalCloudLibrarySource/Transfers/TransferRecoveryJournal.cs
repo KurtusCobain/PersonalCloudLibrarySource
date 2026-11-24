@@ -264,7 +264,7 @@ namespace PersonalCloudLibrarySource
             return payload;
         }
 
-        private static Tuple<Guid, string, Guid> Read(string path)
+        private Tuple<Guid, string, Guid> Read(string path)
         {
             using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
             {
@@ -273,7 +273,7 @@ namespace PersonalCloudLibrarySource
             }
         }
 
-        private static Tuple<Guid, string, Guid> ReadRecord(string path, FileStream stream)
+        private Tuple<Guid, string, Guid> ReadRecord(string path, FileStream stream)
         {
             var length = stream.Length;
             if (length <= 0 || length > MaxRecordBytes)
@@ -288,7 +288,12 @@ namespace PersonalCloudLibrarySource
             }
             if (stream.ReadByte() != -1)
                 throw new IOException("Transfer recovery record changed during reading.");
-            var fields = Encoding.GetString(payload).Split('\n');
+            string[] fields;
+            try { fields = Encoding.GetString(payload).Split('\n'); }
+            catch (DecoderFallbackException ex)
+            {
+                throw new IOException("Transfer recovery record is not valid UTF-8.", ex);
+            }
             Guid gameId, jobId;
             if (fields.Length != 4 || fields[0] != "PCLS-TRANSFER-1" ||
                 !Guid.TryParseExact(fields[1], "N", out gameId) ||
@@ -299,6 +304,9 @@ namespace PersonalCloudLibrarySource
             if (!string.Equals(destination, fields[3], StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Transfer recovery destination is not canonical.");
             TransferPartialPathPolicy.RequireSafePath(destination);
+            var staging = TransferPartialPathPolicy.Create(destination, jobId);
+            if (Overlaps(directory, destination) || Overlaps(directory, staging))
+                throw new IOException("Transfer recovery record overlaps journal storage.");
             return Tuple.Create(gameId, destination, jobId);
         }
     }

@@ -231,6 +231,37 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void RecordPointingInsideJournalIsInvalidAndBlocksUnrelatedTransfers()
+        {
+            Directory.CreateDirectory(records);
+            var id = Guid.NewGuid();
+            var path = Path.Combine(records, id.ToString("N") + ".pending");
+            var text = "PCLS-TRANSFER-1\n" + Guid.NewGuid().ToString("N") + "\n" +
+                id.ToString("N") + "\n" + Path.Combine(records, "protected");
+            File.WriteAllText(path, text, new System.Text.UTF8Encoding(false));
+            var journal = new TransferRecoveryJournal(records);
+            var snapshot = journal.Inspect();
+            Assert.That(snapshot.IsComplete, Is.False);
+            Assert.That(snapshot.UnreadableCount, Is.EqualTo(1));
+            Assert.That(snapshot.Records, Is.Empty);
+            Assert.Throws<IOException>(() => journal.Begin(Job("unrelated")));
+            Assert.That(File.ReadAllText(path), Is.EqualTo(text));
+        }
+
+        [Test]
+        public void InvalidUtf8RecordBlocksExecutionAndRemainsIntact()
+        {
+            Directory.CreateDirectory(records);
+            var path = Path.Combine(records, Guid.NewGuid().ToString("N") + ".pending");
+            var payload = new byte[] { 0xff, 0xfe, 0xc0 };
+            File.WriteAllBytes(path, payload);
+            var journal = new TransferRecoveryJournal(records);
+            Assert.That(journal.Inspect().UnreadableCount, Is.EqualTo(1));
+            Assert.Throws<IOException>(() => journal.Begin(Job("unrelated")));
+            Assert.That(File.ReadAllBytes(path), Is.EqualTo(payload));
+        }
+
+        [Test]
         public void MalformedRecordBlocksExecutionWithoutDeletingEvidence()
         {
             Directory.CreateDirectory(records);
