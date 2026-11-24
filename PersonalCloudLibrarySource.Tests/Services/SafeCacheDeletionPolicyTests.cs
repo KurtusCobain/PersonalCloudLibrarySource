@@ -139,6 +139,24 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(Directory.Exists(directory), Is.False);
         }
 
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW",
+            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CreateHardLinkNative(string link, string existing, IntPtr reserved);
+
+        [Test]
+        public void FileOnlyExecutor_RefusesHardlinkToOriginalSource()
+        {
+            var original = Path.Combine(testRoot, "original.bin");
+            var alias = Path.Combine(cacheRoot, "alias.bin");
+            File.WriteAllText(original, "original fixture");
+            Assert.That(CreateHardLinkNative(alias, original, IntPtr.Zero), Is.True);
+            var result = new SafeCacheDeletionExecutor().DeleteFileOnly(cacheRoot, alias, false);
+            Assert.That(result.Allowed, Is.False);
+            Assert.That(File.ReadAllText(alias), Is.EqualTo("original fixture"));
+            Assert.That(File.ReadAllText(original), Is.EqualTo("original fixture"));
+        }
+
         [Test]
         public void FileOnlyExecutor_NeverInvokesDirectoryRemoval()
         {

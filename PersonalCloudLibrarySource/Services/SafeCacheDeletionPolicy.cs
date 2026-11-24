@@ -131,7 +131,7 @@ namespace PersonalCloudLibrarySource
         private readonly Action<string> deleteDirectory;
 
         public SafeCacheDeletionExecutor()
-            : this(new SafeCacheDeletionPolicy(), File.Delete, path => Directory.Delete(path, true))
+            : this(new SafeCacheDeletionPolicy(), DeleteOrdinaryFileHandle, path => Directory.Delete(path, true))
         {
         }
 
@@ -151,6 +151,20 @@ namespace PersonalCloudLibrarySource
                 System.Threading.CancellationToken.None, null);
         }
 
+        private static void DeleteOrdinaryFileHandle(string path)
+        {
+            // The explicit file-only action authorizes a cache pathname,
+            // not recursive deletion or a hardlink to a source file. Open
+            // the actual leaf without following a link, verify it is an
+            // ordinary single-link object, and delete that same handle.
+            using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, true))
+            {
+                TransferPartialPathPolicy.CapturePrivateFileIdentity(input.SafeFileHandle);
+                TransferPartialPathPolicy.DeleteVerifiedFileHandle(input.SafeFileHandle);
+            }
+            TransferPartialPathPolicy.RequireVacant(path);
+        }
+
         // File-only permission must never fall through to recursive removal
         // when a cached file is missing or has been replaced by a directory.
         public CacheDeletionAuthorization DeleteFileOnly(string cacheRoot, string targetPath, bool allowOutsideCache)
@@ -159,9 +173,13 @@ namespace PersonalCloudLibrarySource
             if (!authorization.Allowed) return authorization;
             if (!File.Exists(authorization.TargetPath) || Directory.Exists(authorization.TargetPath))
                 return new CacheDeletionAuthorization { Reason = "file-only uninstall requires an existing regular file" };
-            // No directory callback is reachable, even if the target changes
-            // after the check. Pathname/ancestor races remain a separate gate.
-            deleteFile(authorization.TargetPath);
+            // No directory callback is reachable. The production callback
+            // deletes the inspected handle; injected callbacks remain for tests.
+            try { deleteFile(authorization.TargetPath); }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                return new CacheDeletionAuthorization { Reason = "file-only removal could not be verified: " + ex.Message };
+            }
             return authorization;
         }
 
@@ -170,7 +188,7 @@ namespace PersonalCloudLibrarySource
             var authorization = policy.Authorize(cacheRoot, targetPath, allowOutsideCache);
             if (!authorization.Allowed) return authorization;
             if (File.Exists(authorization.TargetPath))
-                deleteFile(authorization.TargetPath);
+                return DeleteFileOnly(cacheRoot, authorization.TargetPath, allowOutsideCache);
             else if (Directory.Exists(authorization.TargetPath))
             {
                 // File.Delete/Directory.Delete recursion is not an authorization
