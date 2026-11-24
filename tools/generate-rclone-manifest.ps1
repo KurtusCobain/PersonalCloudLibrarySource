@@ -10,6 +10,7 @@ param(
     [string]$OutputPath = ".\personal-cloud-library.generated.json",
     [string]$ReportPath = "",
     [string]$RclonePath = "rclone",
+    [ValidateRange(5, 3600)][int]$TimeoutSeconds = 300,
     [string[]]$IncludeExtensions = @(),
     [string[]]$ExcludeFolders = @(),
     [switch]$Overwrite,
@@ -31,6 +32,7 @@ if (-not (Test-Path -LiteralPath $scriptPath -PathType Leaf)) {
     -OutputPath $OutputPath `
     -ReportPath $ReportPath `
     -RclonePath $RclonePath `
+    -TimeoutSeconds $TimeoutSeconds `
     -IncludeExtensions $IncludeExtensions `
     -ExcludeFolders $ExcludeFolders `
     -Overwrite:$Overwrite `

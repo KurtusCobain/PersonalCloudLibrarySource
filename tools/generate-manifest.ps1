@@ -18,6 +18,7 @@ param(
     [string]$OutputPath = ".\personal-cloud-library.generated.json",
     [string]$ReportPath = "",
     [string]$RclonePath = "rclone",
+    [ValidateRange(5, 3600)][int]$TimeoutSeconds = 300,
     [string[]]$IncludeExtensions = @(),
     [string[]]$ExcludeFolders = @(),
     [switch]$Recurse,
@@ -106,7 +107,10 @@ if (-not $PSBoundParameters.ContainsKey("SourceRoot") -and -not $PSBoundParamete
 }
 
 $sourceMode = if ($PSBoundParameters.ContainsKey("RcloneRemoteRoot")) { "rclone" } else { "filesystem" }
-$isRecursive = $true
+# -Recurse remains a compatibility switch; scanning is always recursive.
+$MaxScanEntries = 150000
+$MaxManifestItems = 100000
+$MaxManifestBytes = 32 * 1024 * 1024
 
 if ($IncludeExtensions.Count -eq 0) {
     $IncludeExtensions = $DefaultSingleFileExtensions
@@ -120,8 +124,17 @@ if ([string]::IsNullOrWhiteSpace($ReportPath)) {
     $ReportPath = [System.IO.Path]::ChangeExtension($OutputPath, ".report.txt")
 }
 
-if ((Test-Path -LiteralPath $OutputPath) -and (-not $Overwrite) -and (-not $DryRun)) {
-    throw "Output file already exists. Use -Overwrite to replace it: $OutputPath"
+if (-not $DryRun) {
+    $OutputPath = [IO.Path]::GetFullPath($OutputPath)
+    $ReportPath = [IO.Path]::GetFullPath($ReportPath)
+    if (-not $NoReport -and [string]::Equals($OutputPath, $ReportPath, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'Manifest and report must have different output paths.'
+    }
+    foreach ($target in @($OutputPath) + @($(if (-not $NoReport) { $ReportPath }))) {
+        if ((Test-Path -LiteralPath $target) -and (-not $Overwrite)) {
+            throw "Output file already exists. Use -Overwrite to replace it: $target"
+        }
+    }
 }
 
 function Normalize-SourcePath {
@@ -220,19 +233,13 @@ function Test-IsUnderExcludedFolder {
 }
 
 function Test-IsUnderDetectedDirectory {
-    param(
-        [string]$FilePath,
-        [string[]]$DetectedDirectories
-    )
-
+    param([string]$FilePath, [System.Collections.Generic.HashSet[string]]$DetectedDirectories)
     $normalizedFile = Normalize-SourcePath $FilePath
-    foreach ($directory in $DetectedDirectories) {
-        $normalizedDirectory = (Normalize-SourcePath $directory).TrimEnd("/") + "/"
-        if ($normalizedFile.StartsWith($normalizedDirectory, [System.StringComparison]::OrdinalIgnoreCase)) {
-            return $true
-        }
+    $slash = $normalizedFile.LastIndexOf('/')
+    while ($slash -gt 0) {
+        if ($DetectedDirectories.Contains($normalizedFile.Substring(0, $slash))) { return $true }
+        $slash = $normalizedFile.LastIndexOf('/', $slash - 1)
     }
-
     return $false
 }
 
@@ -278,60 +285,90 @@ function New-ManifestItem {
 
 function Quote-Argument {
     param([string]$Value)
-    if ($null -eq $Value) {
-        return '""'
+    # Match Windows ProcessStartInfo quoting, including trailing backslashes.
+    $result = [Text.StringBuilder]::new('"')
+    $slashes = 0
+    foreach ($character in $Value.ToCharArray()) {
+        if ($character -eq [char]92) { $slashes++; continue }
+        if ($character -eq [char]34) {
+            [void]$result.Append([char]92, $slashes * 2 + 1)
+        }
+        else { [void]$result.Append([char]92, $slashes) }
+        [void]$result.Append($character)
+        $slashes = 0
     }
-
-    return '"' + ($Value -replace '"', '\"') + '"'
+    [void]$result.Append([char]92, $slashes * 2)
+    [void]$result.Append([char]34)
+    return $result.ToString()
 }
 
 function Invoke-RcloneJsonList {
-    param(
-        [string]$RcloneExe,
-        [string]$RemoteRoot,
-        [bool]$UseFastList
-    )
-
-    $arguments = "lsjson " + (Quote-Argument $RemoteRoot) + " -R --no-mimetype --no-modtime"
-    if ($UseFastList) {
-        $arguments += " --fast-list"
-    }
-
-    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    param([string]$RcloneExe, [string]$RemoteRoot, [bool]$UseFastList)
+    $arguments = 'lsjson -R --no-mimetype --no-modtime'
+    if ($UseFastList) { $arguments += ' --fast-list' }
+    $arguments += ' -- ' + (Quote-Argument $RemoteRoot)
+    $psi = [Diagnostics.ProcessStartInfo]::new()
     $psi.FileName = $RcloneExe
     $psi.Arguments = $arguments
     $psi.UseShellExecute = $false
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
+    $psi.StandardOutputEncoding = [Text.Encoding]::UTF8
+    $psi.StandardErrorEncoding = [Text.Encoding]::UTF8
     $psi.CreateNoWindow = $true
-
-    $process = New-Object System.Diagnostics.Process
+    $process = [Diagnostics.Process]::new()
     $process.StartInfo = $psi
-
+    $started = $false
     try {
-        [void]$process.Start()
+        if (-not $process.Start()) { throw 'Unable to start rclone.' }
+        $started = $true
+        $timer = [Diagnostics.Stopwatch]::StartNew()
+        $stdout = [Text.StringBuilder]::new()
+        $outBuffer = New-Object char[] 8192
+        $errBuffer = New-Object char[] 4096
+        $outRead = $process.StandardOutput.ReadAsync($outBuffer, 0, $outBuffer.Length)
+        $errRead = $process.StandardError.ReadAsync($errBuffer, 0, $errBuffer.Length)
+        while ($null -ne $outRead -or $null -ne $errRead -or -not $process.HasExited) {
+            if ($timer.Elapsed.TotalSeconds -ge $TimeoutSeconds) {
+                throw 'rclone listing exceeded the configured timeout.'
+            }
+            $progress = $false
+            if ($null -ne $outRead -and $outRead.IsCompleted) {
+                $count = $outRead.GetAwaiter().GetResult()
+                if ($count -eq 0) { $outRead = $null }
+                else {
+                    if ($stdout.Length -gt ($MaxManifestBytes - $count)) {
+                        throw 'rclone listing exceeds the character inspection budget.'
+                    }
+                    [void]$stdout.Append($outBuffer, 0, $count)
+                    $outRead = $process.StandardOutput.ReadAsync($outBuffer, 0, $outBuffer.Length)
+                }
+                $progress = $true
+            }
+            if ($null -ne $errRead -and $errRead.IsCompleted) {
+                $count = $errRead.GetAwaiter().GetResult()
+                if ($count -eq 0) { $errRead = $null }
+                else { $errRead = $process.StandardError.ReadAsync($errBuffer, 0, $errBuffer.Length) }
+                $progress = $true
+            }
+            if (-not $progress) { Start-Sleep -Milliseconds 20 }
+        }
+        if ($process.ExitCode -ne 0) {
+            throw "rclone lsjson failed with exit code $($process.ExitCode). Check the configured source."
+        }
+        if ($stdout.Length -eq 0) { throw 'rclone lsjson returned no JSON output.' }
+        return @($stdout.ToString() | ConvertFrom-Json)
     }
-    catch {
-        throw "Unable to start rclone. Check that rclone is installed or pass -RclonePath. Error: $($_.Exception.Message)"
-    }
-
-    $stdout = $process.StandardOutput.ReadToEnd()
-    $stderr = $process.StandardError.ReadToEnd()
-    $process.WaitForExit()
-
-    if ($process.ExitCode -ne 0) {
-        throw "rclone lsjson failed with exit code $($process.ExitCode). Error: $stderr"
-    }
-
-    if ([string]::IsNullOrWhiteSpace($stdout)) {
-        throw "rclone lsjson returned no JSON output."
-    }
-
-    try {
-        return @($stdout | ConvertFrom-Json)
-    }
-    catch {
-        throw "Failed to parse rclone lsjson output as JSON. Error: $($_.Exception.Message)"
+    finally {
+        if ($started) {
+            try {
+                if (-not $process.HasExited) {
+                    $process.Kill()
+                    [void]$process.WaitForExit(5000)
+                }
+            } catch { }
+        }
+        $process.Dispose()
     }
 }
 
@@ -349,34 +386,28 @@ function Get-ScanEntries {
             throw "SourceRoot was not found or is not a directory: $FilesystemRoot"
         }
 
-        $rootFullPath = [System.IO.Path]::GetFullPath($FilesystemRoot)
-        $dirEntries = Get-ChildItem -LiteralPath $rootFullPath -Directory -Recurse -Force
-        $fileEntries = Get-ChildItem -LiteralPath $rootFullPath -File -Recurse -Force
-
-        $results = New-Object System.Collections.Generic.List[object]
-
-        foreach ($dir in $dirEntries) {
-            $relative = $dir.FullName.Substring($rootFullPath.Length).TrimStart('\', '/')
-            if ([string]::IsNullOrWhiteSpace($relative)) {
-                continue
+        $rootFullPath = [IO.Path]::GetFullPath($FilesystemRoot)
+        $pending = [System.Collections.Generic.Stack[string]]::new()
+        $pending.Push($rootFullPath)
+        $results = [System.Collections.Generic.List[object]]::new()
+        $count = 0
+        while ($pending.Count -gt 0) {
+            $current = $pending.Pop()
+            $attributes = [IO.File]::GetAttributes($current)
+            if (($attributes -band [IO.FileAttributes]::ReparsePoint) -or
+                -not ($attributes -band [IO.FileAttributes]::Directory)) {
+                throw 'Library directory became linked or unavailable during discovery.'
             }
-
-            $results.Add([pscustomobject]@{
-                Path  = (Normalize-SourcePath $relative)
-                IsDir = $true
-            })
-        }
-
-        foreach ($file in $fileEntries) {
-            $relative = $file.FullName.Substring($rootFullPath.Length).TrimStart('\', '/')
-            if ([string]::IsNullOrWhiteSpace($relative)) {
-                continue
+            foreach ($path in [IO.Directory]::EnumerateFileSystemEntries($current)) {
+                if (++$count -gt $MaxScanEntries) { throw 'Library scan limit reached.' }
+                $attributes = [IO.File]::GetAttributes($path)
+                if ($attributes -band [IO.FileAttributes]::ReparsePoint) { continue }
+                $relative = $path.Substring($rootFullPath.Length).TrimStart([char]92, [char]47)
+                if ([string]::IsNullOrWhiteSpace($relative)) { throw 'Invalid library entry.' }
+                $isDir = ($attributes -band [IO.FileAttributes]::Directory) -ne 0
+                $results.Add([pscustomobject]@{ Path = (Normalize-SourcePath $relative); IsDir = $isDir })
+                if ($isDir) { $pending.Push($path) }
             }
-
-            $results.Add([pscustomobject]@{
-                Path  = (Normalize-SourcePath $relative)
-                IsDir = $false
-            })
         }
 
         return $results.ToArray()
@@ -406,6 +437,17 @@ if ($sourceMode -eq "filesystem") {
 }
 
 $entries = @(Get-ScanEntries -Mode $sourceMode -FilesystemRoot $SourceRoot -RemoteRoot $RcloneRemoteRoot -RcloneExe $RclonePath -UseFastList ([bool]$FastList))
+if ($entries.Count -gt $MaxScanEntries) { throw 'Library scan limit reached.' }
+$entryPaths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+foreach ($entry in $entries) {
+    $raw = [string]$entry.Path
+    $normalized = Normalize-SourcePath $raw
+    if ([string]::IsNullOrWhiteSpace($raw) -or $raw.StartsWith('/') -or $raw.StartsWith([string][char]92) -or
+        ($normalized.Split('/') | Where-Object { $_ -eq '.' -or $_ -eq '..' -or [string]::IsNullOrWhiteSpace($_) -or $_ -match '[<>:"|?*\x00-\x1f]' }) -or
+        -not $entryPaths.Add($normalized)) {
+        throw 'Library enumeration returned an unsafe or duplicate path.'
+    }
+}
 $dirs = @($entries | Where-Object { $_.IsDir -eq $true })
 $files = @($entries | Where-Object { $_.IsDir -ne $true })
 
@@ -434,6 +476,7 @@ foreach ($file in $files) {
 
 $items = New-Object System.Collections.Generic.List[object]
 $detectedDirectories = New-Object System.Collections.Generic.List[string]
+$detectedDirectorySet = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 $skipped = New-Object System.Collections.Generic.List[string]
 $warnings = New-Object System.Collections.Generic.List[string]
 
@@ -470,6 +513,7 @@ foreach ($dir in $dirs) {
         $item = New-ManifestItem -Title $title -Platform $platform -SourcePath $sourcePath -SourceType "directory" -CachePath $cachePath -InstallDirectory $cachePath -LaunchFile "" -PackageRole $role
         $items.Add($item)
         $detectedDirectories.Add($dirPath)
+        [void]$detectedDirectorySet.Add($dirPath)
         continue
     }
 
@@ -500,6 +544,7 @@ foreach ($dir in $dirs) {
             $item = New-ManifestItem -Title $title -Platform $platform -SourcePath $sourcePath -SourceType "directory" -CachePath $cachePath -InstallDirectory $installDirectory -LaunchFile $launchFile
             $items.Add($item)
             $detectedDirectories.Add($dirPath)
+        [void]$detectedDirectorySet.Add($dirPath)
             continue
         }
     }
@@ -516,7 +561,7 @@ foreach ($file in $files) {
         continue
     }
 
-    if (Test-IsUnderDetectedDirectory -FilePath $path -DetectedDirectories $detectedDirectories.ToArray()) {
+    if (Test-IsUnderDetectedDirectory -FilePath $path -DetectedDirectories $detectedDirectorySet) {
         $skipped.Add("Skipped file inside detected directory package: $path")
         continue
     }
@@ -551,6 +596,13 @@ foreach ($file in $files) {
     $items.Add($item)
 }
 
+if ($items.Count -gt $MaxManifestItems) { throw 'Generated manifest exceeds importer item limit.' }
+$generatedIds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+foreach ($item in $items) {
+    if (-not $generatedIds.Add($item.id)) {
+        throw 'Generated game IDs collide. Resolve duplicate names or provide an explicit manifest.'
+    }
+}
 $sortedItems = @($items | Sort-Object platform, title, sourcePath)
 $duplicateGroups = $sortedItems | Group-Object platform, title | Where-Object { $_.Count -gt 1 }
 foreach ($group in $duplicateGroups) {
@@ -568,6 +620,9 @@ $manifest = [ordered]@{
 }
 
 $json = $manifest | ConvertTo-Json -Depth 30
+if ($json.Length -gt $MaxManifestBytes -or [Text.Encoding]::UTF8.GetByteCount($json) -gt $MaxManifestBytes) {
+    throw 'Generated manifest exceeds importer size limit.'
+}
 
 Write-Host "Generated manifest items: $($sortedItems.Count)"
 Write-Host "Detected directory items: $($detectedDirectories.Count)"
@@ -583,12 +638,37 @@ if ($DryRun) {
     exit 0
 }
 
-$outputDir = Split-Path -Path $OutputPath -Parent
-if (-not [string]::IsNullOrWhiteSpace($outputDir) -and -not (Test-Path -LiteralPath $outputDir -PathType Container)) {
-    New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+function Write-CatalogText {
+    param([string]$Path, [string]$Text)
+    $directory = [IO.Path]::GetDirectoryName($Path)
+    [void][IO.Directory]::CreateDirectory($directory)
+    $temp = Join-Path $directory ([IO.Path]::GetFileName($Path) + '.' + [guid]::NewGuid().ToString('N') + '.tmp')
+    $owned = $false
+    try {
+        $bytes = [Text.UTF8Encoding]::new($false).GetBytes($Text)
+        $stream = [IO.FileStream]::new($temp, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        $owned = $true
+        try {
+            $stream.Write($bytes, 0, $bytes.Length)
+            $stream.Flush($true)
+        }
+        finally { $stream.Dispose() }
+        if ([IO.File]::Exists($Path)) {
+            if (-not $Overwrite) { throw 'Output already exists; replacement refused.' }
+            $backup = $Path + '.' + [guid]::NewGuid().ToString('N') + '.bak'
+            [IO.File]::Replace($temp, $Path, $backup)
+        }
+        else { [IO.File]::Move($temp, $Path) }
+        $owned = $false
+    }
+    finally {
+        if ($owned) {
+            try { [IO.File]::Delete($temp) } catch { }
+        }
+    }
 }
 
-$json | Set-Content -LiteralPath $OutputPath -Encoding UTF8
+Write-CatalogText -Path $OutputPath -Text $json
 
 if (-not $NoReport) {
     $reportLines = New-Object System.Collections.Generic.List[string]
@@ -643,7 +723,7 @@ if (-not $NoReport) {
         }
     }
 
-    $reportLines | Set-Content -LiteralPath $ReportPath -Encoding UTF8
+    Write-CatalogText -Path $ReportPath -Text (($reportLines.ToArray() -join [Environment]::NewLine) + [Environment]::NewLine)
 }
 
 Write-Host "Manifest written:"

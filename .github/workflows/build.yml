@@ -43,6 +43,10 @@ jobs:
         shell: powershell
         run: .\tools\test-release-validation.ps1
 
+      - name: Run standalone manifest generator regressions
+        shell: powershell
+        run: .\tools\test-manifest-generator.ps1
+
       - name: Audit tracked repository inputs
         shell: pwsh
         run: .\tools\audit-repository.ps1 -ReportPath "$env:RUNNER_TEMP\pcls-repository-audit.json"
