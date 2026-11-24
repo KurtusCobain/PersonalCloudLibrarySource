@@ -10,7 +10,7 @@ namespace PersonalCloudLibrarySource
         private readonly IRcloneProcessFactory processFactory;
 
         public RcloneProcessRunner()
-            : this(new RcloneProcessFactory())
+            : this(new WindowsJobProcessFactory())
         {
         }
 
@@ -88,8 +88,12 @@ namespace PersonalCloudLibrarySource
                     };
                     DataReceivedEventHandler outputHandler = (sender, args) => outputLine(args.Data);
                     DataReceivedEventHandler errorHandler = (sender, args) => errorLine(args.Data);
-                    process.OutputDataReceived += outputHandler;
-                    process.ErrorDataReceived += errorHandler;
+                    var contained = process as WindowsJobProcessHandle;
+                    if (contained == null)
+                    {
+                        process.OutputDataReceived += outputHandler;
+                        process.ErrorDataReceived += errorHandler;
+                    }
 
                     try
                     {
@@ -99,10 +103,16 @@ namespace PersonalCloudLibrarySource
                         // during redirected-stream initialization). An exception
                         // is not proof that no child exists.
                         launchAttempted = true;
-                        if (!process.Start())
+                        if (!(contained == null ? process.Start() : contained.Start(cancellationToken)))
                             return RcloneProcessResult.Failure("rclone did not start.");
                         var bounded = process as RcloneProcessHandle;
-                        if (bounded != null)
+                        if (contained != null)
+                        {
+                            Action readFailed = () => Interlocked.Exchange(ref callbackFailed, 1);
+                            contained.BeginBoundedOutputRead(outputLine, readFailed);
+                            contained.BeginBoundedErrorRead(errorLine, readFailed);
+                        }
+                        else if (bounded != null)
                         {
                             Action readFailed = () => Interlocked.Exchange(ref callbackFailed, 1);
                             bounded.BeginBoundedOutputRead(outputLine, readFailed);
@@ -115,8 +125,16 @@ namespace PersonalCloudLibrarySource
                             process.BeginErrorReadLine();
                         }
 
+                        Stopwatch descendantGrace = null;
                         while (!process.WaitForExit(200))
                         {
+                            if (contained != null && contained.RootExited)
+                            {
+                                if (descendantGrace == null) descendantGrace = Stopwatch.StartNew();
+                                if (descendantGrace.Elapsed >= TimeSpan.FromSeconds(5))
+                                    return RcloneProcessResult.Failure("rclone descendants did not finish after root exit.",
+                                        processExitConfirmed: TryStop(process));
+                            }
                             if (Volatile.Read(ref callbackFailed) != 0)
                                 return RcloneProcessResult.Failure("rclone progress callback failed.",
                                     processExitConfirmed: TryStop(process));
@@ -183,6 +201,13 @@ namespace PersonalCloudLibrarySource
                             null,
                             process.ExitCode);
                     }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        return TryStop(process)
+                            ? RcloneProcessResult.Cancelled("rclone transfer cancelled.")
+                            : RcloneProcessResult.Failure("rclone cancellation could not confirm process exit.",
+                                processExitConfirmed: false);
+                    }
                     catch (Exception)
                     {
                         return RcloneProcessResult.Failure("Unable to run rclone; review the executable and transfer settings.",
@@ -191,8 +216,11 @@ namespace PersonalCloudLibrarySource
                     finally
                     {
                         Interlocked.Exchange(ref receiving, 0);
-                        process.OutputDataReceived -= outputHandler;
-                        process.ErrorDataReceived -= errorHandler;
+                        if (contained == null)
+                        {
+                            process.OutputDataReceived -= outputHandler;
+                            process.ErrorDataReceived -= errorHandler;
+                        }
                     }
                 }
             }

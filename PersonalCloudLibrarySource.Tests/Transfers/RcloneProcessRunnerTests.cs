@@ -44,6 +44,81 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(lines, Is.EqualTo(new[] { prefix, "[rclone diagnostic line omitted]", "next", "", "last" }));
         }
 
+        private static IRcloneProcessHandle CreateContainedHandle()
+        {
+            var type = typeof(RcloneProcessRunner).Assembly.GetType("PersonalCloudLibrarySource.WindowsJobProcessHandle");
+            Assert.That(type, Is.Not.Null);
+            return (IRcloneProcessHandle)Activator.CreateInstance(type, true);
+        }
+
+        [Test]
+        public void ProductionLauncherWaitsForEntireJobAndTerminatesSurvivingDescendant()
+        {
+            var executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe");
+            using (var process = CreateContainedHandle())
+            {
+                var type = process.GetType();
+                var rootExited = type.GetProperty("RootExited",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                Assert.That(rootExited, Is.Not.Null);
+                process.StartInfo = new ProcessStartInfo
+                {
+                    FileName = executable,
+                    Arguments = "/d /c start \"\" /b ping.exe -n 30 127.0.0.1 >nul",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                Assert.That(process.Start(), Is.True);
+                Assert.That(SpinWait.SpinUntil(() => (bool)rootExited.GetValue(process),
+                    TimeSpan.FromSeconds(10)), Is.True, "The fixture root should exit first.");
+                Assert.That(process.WaitForExit(100), Is.False, "A live descendant prevents completion.");
+                Assert.That(process.HasExited, Is.False);
+                process.Kill();
+                Assert.That(process.WaitForExit(5000), Is.True);
+                Assert.That(process.HasExited, Is.True);
+            }
+        }
+
+        [Test]
+        public void ProductionContainedLauncherDrainsBothExplicitPipes()
+        {
+            var executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
+                "WindowsPowerShell", "v1.0", "powershell.exe");
+            using (var process = CreateContainedHandle())
+            using (var outputDone = new ManualResetEventSlim())
+            using (var errorDone = new ManualResetEventSlim())
+            {
+                var output = new System.Collections.Concurrent.ConcurrentQueue<string>();
+                var errors = new System.Collections.Concurrent.ConcurrentQueue<string>();
+                var failed = 0;
+                process.StartInfo = new ProcessStartInfo
+                {
+                    FileName = executable,
+                    Arguments = "-NoProfile -NonInteractive -Command \"[Console]::WriteLine('out'); [Console]::Error.WriteLine('err')\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                Assert.That(process.Start(), Is.True);
+                var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                Action failure = () => { Interlocked.Exchange(ref failed, 1); outputDone.Set(); errorDone.Set(); };
+                Action<string> stdout = line => { if (line == null) outputDone.Set(); else output.Enqueue(line); };
+                Action<string> stderr = line => { if (line == null) errorDone.Set(); else errors.Enqueue(line); };
+                process.GetType().GetMethod("BeginBoundedOutputRead", flags).Invoke(process, new object[] { stdout, failure });
+                process.GetType().GetMethod("BeginBoundedErrorRead", flags).Invoke(process, new object[] { stderr, failure });
+                Assert.That(process.WaitForExit(10000), Is.True);
+                Assert.That(outputDone.Wait(5000), Is.True);
+                Assert.That(errorDone.Wait(5000), Is.True);
+                Assert.That(Volatile.Read(ref failed), Is.Zero);
+                Assert.That(output.ToArray(), Is.EqualTo(new[] { "out" }));
+                Assert.That(errors.ToArray(), Is.EqualTo(new[] { "err" }));
+                Assert.That(process.ExitCode, Is.Zero);
+            }
+        }
+
         [Test]
         public void ProductionBoundedPipeReaderDrainsOversizeLineFromDisposableChild()
         {

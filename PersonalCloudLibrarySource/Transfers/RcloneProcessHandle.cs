@@ -84,7 +84,7 @@ namespace PersonalCloudLibrarySource
             StartBoundedRead(boundedError, receive, failure);
         }
 
-        private static void StartBoundedRead(TextReader reader, Action<string> receive, Action failure)
+        internal static void StartBoundedRead(TextReader reader, Action<string> receive, Action failure)
         {
             // Start both pipes independently; a constantly readable pipe must
             // not prevent the other pipe from starting. All read faults are

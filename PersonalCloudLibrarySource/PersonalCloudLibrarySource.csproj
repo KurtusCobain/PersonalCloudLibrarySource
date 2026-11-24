@@ -160,6 +160,7 @@
     <Compile Include="Transfers\RcloneActivityTimeout.cs" />
     <Compile Include="Transfers\RcloneProcessRunner.cs" />
     <Compile Include="Transfers\RcloneProcessHandle.cs" />
+    <Compile Include="Transfers\WindowsJobProcessHandle.cs" />
     <Compile Include="Transfers\RcloneProgressParser.cs" />
     <Compile Include="Transfers\RcloneTransferAdapter.cs" />
     <Compile Include="Transfers\RcloneTransferModels.cs" />
