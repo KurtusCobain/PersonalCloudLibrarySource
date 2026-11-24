@@ -42,6 +42,66 @@ namespace PersonalCloudLibrarySource
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool CreateDirectoryNative(string path, IntPtr securityAttributes);
 
+        internal static FileIdentity CreateOwnedDirectory(string path)
+        {
+            CreateExclusiveDirectory(path);
+            using (var handle = OpenDirectoryForReview(path, false))
+                return CaptureDirectoryIdentity(handle);
+        }
+
+        internal static void RequireDirectoryIdentity(string path, FileIdentity expected)
+        {
+            using (var handle = OpenDirectoryForReview(path, false))
+            {
+                if (!SameIdentity(CaptureDirectoryIdentity(handle), expected))
+                    throw new IOException("Private directory identity changed.");
+            }
+        }
+
+        internal static void DeleteOwnedEmptyDirectory(string path, FileIdentity expected)
+        {
+            using (var handle = OpenDirectoryForReview(path, true))
+            {
+                if (!SameIdentity(CaptureDirectoryIdentity(handle), expected))
+                    throw new IOException("Private directory identity changed.");
+                // FileDispositionInfo on a directory refuses nonempty directories.
+                DeleteVerifiedFileHandle(handle);
+            }
+            RequireVacant(path);
+        }
+
+        private static SafeFileHandle OpenDirectoryForReview(string path, bool deleteAccess)
+        {
+            RequireSafePath(path);
+            // FILE_READ_ATTRIBUTES | optional DELETE; deny delete sharing.
+            // BACKUP_SEMANTICS | OPEN_REPARSE_POINT; do not follow the leaf.
+            var handle = OpenNativeFile(Path.GetFullPath(path),
+                0x80u | (deleteAccess ? 0x00010000u : 0u), 3u,
+                IntPtr.Zero, 3u, 0x02200000u, IntPtr.Zero);
+            if (handle.IsInvalid)
+            {
+                var error = Marshal.GetLastWin32Error();
+                handle.Dispose();
+                throw new IOException("Could not open private directory for identity review.",
+                    new System.ComponentModel.Win32Exception(error));
+            }
+            return handle;
+        }
+
+        private static FileIdentity CaptureDirectoryIdentity(SafeFileHandle handle)
+        {
+            HandleInformation information;
+            FileIdentity identity;
+            if (!GetFileInformationByHandle(handle, out information) ||
+                (information.Attributes & (uint)FileAttributes.Directory) == 0 ||
+                (information.Attributes & (uint)FileAttributes.ReparsePoint) != 0 ||
+                !GetFileInformationByHandleEx(handle, 18, out identity,
+                    (uint)Marshal.SizeOf(typeof(FileIdentity))) ||
+                (identity.IdLow == 0 && identity.IdHigh == 0))
+                throw new IOException("Private directory identity could not be verified.");
+            return identity;
+        }
+
         internal static void RequirePublicationPaths(string staging, string destination, bool directory)
         {
             RequireSafePath(staging);
@@ -113,6 +173,11 @@ namespace PersonalCloudLibrarySource
         internal static bool MatchesPrivateFileIdentity(SafeFileHandle handle, FileIdentity expected)
         {
             var current = CapturePrivateFileIdentity(handle);
+            return SameIdentity(current, expected);
+        }
+
+        private static bool SameIdentity(FileIdentity current, FileIdentity expected)
+        {
             return current.VolumeSerial == expected.VolumeSerial &&
                 current.IdLow == expected.IdLow && current.IdHigh == expected.IdHigh;
         }

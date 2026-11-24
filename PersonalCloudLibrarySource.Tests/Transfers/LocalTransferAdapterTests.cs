@@ -255,6 +255,36 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             }
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void CopyDirectory_ReplacedEmptyDirectoryIsPreserved(bool cancel)
+        {
+            var source = Path.Combine(testRoot, "source");
+            var destination = Path.Combine(testRoot, "destination");
+            Directory.CreateDirectory(Path.Combine(source, "empty"));
+            File.WriteAllText(Path.Combine(source, "file.txt"), "owned");
+            var jobId = Guid.NewGuid();
+            var partial = TransferPartialPathPolicy.Create(destination, jobId);
+            var empty = Path.Combine(partial, "empty");
+            var moved = Path.Combine(testRoot, "original-empty");
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var result = new LocalTransferAdapter().CopyDirectory(source, destination, jobId,
+                    cancellation.Token, null, state =>
+                    {
+                        if (state != CloudTransferState.Finalizing) return;
+                        Directory.Move(empty, moved);
+                        Directory.CreateDirectory(empty);
+                        if (cancel) cancellation.Cancel();
+                    });
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(result.RequiresManualRecovery, Is.True);
+                Assert.That(Directory.Exists(empty), Is.True);
+                Assert.That(Directory.Exists(moved), Is.True);
+                Assert.That(Directory.Exists(destination), Is.False);
+            }
+        }
+
         [Test]
         public void CopyDirectory_UnexpectedEmptyFileAtFinalizationCannotPublish()
         {
