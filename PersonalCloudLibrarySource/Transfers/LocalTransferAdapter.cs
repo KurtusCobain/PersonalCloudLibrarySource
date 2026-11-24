@@ -483,14 +483,14 @@ namespace PersonalCloudLibrarySource
         }
 
         private static CloudTransferExecutionResult CleanupOwnedFile(bool owned, string path,
-            WrittenFile written, CloudTransferExecutionResult result)
+            WrittenFile written, CloudTransferExecutionResult result, byte[] buffer = null)
         {
             if (!owned) return result;
             try
             {
                 using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, true))
                 {
-                    if (!MatchesWrittenFile(input, written, CancellationToken.None))
+                    if (!MatchesWrittenFile(input, written, CancellationToken.None, buffer))
                         throw new IOException("Private staging identity or contents changed.");
                     TransferPartialPathPolicy.DeleteVerifiedFileHandle(input.SafeFileHandle);
                 }
@@ -505,7 +505,8 @@ namespace PersonalCloudLibrarySource
             }
         }
 
-        private static bool MatchesWrittenFile(FileStream input, WrittenFile written, CancellationToken token)
+        private static bool MatchesWrittenFile(FileStream input, WrittenFile written, CancellationToken token,
+            byte[] buffer = null)
         {
             if (!written.Identity.HasValue || written.Digest == null ||
                 !TransferPartialPathPolicy.MatchesPrivateFileIdentity(input.SafeFileHandle, written.Identity.Value) ||
@@ -514,7 +515,7 @@ namespace PersonalCloudLibrarySource
 
             using (var digest = SHA256.Create())
             {
-                var buffer = new byte[64 * 1024];
+                buffer = buffer ?? new byte[64 * 1024];
                 int count;
                 while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
                 {
@@ -538,6 +539,7 @@ namespace PersonalCloudLibrarySource
                 throw new IOException("Private staging root was not recorded.");
             var remainingFiles = new HashSet<string>(files.Keys, StringComparer.OrdinalIgnoreCase);
             long observedBytes = 0;
+            var buffer = new byte[64 * 1024];
             var refusal = SafeFileTreeTraversal.Walk(root, SafeFileTreeTraversal.DefaultMaxEntries,
                 token, (path, attributes) =>
                 {
@@ -553,7 +555,7 @@ namespace PersonalCloudLibrarySource
                         throw new IOException("Unexpected private staging file.");
                     using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
                     {
-                        if (!MatchesWrittenFile(input, written, token))
+                        if (!MatchesWrittenFile(input, written, token, buffer))
                             throw new IOException("Private staging file identity or contents changed.");
                         observedBytes = checked(observedBytes + input.Length);
                     }
@@ -568,9 +570,10 @@ namespace PersonalCloudLibrarySource
             IDictionary<string, WrittenFile> files, CloudTransferExecutionResult result)
         {
             var clean = true;
+            var buffer = new byte[64 * 1024];
             foreach (var entry in files)
             {
-                var outcome = CleanupOwnedFile(true, entry.Key, entry.Value, result);
+                var outcome = CleanupOwnedFile(true, entry.Key, entry.Value, result, buffer);
                 if (outcome.RequiresManualRecovery) clean = false;
             }
 
