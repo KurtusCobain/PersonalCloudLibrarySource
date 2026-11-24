@@ -28,6 +28,7 @@ namespace PersonalCloudLibrarySource
             public CloudTransferJob Job { get; set; }
             public bool IsRclone { get; set; }
             public PersonalCloudLibrarySourceSettings Settings { get; set; }
+            public Func<bool> ExecutionAuthorized { get; set; }
             public TaskCompletionSource<CloudTransferExecutionResult> Completion { get; set; }
         }
 
@@ -63,9 +64,10 @@ namespace PersonalCloudLibrarySource
             string source,
             string destination,
             string providerType,
-            bool isDirectory, PersonalCloudLibrarySourceSettings settings = null)
+            bool isDirectory, PersonalCloudLibrarySourceSettings settings = null,
+            Func<bool> executionAuthorized = null)
         {
-            return Enqueue(gameId, displayName, source, destination, providerType, isDirectory, false, settings);
+            return Enqueue(gameId, displayName, source, destination, providerType, isDirectory, false, settings, executionAuthorized);
         }
 
         public CloudTransferJob EnqueueRclone(
@@ -75,9 +77,10 @@ namespace PersonalCloudLibrarySource
             string destination,
             string providerType,
             bool isDirectory,
-            PersonalCloudLibrarySourceSettings settings)
+            PersonalCloudLibrarySourceSettings settings,
+            Func<bool> executionAuthorized = null)
         {
-            return Enqueue(gameId, displayName, source, destination, providerType, isDirectory, true, settings);
+            return Enqueue(gameId, displayName, source, destination, providerType, isDirectory, true, settings, executionAuthorized);
         }
 
         public Task<CloudTransferExecutionResult> GetCompletion(Guid jobId)
@@ -139,7 +142,8 @@ namespace PersonalCloudLibrarySource
                     throw new TransferRetryRefusedException(
                         "Transfer source or cache settings changed. Refresh the library and start a new download.");
                 var retry = manager.Retry(failedJobId);
-                AddRequestLocked(retry, previous.IsRclone, settingsSnapshot ?? previous.Settings);
+                AddRequestLocked(retry, previous.IsRclone, settingsSnapshot ?? previous.Settings,
+                    previous.ExecutionAuthorized);
                 WakeWorkersLocked();
                 return retry;
             }
@@ -203,7 +207,7 @@ namespace PersonalCloudLibrarySource
             string providerType,
             bool isDirectory,
             bool isRclone,
-            PersonalCloudLibrarySourceSettings settings)
+            PersonalCloudLibrarySourceSettings settings, Func<bool> executionAuthorized)
         {
             lock (syncRoot)
             {
@@ -215,7 +219,7 @@ namespace PersonalCloudLibrarySource
 
                 RefuseBlockedDestination(gameId, destination);
                 var job = manager.Enqueue(gameId, displayName, source, destination, providerType, isDirectory);
-                AddRequestLocked(job, isRclone, settings);
+                AddRequestLocked(job, isRclone, settings, executionAuthorized);
                 WakeWorkersLocked();
                 return job;
             }
@@ -224,12 +228,13 @@ namespace PersonalCloudLibrarySource
         private void AddRequestLocked(
             CloudTransferJob job,
             bool isRclone,
-            PersonalCloudLibrarySourceSettings settings)
+            PersonalCloudLibrarySourceSettings settings, Func<bool> executionAuthorized)
         {
             var request = new QueueRequest
             {
                 Job = job,
                 IsRclone = isRclone,
+                ExecutionAuthorized = executionAuthorized,
                 Settings = settings == null ? null : SettingsMigrationService.CloneForEditing(settings),
                 Completion = new TaskCompletionSource<CloudTransferExecutionResult>(
                     TaskCreationOptions.RunContinuationsAsynchronously)
@@ -292,6 +297,15 @@ namespace PersonalCloudLibrarySource
                 {
                     result = CloudTransferExecutionResult.CancelledResult();
                 }
+                else if (!IsExecutionAuthorized(request))
+                {
+                    result = CloudTransferExecutionResult.Failure(
+                        "Transfer authorization expired. Refresh the library and start a new download.");
+                }
+                else if (request.Job.CancellationToken.IsCancellationRequested)
+                {
+                    result = CloudTransferExecutionResult.CancelledResult();
+                }
                 else
                 {
                     if (recoveryJournal != null)
@@ -348,10 +362,19 @@ namespace PersonalCloudLibrarySource
             lock (syncRoot)
             {
                 if (request.Job.State == CloudTransferState.Completed || request.Job.RequiresManualRecovery)
+                {
                     request.Settings = null;
+                    request.ExecutionAuthorized = null;
+                }
             }
             PublishTerminalOnce(request.Job);
             request.Completion.TrySetResult(result);
+        }
+
+        private static bool IsExecutionAuthorized(QueueRequest request)
+        {
+            try { return request.ExecutionAuthorized == null || request.ExecutionAuthorized(); }
+            catch (Exception) { return false; }
         }
 
         private void EnsureTerminal(CloudTransferJob job, CloudTransferExecutionResult result)

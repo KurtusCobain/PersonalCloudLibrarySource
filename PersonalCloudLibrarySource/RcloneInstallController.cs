@@ -104,11 +104,11 @@ namespace PersonalCloudLibrarySource
                     ? transferQueue.EnqueueRclone(
                         Game.Id, string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
                         PersonalCloudLibrarySource.ResolveRcloneSourcePath(settings, sourcePath),
-                        destinationPath, providerType, sourceType == "directory", settings)
+                        destinationPath, providerType, sourceType == "directory", settings, executionAuthorized)
                     : transferQueue.EnqueueLocal(
                         Game.Id, string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
                         PersonalCloudLibrarySource.ResolveLocalFolderSourcePath(settings, sourcePath),
-                        destinationPath, providerType, sourceType == "directory", settings);
+                        destinationPath, providerType, sourceType == "directory", settings, executionAuthorized);
                 activeJobId = job.Id;
                 ObserveCompletionAsync(job.Id, sourceType, launchPath, installDirectory);
             }

@@ -11,6 +11,47 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
     public class TransferQueueServiceTests
     {
         [Test]
+        public void WorkerRefusesExpiredAuthorizationBeforeReservationOrExecution()
+        {
+            var root = CreateVerifiedTestRoot();
+            try
+            {
+                var manager = new CloudTransferManager(1);
+                var executor = new BlockingExecutor(manager);
+                var journalPath = Path.Combine(root, "journal");
+                using (var queue = new TransferQueueService(manager, executor, new TransferRecoveryJournal(journalPath)))
+                {
+                    var job = queue.EnqueueLocal(Guid.NewGuid(), "Denied", Path.Combine(root, "source"),
+                        Path.Combine(root, "destination"), "LocalFolder", false,
+                        executionAuthorized: () => false);
+                    Assert.That(queue.GetCompletion(job.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                    Assert.That(job.State, Is.EqualTo(CloudTransferState.Failed));
+                    Assert.That(executor.ExecutedJobIds, Is.Empty);
+                    Assert.That(Directory.Exists(journalPath), Is.False);
+                }
+            }
+            finally { DeleteVerifiedTestRoot(root); }
+        }
+
+        [Test]
+        public void RetryRetainsAuthorizationAndRefusesDrift()
+        {
+            var manager = new CloudTransferManager(1);
+            var executor = new BlockingExecutor(manager);
+            using (var queue = new TransferQueueService(manager, executor))
+            {
+                var allowed = 0;
+                var job = queue.EnqueueLocal(Guid.NewGuid(), "Denied", "source", "destination",
+                    "LocalFolder", false, executionAuthorized: () => Volatile.Read(ref allowed) == 1);
+                Assert.That(queue.GetCompletion(job.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                var retry = queue.Retry(job.Id);
+                Assert.That(queue.GetCompletion(retry.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                Assert.That(retry.State, Is.EqualTo(CloudTransferState.Failed));
+                Assert.That(executor.ExecutedJobIds, Is.Empty);
+            }
+        }
+
+        [Test]
         public void Workers_EnforceConfiguredConcurrencyAndObserveAllJobs()
         {
             var manager = new CloudTransferManager(2);
