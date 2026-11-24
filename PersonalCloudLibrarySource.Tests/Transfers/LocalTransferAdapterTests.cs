@@ -226,6 +226,56 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(File.ReadAllText(partial), Is.EqualTo("original"));
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void CopyDirectory_CancellationDoesNotRecursivelyDeleteUnexpectedContent(bool inject)
+        {
+            var source = Path.Combine(testRoot, "source");
+            var destination = Path.Combine(testRoot, "destination");
+            Directory.CreateDirectory(source);
+            File.WriteAllText(Path.Combine(source, "file.txt"), "owned");
+            var jobId = Guid.NewGuid();
+            var partial = TransferPartialPathPolicy.Create(destination, jobId);
+            var foreign = Path.Combine(partial, "foreign.txt");
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var result = new LocalTransferAdapter().CopyDirectory(source, destination, jobId,
+                    cancellation.Token, (bytes, total) =>
+                    {
+                        if (inject) File.WriteAllText(foreign, "preserve");
+                        cancellation.Cancel();
+                    });
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(result.Cancelled, Is.EqualTo(!inject));
+                Assert.That(result.RequiresManualRecovery, Is.EqualTo(inject));
+                Assert.That(Directory.Exists(destination), Is.False);
+                Assert.That(File.Exists(Path.Combine(partial, "file.txt")), Is.False);
+                if (inject) Assert.That(File.ReadAllText(foreign), Is.EqualTo("preserve"));
+                else Assert.That(Directory.Exists(partial), Is.False);
+            }
+        }
+
+        [Test]
+        public void CopyDirectory_UnexpectedEmptyFileAtFinalizationCannotPublish()
+        {
+            var source = Path.Combine(testRoot, "source");
+            var destination = Path.Combine(testRoot, "destination");
+            Directory.CreateDirectory(source);
+            File.WriteAllText(Path.Combine(source, "file.txt"), "owned");
+            var jobId = Guid.NewGuid();
+            var partial = TransferPartialPathPolicy.Create(destination, jobId);
+            var foreign = Path.Combine(partial, "foreign.txt");
+            var result = new LocalTransferAdapter().CopyDirectory(source, destination, jobId,
+                CancellationToken.None, null, state =>
+                {
+                    if (state == CloudTransferState.Finalizing) File.WriteAllBytes(foreign, new byte[0]);
+                });
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.RequiresManualRecovery, Is.True);
+            Assert.That(File.Exists(foreign), Is.True);
+            Assert.That(Directory.Exists(destination), Is.False);
+        }
+
         [Test]
         public void CopyDirectory_UnexpectedFileDuringCopyIsPreserved()
         {

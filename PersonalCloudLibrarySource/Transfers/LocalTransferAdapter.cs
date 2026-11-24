@@ -181,7 +181,8 @@ namespace PersonalCloudLibrarySource
             Action<long, long?> progress,
             Action<CloudTransferState> phase)
         {
-            var ownsPartial = false;
+            var ownedDirectories = new List<string>();
+            var ownedFiles = new Dictionary<string, TransferPartialPathPolicy.FileIdentity?>(StringComparer.OrdinalIgnoreCase);
             try
             {
                 if (string.IsNullOrWhiteSpace(sourceDirectory) || !Directory.Exists(sourceDirectory))
@@ -232,14 +233,15 @@ namespace PersonalCloudLibrarySource
                 var transferred = 0L;
 
                 TransferPartialPathPolicy.CreateExclusiveDirectory(partialDirectory);
-                ownsPartial = true;
+                ownedDirectories.Add(partialDirectory);
                 foreach (var directory in directories)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     try
                     {
-                        TransferPartialPathPolicy.CreateExclusiveDirectory(
-                            Path.Combine(partialDirectory, GetRelativePath(sourceRoot, directory)));
+                        var target = Path.Combine(partialDirectory, GetRelativePath(sourceRoot, directory));
+                        TransferPartialPathPolicy.CreateExclusiveDirectory(target);
+                        ownedDirectories.Add(target);
                     }
                     catch (Exception)
                     {
@@ -276,7 +278,13 @@ namespace PersonalCloudLibrarySource
                             transferred,
                             progress,
                             copyBuffer,
-                            () => fileCreated = true);
+                            () =>
+                            {
+                                fileCreated = true;
+                                ownedFiles.Add(destinationFile, null);
+                            },
+                            handle => ownedFiles[destinationFile] =
+                                TransferPartialPathPolicy.CapturePrivateFileIdentity(handle));
                     }
                     catch (Exception) when (!fileCreated)
                     {
@@ -289,17 +297,16 @@ namespace PersonalCloudLibrarySource
                 }
 
                 phase?.Invoke(CloudTransferState.Verifying);
-                long copiedBytes;
-                if (!SafeFileTreeTraversal.TryMeasure(partialDirectory, true, cancellationToken, out copiedBytes) ||
-                    copiedBytes != totalBytes)
-                {
-                    throw new IOException("The copied directory did not pass size verification.");
-                }
+                VerifyOwnedDirectory(partialDirectory, ownedDirectories, ownedFiles, totalBytes, cancellationToken);
 
                 cancellationToken.ThrowIfCancellationRequested();
                 phase?.Invoke(CloudTransferState.Finalizing);
                 cancellationToken.ThrowIfCancellationRequested();
-                try { TransferPartialPathPolicy.RequirePublicationPaths(partialDirectory, normalizedDestination, true); }
+                try
+                {
+                    TransferPartialPathPolicy.RequirePublicationPaths(partialDirectory, normalizedDestination, true);
+                    VerifyOwnedDirectory(partialDirectory, ownedDirectories, ownedFiles, totalBytes, cancellationToken);
+                }
                 catch (Exception)
                 {
                     return CloudTransferExecutionResult.Failure(
@@ -311,12 +318,12 @@ namespace PersonalCloudLibrarySource
             }
             catch (OperationCanceledException)
             {
-                return CleanupOwnedPartial(ownsPartial, partialDirectory, true,
+                return CleanupOwnedDirectory(ownedDirectories, ownedFiles,
                     CloudTransferExecutionResult.CancelledResult());
             }
             catch (Exception ex)
             {
-                return CleanupOwnedPartial(ownsPartial, partialDirectory, true,
+                return CleanupOwnedDirectory(ownedDirectories, ownedFiles,
                     CloudTransferExecutionResult.Failure(ex.Message, ex));
             }
         }
@@ -470,36 +477,66 @@ namespace PersonalCloudLibrarySource
             }
         }
 
-        private static CloudTransferExecutionResult CleanupOwnedPartial(bool owned,
-            string path, bool directory, CloudTransferExecutionResult result)
+        private static void VerifyOwnedDirectory(string root, IList<string> directories,
+            IDictionary<string, TransferPartialPathPolicy.FileIdentity?> files, long expectedBytes,
+            CancellationToken token)
         {
-            if (!owned) return result;
-            try
-            {
-                TransferPartialPathPolicy.RequireSafePath(path);
-                if (directory)
+            var remainingDirectories = new HashSet<string>(directories, StringComparer.OrdinalIgnoreCase);
+            if (!remainingDirectories.Remove(root))
+                throw new IOException("Private staging root was not recorded.");
+            var remainingFiles = new HashSet<string>(files.Keys, StringComparer.OrdinalIgnoreCase);
+            long observedBytes = 0;
+            var refusal = SafeFileTreeTraversal.Walk(root, SafeFileTreeTraversal.DefaultMaxEntries,
+                token, (path, attributes) =>
                 {
-                    if (File.Exists(path)) throw new IOException("Staging type changed.");
-                    if (Directory.Exists(path))
+                    if ((attributes & FileAttributes.Directory) != 0)
                     {
-                        var refusal = SafeCacheDeletionExecutor.GetUnsafeDescendantReason(path);
-                        if (!string.IsNullOrWhiteSpace(refusal)) throw new IOException(refusal);
-                        Directory.Delete(path, true);
+                        if (!remainingDirectories.Remove(path))
+                            throw new IOException("Unexpected private staging directory.");
+                        return;
                     }
-                }
-                else
-                {
-                    if (Directory.Exists(path)) throw new IOException("Staging type changed.");
-                    if (File.Exists(path)) File.Delete(path);
-                }
-                return result;
-            }
-            catch (Exception)
+                    TransferPartialPathPolicy.FileIdentity? identity;
+                    if (!remainingFiles.Remove(path) || !files.TryGetValue(path, out identity) || !identity.HasValue)
+                        throw new IOException("Unexpected private staging file.");
+                    using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
+                    {
+                        if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(input.SafeFileHandle, identity.Value))
+                            throw new IOException("Private staging file identity changed.");
+                        observedBytes = checked(observedBytes + input.Length);
+                    }
+                });
+            if (!string.IsNullOrEmpty(refusal) || remainingDirectories.Count != 0 ||
+                remainingFiles.Count != 0 || observedBytes != expectedBytes)
+                throw new IOException("Private staging tree did not match the recorded transfer.");
+        }
+
+        private static CloudTransferExecutionResult CleanupOwnedDirectory(IList<string> directories,
+            IDictionary<string, TransferPartialPathPolicy.FileIdentity?> files, CloudTransferExecutionResult result)
+        {
+            var clean = true;
+            foreach (var entry in files)
             {
-                return CloudTransferExecutionResult.Failure(
-                    "Transfer cleanup could not be verified. Preserve staging for manual recovery.",
-                    requiresManualRecovery: true);
+                var outcome = CleanupOwnedFile(true, entry.Key, entry.Value, result);
+                if (outcome.RequiresManualRecovery) clean = false;
             }
+
+            // Only directories recorded after successful exclusive creation
+            // are candidates, and only empty directories can be removed.
+            for (var index = directories.Count - 1; index >= 0; index--)
+            {
+                try
+                {
+                    var path = directories[index];
+                    TransferPartialPathPolicy.RequireSafePath(path);
+                    Directory.Delete(path, false);
+                    TransferPartialPathPolicy.RequireVacant(path);
+                }
+                catch (Exception) { clean = false; }
+            }
+
+            return clean ? result : CloudTransferExecutionResult.Failure(
+                "Transfer cleanup could not be verified. Preserve staging for manual recovery.",
+                requiresManualRecovery: true);
         }
     }
 }
