@@ -29,7 +29,7 @@ Add the build output folder to Playnite as a developer extension:
 
 ## Packaging
 
-The repo includes `tools/package-extension.ps1` for local packaging.
+The repo includes `tools/package-extension.ps1` for local packaging. On the stabilization branch, it builds the six-file allowlisted archive in a unique staging directory, validates the package, and only then replaces the prior generated artifact. Failed staging is retained for inspection; fixed distribution directories are not recursively removed. CI artifacts are development-only and do not authorize publishing.
 
 Expected output:
 

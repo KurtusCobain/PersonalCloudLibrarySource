@@ -24,7 +24,6 @@ $solution = Join-Path $repoRoot "PersonalCloudLibrarySource\PersonalCloudLibrary
 $configuration = "Release"
 $projectOutput = Join-Path $repoRoot "PersonalCloudLibrarySource\bin\$configuration"
 $distRoot = Join-Path $repoRoot "dist"
-$packageFolder = Join-Path $distRoot "PersonalCloudLibrarySource"
 $extensionManifestPath = Join-Path $repoRoot "PersonalCloudLibrarySource\extension.yaml"
 
 if (-not (Test-Path -LiteralPath $extensionManifestPath)) {
@@ -39,7 +38,8 @@ if ([string]::IsNullOrWhiteSpace($extensionVersion)) {
     throw "Unable to determine extension version from $extensionManifestPath"
 }
 
-$packagePath = Join-Path $distRoot "PersonalCloudLibrarySource-$extensionVersion.pext"
+$parsedVersion = $null
+if (-not [version]::TryParse($extensionVersion, [ref]$parsedVersion) -or $extensionVersion -notmatch '^\d+\.\d+\.\d+(?:\.\d+)?
 $debugPackagePath = Join-Path $distRoot "PersonalCloudLibrarySource-$extensionVersion-debug-symbols.zip"
 
 if ([string]::IsNullOrWhiteSpace($msbuild)) {
@@ -51,76 +51,85 @@ if ($LASTEXITCODE -ne 0) {
     throw "Release build failed with exit code $LASTEXITCODE"
 }
 
-if (Test-Path -LiteralPath $packageFolder) {
-    Remove-Item -LiteralPath $packageFolder -Recurse -Force
+Import-Module (Join-Path $PSScriptRoot 'ReleaseValidation.psm1') -Force
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+function Assert-OrdinaryFile {
+    param([string]$Path)
+    $attributes = [IO.File]::GetAttributes($Path)
+    if ($attributes -band ([IO.FileAttributes]::Directory -bor [IO.FileAttributes]::ReparsePoint)) {
+        throw "Package input or output is not an ordinary file: $Path"
+    }
 }
 
-New-Item -ItemType Directory -Path $packageFolder -Force | Out-Null
+function Write-PackageArchive {
+    param([string]$Path, [System.Collections.IDictionary]$Files)
+    $stream = [IO.FileStream]::new($Path, [IO.FileMode]::CreateNew, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+    try {
+        $archive = [IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Create, $true)
+        try {
+            foreach ($entryName in $Files.Keys) {
+                $source = $Files[$entryName]
+                Assert-OrdinaryFile $source
+                [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                    $archive, $source, $entryName, [IO.Compression.CompressionLevel]::Optimal)
+            }
+        }
+        finally { $archive.Dispose() }
+        $stream.Flush($true)
+    }
+    finally { $stream.Dispose() }
+}
 
-$requiredFiles = @(
-    "PersonalCloudLibrarySource.dll",
-    "extension.yaml",
-    "icon.png"
-)
+function Publish-ValidatedPackage {
+    param([string]$Staged, [string]$Destination)
+    if ([IO.File]::Exists($Destination)) {
+        Assert-OrdinaryFile $Destination
+        [IO.File]::Replace($Staged, $Destination, $null)
+    }
+    else { [IO.File]::Move($Staged, $Destination) }
+}
 
-foreach ($fileName in $requiredFiles) {
-    $sourcePath = Join-Path $projectOutput $fileName
-    if (-not (Test-Path -LiteralPath $sourcePath)) {
-        throw "Required extension file missing: $sourcePath"
+# Explicit allowlist matches the strict official validator. No recursive copy
+# of build outputs, localization directories or arbitrary assets.
+$inputs = [ordered]@{
+    'PersonalCloudLibrarySource.dll' = (Join-Path $projectOutput 'PersonalCloudLibrarySource.dll')
+    'extension.yaml' = (Join-Path $projectOutput 'extension.yaml')
+    'icon.png' = (Join-Path $projectOutput 'icon.png')
+    'Localization/en_US.xaml' = (Join-Path $projectOutput 'Localization\en_US.xaml')
+    'Assets/pcls-logo-wide.png' = (Join-Path $repoRoot 'PersonalCloudLibrarySource\Assets\pcls-logo-wide.png')
+    'LICENSE' = (Join-Path $repoRoot 'LICENSE')
+}
+foreach ($source in $inputs.Values) { Assert-OrdinaryFile $source }
+
+[void][IO.Directory]::CreateDirectory($distRoot)
+$distAttributes = [IO.File]::GetAttributes($distRoot)
+if ($distAttributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Distribution directory must not be linked.' }
+$stage = Join-Path $distRoot ('.pcls-package-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $stage | Out-Null
+$stagedPackage = Join-Path $stage ([IO.Path]::GetFileName($packagePath))
+try {
+    Write-PackageArchive -Path $stagedPackage -Files $inputs
+    Test-ReleasePackage -PackagePath $stagedPackage -ExtensionPath $extensionManifestPath | Out-Null
+
+    if ($DebugSymbols) {
+        $stagedDebug = Join-Path $stage ([IO.Path]::GetFileName($debugPackagePath))
+        $debugInputs = [ordered]@{
+            'PersonalCloudLibrarySource.pdb' = (Join-Path $projectOutput 'PersonalCloudLibrarySource.pdb')
+        }
+        Write-PackageArchive -Path $stagedDebug -Files $debugInputs
+        Publish-ValidatedPackage -Staged $stagedDebug -Destination $debugPackagePath
     }
 
-    Copy-Item -LiteralPath $sourcePath -Destination $packageFolder -Force
+    Publish-ValidatedPackage -Staged $stagedPackage -Destination $packagePath
+    # Only remove an empty invocation-owned directory. Preserve any unexpected
+    # content and never recursively delete a fixed dist or staging tree.
+    [IO.Directory]::Delete($stage, $false)
 }
-
-$localizationPath = Join-Path $projectOutput "Localization"
-if (Test-Path -LiteralPath $localizationPath) {
-    Copy-Item -LiteralPath $localizationPath -Destination $packageFolder -Recurse -Force
-}
-
-$assetsPath = Join-Path $repoRoot "PersonalCloudLibrarySource\Assets"
-if (-not (Test-Path -LiteralPath $assetsPath)) {
-    throw "Branding assets are missing: $assetsPath"
-}
-
-Copy-Item -LiteralPath $assetsPath -Destination $packageFolder -Recurse -Force
-
-# The extension is MIT-licensed. Ship its copyright and license notice
-# alongside every redistributed package, not just in the source repository.
-$licensePath = Join-Path $repoRoot "LICENSE"
-if (-not (Test-Path -LiteralPath $licensePath)) {
-    throw "PCLS license notice is missing: $licensePath"
-}
-Copy-Item -LiteralPath $licensePath -Destination (Join-Path $packageFolder "LICENSE") -Force
-
-if (Test-Path -LiteralPath $packagePath) {
-    Remove-Item -LiteralPath $packagePath -Force
-}
-
-$packageZipPath = "$packagePath.zip"
-if (Test-Path -LiteralPath $packageZipPath) {
-    Remove-Item -LiteralPath $packageZipPath -Force
-}
-
-Compress-Archive -Path (Join-Path $packageFolder "*") -DestinationPath $packageZipPath -Force
-Move-Item -LiteralPath $packageZipPath -Destination $packagePath -Force
-
-if ($DebugSymbols) {
-    $debugFolder = Join-Path $distRoot "PersonalCloudLibrarySource-debug-symbols"
-    if (Test-Path -LiteralPath $debugFolder) {
-        Remove-Item -LiteralPath $debugFolder -Recurse -Force
-    }
-
-    New-Item -ItemType Directory -Path $debugFolder -Force | Out-Null
-    $pdbPath = Join-Path $projectOutput "PersonalCloudLibrarySource.pdb"
-    if (Test-Path -LiteralPath $pdbPath) {
-        Copy-Item -LiteralPath $pdbPath -Destination $debugFolder -Force
-    }
-
-    if (Test-Path -LiteralPath $debugPackagePath) {
-        Remove-Item -LiteralPath $debugPackagePath -Force
-    }
-
-    Compress-Archive -Path (Join-Path $debugFolder "*") -DestinationPath $debugPackagePath -Force
+catch {
+    Write-Warning "Package creation failed; staging evidence retained at $stage."
+    throw
 }
 
 Write-Host "Created package: $packagePath"

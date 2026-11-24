@@ -8,6 +8,8 @@ Rclone is optional and only needed for rclone remote scanning or `RcloneRemote` 
 
 Configure rclone outside Playnite first. The plugin calls the existing rclone setup; it does not configure cloud accounts itself.
 
+> **Unreleased stabilization branch:** the standalone generator adds `-TimeoutSeconds` (default 300, range 5–3600), bounded listings and atomic per-file output replacement. `-Overwrite` retains a unique sibling backup of a replaced catalog/report; without it, existing outputs are refused. These changes are not part of the published v0.3.2 package.
+
 ## Install Rclone
 
 Install rclone from the official rclone project and confirm it runs:
