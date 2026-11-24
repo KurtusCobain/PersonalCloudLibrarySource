@@ -192,6 +192,28 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void NativeHandlePublicationRefusesExistingTargetWithoutReplacingEitherFile()
+        {
+            var staging = Path.Combine(testRoot, "staging.bin");
+            var destination = Path.Combine(testRoot, "destination.bin");
+            File.WriteAllText(staging, "owned");
+            File.WriteAllText(destination, "foreign");
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+            var open = typeof(TransferPartialPathPolicy).GetMethod("OpenPrivateFileForReview", flags);
+            var publish = typeof(TransferPartialPathPolicy).GetMethod("PublishVerifiedHandle", flags);
+            Assert.That(open, Is.Not.Null);
+            Assert.That(publish, Is.Not.Null);
+            using (var stream = (FileStream)open.Invoke(null, new object[] { staging, true }))
+            {
+                var exception = Assert.Throws<System.Reflection.TargetInvocationException>(() =>
+                    publish.Invoke(null, new object[] { stream.SafeFileHandle, staging, destination }));
+                Assert.That(exception.InnerException, Is.TypeOf<IOException>());
+            }
+            Assert.That(File.ReadAllText(staging), Is.EqualTo("owned"));
+            Assert.That(File.ReadAllText(destination), Is.EqualTo("foreign"));
+        }
+
+        [Test]
         public void ExclusiveStagingCreationNeverAdoptsExistingDirectory()
         {
             var path = Path.Combine(testRoot, "exclusive");

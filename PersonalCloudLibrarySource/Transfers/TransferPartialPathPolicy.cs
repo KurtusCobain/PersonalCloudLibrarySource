@@ -211,6 +211,63 @@ namespace PersonalCloudLibrarySource
                     new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()));
         }
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RenameHeader
+        {
+            public uint ReplaceFlags;
+            public IntPtr RootDirectory;
+            public uint NameBytes;
+            public ushort FirstCharacter;
+        }
+
+        [DllImport("kernel32.dll", EntryPoint = "SetFileInformationByHandle", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetRenameInformation(SafeFileHandle handle,
+            int informationClass, IntPtr information, uint size);
+
+        // Bind the source of publication to the inspected handle, never a
+        // second source pathname. The target is a validated sibling and the
+        // native no-replace flag also rejects a late destination collision.
+        // Full ancestor-relative target resolution remains a separate gate.
+        internal static void PublishVerifiedHandle(SafeFileHandle handle, string staging, string destination)
+        {
+            var sourceFull = Path.GetFullPath(staging);
+            var targetFull = Path.GetFullPath(destination);
+            if (!string.Equals(Path.GetDirectoryName(sourceFull), Path.GetDirectoryName(targetFull),
+                StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(sourceFull, targetFull, StringComparison.OrdinalIgnoreCase))
+                throw new IOException("Publication must rename staging to a distinct sibling.");
+            RequireSafePath(targetFull);
+            var name = System.Text.Encoding.Unicode.GetBytes(targetFull);
+            var nameOffset = Marshal.OffsetOf(typeof(RenameHeader), nameof(RenameHeader.FirstCharacter)).ToInt32();
+            var lengthOffset = Marshal.OffsetOf(typeof(RenameHeader), nameof(RenameHeader.NameBytes)).ToInt32();
+            var size = Math.Max(Marshal.SizeOf(typeof(RenameHeader)), checked(nameOffset + name.Length + 2));
+            var info = Marshal.AllocHGlobal(size);
+            try
+            {
+                // Zero flags (ReplaceIfExists=false), zero root (absolute
+                // target), and a NUL-terminated length-delimited UTF-16 name.
+                Marshal.Copy(new byte[size], 0, info, size);
+                Marshal.WriteInt32(info, lengthOffset, name.Length);
+                Marshal.Copy(name, 0, IntPtr.Add(info, nameOffset), name.Length);
+                if (!SetRenameInformation(handle, 3, info, (uint)size)) // FileRenameInfo
+                    throw new IOException("Verified staging could not be published without replacement.",
+                        new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()));
+            }
+            finally { Marshal.FreeHGlobal(info); }
+        }
+
+        internal static void PublishOwnedDirectory(string staging, string destination, FileIdentity expected)
+        {
+            using (var handle = OpenDirectoryForReview(staging, true))
+            {
+                if (!SameIdentity(CaptureDirectoryIdentity(handle), expected))
+                    throw new IOException("Private directory identity changed before publication.");
+                PublishVerifiedHandle(handle, staging, destination);
+            }
+            RequireVacant(staging);
+        }
+
         public static string Create(string destinationPath, Guid jobId)
         {
             if (string.IsNullOrWhiteSpace(destinationPath))

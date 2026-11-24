@@ -118,12 +118,15 @@ namespace PersonalCloudLibrarySource
                 try
                 {
                     TransferPartialPathPolicy.RequirePublicationPaths(partialPath, destinationPath, false);
-                    using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(partialPath, false))
+                    using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(partialPath, true))
                     {
                         if (written.Length != totalBytes ||
                             !MatchesWrittenFile(input, written, cancellationToken))
-                            throw new IOException("Private staging file identity or length changed.");
+                            throw new IOException("Private staging file identity or contents changed.");
+                        cancellationToken.ThrowIfCancellationRequested();
+                        TransferPartialPathPolicy.PublishVerifiedHandle(input.SafeFileHandle, partialPath, destinationPath);
                     }
+                    TransferPartialPathPolicy.RequireVacant(partialPath);
                 }
                 catch (Exception)
                 {
@@ -131,7 +134,6 @@ namespace PersonalCloudLibrarySource
                         "Transfer publication paths changed; staging was preserved for review.",
                         requiresManualRecovery: true);
                 }
-                File.Move(partialPath, destinationPath);
                 return CloudTransferExecutionResult.Success(transferred, totalBytes);
             }
             catch (OperationCanceledException)
@@ -324,6 +326,9 @@ namespace PersonalCloudLibrarySource
                 {
                     TransferPartialPathPolicy.RequirePublicationPaths(partialDirectory, normalizedDestination, true);
                     VerifyOwnedDirectory(partialDirectory, directoryIdentities, ownedFiles, totalBytes, cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    TransferPartialPathPolicy.PublishOwnedDirectory(partialDirectory, normalizedDestination,
+                        directoryIdentities[partialDirectory]);
                 }
                 catch (Exception)
                 {
@@ -331,7 +336,6 @@ namespace PersonalCloudLibrarySource
                         "Transfer publication paths changed; staging was preserved for review.",
                         requiresManualRecovery: true);
                 }
-                Directory.Move(partialDirectory, normalizedDestination);
                 return CloudTransferExecutionResult.Success(transferred, totalBytes);
             }
             catch (OperationCanceledException)

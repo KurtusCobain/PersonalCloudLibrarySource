@@ -241,7 +241,18 @@ namespace PersonalCloudLibrarySource
                         throw new IOException("Destination changed before publishing the staged game.");
 
                     cancellationToken.ThrowIfCancellationRequested();
-                    Directory.Move(staging, destination);
+                    try
+                    {
+                        TransferPartialPathPolicy.PublishOwnedDirectory(staging, destination, createdDirectoryIndex[staging]);
+                    }
+                    catch (Exception)
+                    {
+                        // Publication may have raced a destination or ancestor
+                        // change. Do not roll back either pathname by inference.
+                        return CloudTransferExecutionResult.Failure(
+                            "ZIP publication could not be confirmed; preserve staging for review.",
+                            requiresManualRecovery: true);
+                    }
                     return CloudTransferExecutionResult.Success(copiedTotal,
                         inspected.TotalUncompressedBytes);
                     }
