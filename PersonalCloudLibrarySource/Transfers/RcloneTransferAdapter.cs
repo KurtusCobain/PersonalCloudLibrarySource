@@ -67,6 +67,8 @@ namespace PersonalCloudLibrarySource
             Action<CloudTransferState> phase)
         {
             settings = settings ?? new PersonalCloudLibrarySourceSettings();
+            var mayOwnPartial = false;
+            var processExitConfirmed = true;
 
             try
             {
@@ -82,11 +84,9 @@ namespace PersonalCloudLibrarySource
                         "Destination already exists: " + normalizedDestination);
                 }
 
+                cancellationToken.ThrowIfCancellationRequested();
+                TransferPartialPathPolicy.RequireVacant(partialPath);
                 string cleanupError;
-                if (!TryDeletePartial(partialPath, out cleanupError))
-                {
-                    return CloudTransferExecutionResult.Failure("Transfer partial cleanup failed: " + cleanupError);
-                }
                 var parent = Path.GetDirectoryName(normalizedDestination);
                 if (!string.IsNullOrWhiteSpace(parent))
                 {
@@ -109,8 +109,12 @@ namespace PersonalCloudLibrarySource
                     InactivityTimeoutSeconds = settings.RcloneTimeoutSeconds
                 };
                 phase?.Invoke(CloudTransferState.Transferring);
+                TransferPartialPathPolicy.RequireVacant(partialPath);
+                mayOwnPartial = true;
+                processExitConfirmed = false;
                 var processResult = processRunner.Run(request, cancellationToken, progress);
-                if (!processResult.ProcessExitConfirmed)
+                processExitConfirmed = processResult.ProcessExitConfirmed;
+                if (!processExitConfirmed)
                     return CloudTransferExecutionResult.Failure(
                         "rclone exit was not confirmed. Partial data was preserved; stop the process and review staging before retrying.",
                         requiresManualRecovery: true);
@@ -167,6 +171,10 @@ namespace PersonalCloudLibrarySource
             }
             catch (OperationCanceledException)
             {
+                if (!processExitConfirmed)
+                    return CloudTransferExecutionResult.Failure("rclone exit could not be confirmed; preserve staging.",
+                        requiresManualRecovery: true);
+                if (!mayOwnPartial) return CloudTransferExecutionResult.CancelledResult();
                 string cleanupError;
                 if (!TryDeletePartial(partialPath, out cleanupError))
                 {
@@ -177,6 +185,10 @@ namespace PersonalCloudLibrarySource
             }
             catch (Exception ex)
             {
+                if (!processExitConfirmed)
+                    return CloudTransferExecutionResult.Failure("rclone exit could not be confirmed; preserve staging.",
+                        requiresManualRecovery: true);
+                if (!mayOwnPartial) return CloudTransferExecutionResult.Failure(ex.Message, ex);
                 string cleanupError;
                 return TryDeletePartial(partialPath, out cleanupError)
                     ? CloudTransferExecutionResult.Failure(ex.Message, ex)
@@ -267,6 +279,7 @@ namespace PersonalCloudLibrarySource
 
             try
             {
+                TransferPartialPathPolicy.RequireSafePath(path);
                 // Never recursively delete a junction/symlink planted at the
                 // temporary transfer destination, even on cancellation.
                 if ((File.Exists(path) || Directory.Exists(path)) &&

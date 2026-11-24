@@ -181,6 +181,26 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void Copy_PreexistingStagingIsPreservedWithoutStartingProcess()
+        {
+            var destination = Path.Combine(testRoot, "game.zip");
+            var id = Guid.NewGuid();
+            var partial = TransferPartialPathPolicy.Create(destination, id);
+            File.WriteAllText(partial, "preserve");
+            var called = false;
+            var runner = new FakeRcloneProcessRunner(request =>
+            {
+                called = true;
+                return RcloneProcessResult.Success("unexpected");
+            });
+            var result = new RcloneTransferAdapter(runner).Copy(CreateSettings(), "game.zip",
+                destination, false, id, CancellationToken.None, null);
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(called, Is.False);
+            Assert.That(File.ReadAllText(partial), Is.EqualTo("preserve"));
+        }
+
+        [Test]
         public void Copy_ExistingDestination_FailsBeforeStartingRclone()
         {
             var destination = Path.Combine(testRoot, "game.zip");

@@ -149,6 +149,27 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(File.Exists(destination + ".pcls-partial"), Is.False);
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Copy_PreexistingStagingIsPreserved(bool directory)
+        {
+            var source = Path.Combine(testRoot, "source");
+            var destination = Path.Combine(testRoot, "destination");
+            var id = Guid.NewGuid();
+            var partial = TransferPartialPathPolicy.Create(destination, id);
+            var sentinel = directory ? Path.Combine(partial, "keep.txt") : partial;
+            if (directory) { Directory.CreateDirectory(source); Directory.CreateDirectory(partial); }
+            else File.WriteAllText(source, "source");
+            File.WriteAllText(sentinel, "preserve");
+            var adapter = new LocalTransferAdapter();
+            var result = directory
+                ? adapter.CopyDirectory(source, destination, id, CancellationToken.None, null)
+                : adapter.CopyFile(source, destination, id, CancellationToken.None, null);
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(File.ReadAllText(sentinel), Is.EqualTo("preserve"));
+            Assert.That(File.Exists(destination) || Directory.Exists(destination), Is.False);
+        }
+
         [Test]
         public void CopyFile_ExistingDestination_FailsWithoutOverwriting()
         {

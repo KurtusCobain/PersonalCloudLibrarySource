@@ -5,6 +5,25 @@ namespace PersonalCloudLibrarySource
 {
     public static class TransferPartialPathPolicy
     {
+        // A staging name is not proof of ownership. Refuse collisions and
+        // inaccessible/linked paths; never erase pre-existing content to start.
+        internal static void RequireVacant(string path)
+        {
+            RequireSafePath(path);
+            try { File.GetAttributes(path); }
+            catch (FileNotFoundException) { return; }
+            catch (DirectoryNotFoundException) { return; }
+            throw new IOException("Transfer staging already exists. Preserve it for review.");
+        }
+
+        internal static void RequireSafePath(string path)
+        {
+            var parent = Path.GetDirectoryName(Path.GetFullPath(path));
+            var authorization = new SafeCacheDeletionPolicy().Authorize(parent, path, false);
+            if (!authorization.Allowed)
+                throw new IOException("Transfer staging path cannot be verified: " + authorization.Reason);
+        }
+
         public static string Create(string destinationPath, Guid jobId)
         {
             if (string.IsNullOrWhiteSpace(destinationPath))

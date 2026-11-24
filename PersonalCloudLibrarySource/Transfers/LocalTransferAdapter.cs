@@ -55,6 +55,7 @@ namespace PersonalCloudLibrarySource
             Action<long, long?> progress,
             Action<CloudTransferState> phase)
         {
+            var ownsPartial = false;
             try
             {
                 if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
@@ -77,7 +78,8 @@ namespace PersonalCloudLibrarySource
                 if (!string.IsNullOrWhiteSpace(spaceError))
                     return CloudTransferExecutionResult.Failure(spaceError);
 
-                DeleteFileIfExists(partialPath);
+                cancellationToken.ThrowIfCancellationRequested();
+                TransferPartialPathPolicy.RequireVacant(partialPath);
                 var destinationDirectory = Path.GetDirectoryName(destinationPath);
                 if (!string.IsNullOrWhiteSpace(destinationDirectory))
                     Directory.CreateDirectory(destinationDirectory);
@@ -87,7 +89,8 @@ namespace PersonalCloudLibrarySource
                     cancellationToken,
                     totalBytes,
                     0,
-                    progress);
+                    progress,
+                    () => ownsPartial = true);
 
                 phase?.Invoke(CloudTransferState.Verifying);
                 if (!File.Exists(partialPath) || new FileInfo(partialPath).Length != totalBytes)
@@ -103,13 +106,13 @@ namespace PersonalCloudLibrarySource
             }
             catch (OperationCanceledException)
             {
-                DeleteFileIfExists(partialPath);
-                return CloudTransferExecutionResult.CancelledResult();
+                return CleanupOwnedPartial(ownsPartial, partialPath, false,
+                    CloudTransferExecutionResult.CancelledResult());
             }
             catch (Exception ex)
             {
-                DeleteFileIfExists(partialPath);
-                return CloudTransferExecutionResult.Failure(ex.Message, ex);
+                return CleanupOwnedPartial(ownsPartial, partialPath, false,
+                    CloudTransferExecutionResult.Failure(ex.Message, ex));
             }
         }
 
@@ -155,6 +158,7 @@ namespace PersonalCloudLibrarySource
             Action<long, long?> progress,
             Action<CloudTransferState> phase)
         {
+            var ownsPartial = false;
             try
             {
                 if (string.IsNullOrWhiteSpace(sourceDirectory) || !Directory.Exists(sourceDirectory))
@@ -182,7 +186,8 @@ namespace PersonalCloudLibrarySource
                         "Source directory overlaps the cache destination; choose a separate cache location.");
                 }
 
-                DeleteDirectoryIfExists(partialDirectory);
+                cancellationToken.ThrowIfCancellationRequested();
+                TransferPartialPathPolicy.RequireVacant(partialDirectory);
                 var destinationParent = Path.GetDirectoryName(normalizedDestination);
                 if (!string.IsNullOrWhiteSpace(destinationParent))
                 {
@@ -202,7 +207,9 @@ namespace PersonalCloudLibrarySource
                     return CloudTransferExecutionResult.Failure(spaceError);
                 var transferred = 0L;
 
+                TransferPartialPathPolicy.RequireVacant(partialDirectory);
                 Directory.CreateDirectory(partialDirectory);
+                ownsPartial = true;
                 foreach (var directory in directories)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -230,8 +237,10 @@ namespace PersonalCloudLibrarySource
                 }
 
                 phase?.Invoke(CloudTransferState.Verifying);
-                var copiedBytes = Directory.GetFiles(partialDirectory, "*", SearchOption.AllDirectories)
-                    .Sum(file => new FileInfo(file).Length);
+                List<string> verifiedDirectories;
+                List<string> verifiedFiles;
+                CollectSafeSourceTree(partialDirectory, cancellationToken, out verifiedDirectories, out verifiedFiles);
+                var copiedBytes = verifiedFiles.Sum(file => new FileInfo(file).Length);
                 if (copiedBytes != totalBytes)
                 {
                     throw new IOException("The copied directory did not pass size verification.");
@@ -245,13 +254,13 @@ namespace PersonalCloudLibrarySource
             }
             catch (OperationCanceledException)
             {
-                DeleteDirectoryIfExists(partialDirectory);
-                return CloudTransferExecutionResult.CancelledResult();
+                return CleanupOwnedPartial(ownsPartial, partialDirectory, true,
+                    CloudTransferExecutionResult.CancelledResult());
             }
             catch (Exception ex)
             {
-                DeleteDirectoryIfExists(partialDirectory);
-                return CloudTransferExecutionResult.Failure(ex.Message, ex);
+                return CleanupOwnedPartial(ownsPartial, partialDirectory, true,
+                    CloudTransferExecutionResult.Failure(ex.Message, ex));
             }
         }
 
@@ -344,7 +353,7 @@ namespace PersonalCloudLibrarySource
             CancellationToken cancellationToken,
             long totalBytes,
             long alreadyTransferred,
-            Action<long, long?> progress)
+            Action<long, long?> progress, Action created = null)
         {
             var transferred = alreadyTransferred;
             var buffer = new byte[bufferSize];
@@ -363,6 +372,7 @@ namespace PersonalCloudLibrarySource
                 bufferSize,
                 FileOptions.SequentialScan))
             {
+                created?.Invoke();
                 while (true)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -396,21 +406,35 @@ namespace PersonalCloudLibrarySource
             return normalizedFullPath.Substring(normalizedRoot.Length);
         }
 
-        private static void DeleteFileIfExists(string path)
+        private static CloudTransferExecutionResult CleanupOwnedPartial(bool owned,
+            string path, bool directory, CloudTransferExecutionResult result)
         {
-            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+            if (!owned) return result;
+            try
             {
-                File.Delete(path);
+                TransferPartialPathPolicy.RequireSafePath(path);
+                if (directory)
+                {
+                    if (File.Exists(path)) throw new IOException("Staging type changed.");
+                    if (Directory.Exists(path))
+                    {
+                        var refusal = SafeCacheDeletionExecutor.GetUnsafeDescendantReason(path);
+                        if (!string.IsNullOrWhiteSpace(refusal)) throw new IOException(refusal);
+                        Directory.Delete(path, true);
+                    }
+                }
+                else
+                {
+                    if (Directory.Exists(path)) throw new IOException("Staging type changed.");
+                    if (File.Exists(path)) File.Delete(path);
+                }
+                return result;
             }
-        }
-
-        private static void DeleteDirectoryIfExists(string path)
-        {
-            if (!string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
+            catch (Exception)
             {
-                if (!IsSafeCopyEntry(File.GetAttributes(path)))
-                    throw new IOException("Refusing to recursively delete a linked partial directory.");
-                Directory.Delete(path, true);
+                return CloudTransferExecutionResult.Failure(
+                    "Transfer cleanup could not be verified. Preserve staging for manual recovery.",
+                    requiresManualRecovery: true);
             }
         }
     }
