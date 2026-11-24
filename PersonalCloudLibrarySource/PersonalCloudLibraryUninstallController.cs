@@ -41,9 +41,13 @@ namespace PersonalCloudLibrarySource
             // Recheck the distinct managed namespace at the moment of uninstall.
             // Legacy file-only deletion must never silently remove the ZIP
             // source or claim this separately extracted package.
-            if (ownershipReceipts != null && item != null && settings != null &&
-                new ZipManagedMaintenanceService().HasManagedFootprint(
-                    settings.LocalCacheFolder, item.Id, ownershipReceipts))
+            var maintenance = new ZipManagedMaintenanceService();
+            if (item != null && settings != null &&
+                (maintenance.HasManagedFootprint(
+                    settings.LocalCacheFolder, item.Id, ownershipReceipts) ||
+                 (Game != null && !string.Equals(Game.GameId, item.Id, StringComparison.Ordinal) &&
+                  maintenance.HasManagedFootprint(
+                    settings.LocalCacheFolder, Game.GameId, ownershipReceipts))))
             {
                 const string reason = "Managed ZIP extraction exists. Use Review Managed ZIP Maintenance; automatic removal is disabled to protect saves and ownership evidence.";
                 logger.Warn("PCLS refused legacy uninstall for managed ZIP game " + Game.GameId);

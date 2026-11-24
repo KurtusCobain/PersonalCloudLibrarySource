@@ -126,7 +126,12 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Directory.CreateDirectory(Path.GetDirectoryName(destination));
             File.WriteAllText(destination, "cached bytes");
             Assert.That(factory.TryPrepareUninstall(null, game,
-                pluginId, plan, out action), Is.True);
+                pluginId, plan, out action), Is.False,
+                "Missing receipt storage must deny the source-scoped uninstall.");
+            Assert.That(action, Is.Null);
+            var receipts = new CacheOwnershipReceiptStore(Path.Combine(root, "ownership-receipts"));
+            Assert.That(factory.TryPrepareUninstall(null, game,
+                pluginId, plan, out action, receipts), Is.True);
             Assert.That(action, Is.TypeOf<PersonalCloudLibraryUninstallController>());
             action.Dispose();
 
@@ -156,6 +161,35 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(action, Is.Null);
             Assert.That(File.ReadAllText(precious), Is.EqualTo("do not delete"));
             Assert.That(File.ReadAllText(cached), Is.EqualTo("cached game"));
+        }
+
+        [Test]
+        public void PreparedUninstallRefusesLaterNamespacedManagedFootprint()
+        {
+            var added = Profile();
+            added.IsLegacySingleSource = false;
+            var plan = new MultiSourceRuntimeCoordinator().Prepare(
+                new[] { added }, Shared(), null);
+            Assert.That(plan.CanPublish, Is.True, plan.RefusalReason);
+            var identity = plan.Games.Single().GameId;
+            var cached = Path.Combine(cache, "test-game", "game.exe");
+            Directory.CreateDirectory(Path.GetDirectoryName(cached));
+            File.WriteAllText(cached, "cached game");
+            var receipts = new CacheOwnershipReceiptStore(Path.Combine(root, "ownership-receipts"));
+            UninstallController action;
+            Assert.That(new MultiSourceControllerFactory().TryPrepareUninstall(
+                null, Game(identity), pluginId, plan, out action, receipts), Is.True);
+            try
+            {
+                var managed = Path.Combine(cache, ZipManagedExtractionService.ReceiptKeyForGame(identity));
+                Directory.CreateDirectory(managed);
+                var save = Path.Combine(managed, "keep.sav");
+                File.WriteAllText(save, "precious");
+                Assert.Throws<InvalidOperationException>(() => action.Uninstall(new UninstallActionArgs()));
+                Assert.That(File.ReadAllText(cached), Is.EqualTo("cached game"));
+                Assert.That(File.ReadAllText(save), Is.EqualTo("precious"));
+            }
+            finally { action.Dispose(); }
         }
 
         [Test]

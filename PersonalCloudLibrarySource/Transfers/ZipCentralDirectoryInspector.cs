@@ -54,8 +54,9 @@ namespace PersonalCloudLibrarySource
             if (count == 0 || count == ushort.MaxValue ||
                 centralBytes == uint.MaxValue || centralOffset == uint.MaxValue)
                 throw new InvalidDataException("Empty or ZIP64 archives require separate review.");
-            if (count > ArchiveInspectionPolicy.MaxEntries ||
-                centralBytes > MaxCentralBytes)
+            // ZIP32 count is a 16-bit value; its sentinel was rejected above.
+            // The general policy permits 100,000 entries, beyond ZIP32's range.
+            if (centralBytes > MaxCentralBytes)
                 throw new InvalidDataException("ZIP central directory exceeds the safety cap.");
 
             var eocdAbsolute = source.Length - tailSize + eocd;

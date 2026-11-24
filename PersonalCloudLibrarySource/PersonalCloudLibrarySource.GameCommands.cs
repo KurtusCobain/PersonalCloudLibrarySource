@@ -179,7 +179,8 @@ namespace PersonalCloudLibrarySource
             // Permanent cleanup is intentionally separate from reversible
             // quarantine and requires TWO explicit confirmations. It appears
             // only for a quarantined or partially cleaned managed ZIP.
-            if (target.Item != null && menuSnapshot != null &&
+            if (PermanentZipCleanupHostEnabled &&
+                target.Item != null && menuSnapshot != null &&
                 !activeZipCleanups.ContainsKey(target.Game.Id))
             {
                 var purgeState = new ZipManagedRecoveryService(Path.Combine(

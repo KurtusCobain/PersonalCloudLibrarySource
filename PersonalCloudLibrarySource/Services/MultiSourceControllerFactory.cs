@@ -5,7 +5,7 @@ using System;
 
 namespace PersonalCloudLibrarySource
 {
-    // Not wired to the live LibraryPlugin methods yet. This factory is an
+    // Used by the opt-in multi-source LibraryPlugin methods. This factory is an
     // explicit fail-closed bridge from frozen source routes to Playnite actions.
     // Do not construct actions from the globally selected source settings.
     public sealed class MultiSourceControllerFactory
@@ -44,7 +44,7 @@ namespace PersonalCloudLibrarySource
         {
             controller = null;
             SourceScopedGameAction route;
-            if (!TryResolveOwnedGame(game, expectedPluginId, plan, out route))
+            if (receipts == null || !TryResolveOwnedGame(game, expectedPluginId, plan, out route))
                 return false;
 
             var item = route.CreateItemSnapshot();
@@ -53,15 +53,12 @@ namespace PersonalCloudLibrarySource
             // Multi-source routing cannot resurrect the legacy uninstall for
             // an extracted ZIP. Check both the source manifest ID and scoped
             // game identity: historic cache records may use either namespace.
-            if (receipts != null)
-            {
-                var maintenance = new ZipManagedMaintenanceService();
-                if (maintenance.HasManagedFootprint(
-                        sourceSettings.LocalCacheFolder, item.Id, receipts) ||
-                    maintenance.HasManagedFootprint(
-                        sourceSettings.LocalCacheFolder, route.GameId, receipts))
-                    return false;
-            }
+            var maintenance = new ZipManagedMaintenanceService();
+            if (maintenance.HasManagedFootprint(
+                    sourceSettings.LocalCacheFolder, item.Id, receipts) ||
+                maintenance.HasManagedFootprint(
+                    sourceSettings.LocalCacheFolder, route.GameId, receipts))
+                return false;
 
             // Multi-source mode never inherits external-cache deletion opt-ins,
             // and recursive folder deletion remains disabled by existing policy.

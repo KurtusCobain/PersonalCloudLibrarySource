@@ -11,6 +11,11 @@ namespace PersonalCloudLibrarySource
 {
     public partial class PersonalCloudLibrarySource
     {
+        // Release gate: pathname-based irreversible deletion is not yet proven
+        // against concurrent replacement. Keep the engine for isolated fixtures,
+        // but do not expose it through the Playnite host until qualified.
+        private static readonly bool PermanentZipCleanupHostEnabled = false;
+
         private readonly ConcurrentDictionary<Guid, CancellationTokenSource> activeZipCleanups =
             new ConcurrentDictionary<Guid, CancellationTokenSource>();
 
@@ -169,6 +174,8 @@ namespace PersonalCloudLibrarySource
         // manifest. The service never recursively deletes folders or files.
         private async void PermanentlyCleanupZipAsync(GameCommandTarget selected)
         {
+            if (!PermanentZipCleanupHostEnabled)
+                return;
             var title = PclsResources.Get("LOCPLSZipPermanentCleanupTitle",
                 "Permanently Remove Quarantined ZIP Files");
             var registered = false;

@@ -115,7 +115,7 @@ namespace PersonalCloudLibrarySource
         }
     }
 
-    // Purely opt-in coordinator, NOT yet called by LibraryPlugin.GetGames.
+    // Opt-in coordinator called by LibraryPlugin.GetGames in multi-source mode.
     // No Playnite database mutation, no settings save, and no cache deletion.
     // A failure in any source means that NONE of the combined games can publish.
     public sealed class MultiSourceRuntimeCoordinator
