@@ -323,7 +323,13 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             var next = manager.Retry(failed.Id);
             manager.Transition(next.Id, CloudTransferState.Transferring);
             manager.Transition(next.Id, quarantine ? CloudTransferState.Failed : CloudTransferState.Completed);
-            if (quarantine) manager.MarkRequiresManualRecovery(next.Id);
+            if (quarantine)
+            {
+                var mark = typeof(CloudTransferManager).GetMethod("MarkRequiresManualRecovery",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                Assert.That(mark, Is.Not.Null);
+                mark.Invoke(manager, new object[] { next.Id });
+            }
 
             Assert.That(manager.GetLatestRetryableJobForGame(gameId), Is.Null);
             Assert.That(manager.GetJob(failed.Id), Is.SameAs(failed));
