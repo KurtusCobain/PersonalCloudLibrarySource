@@ -33,4 +33,8 @@ The official Playnite add-on database already has a PCLS listing pointing to thi
 - Cached-size display can overcount a single game when multiple games share the same cache directory.
 - Three genuine privacy-safe Windows QA screenshots were selected for the public gallery, but the independent screenshot asset update requires a separate publication check; existing listing screenshot URLs remain unchanged.
 
+## Isolated development candidate — November 24, 2026
+
+The public release above is unchanged. The latest internal candidate is undergoing stabilization and is **not approved for publication or installation over a real user library**. Its checks are distinct from the historical v0.3.2 acceptance. See [stabilization qualification](engineering/stabilization-qualification-20261124.md) and the [engineering ledger](engineering/stabilization-baseline-20261124.md).
+
 Do not confuse this v0.3.2 public release with the future 1.0 milestone.
