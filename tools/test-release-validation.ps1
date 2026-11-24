@@ -199,6 +199,29 @@ try {
         Assert-ThrowsLike { Test-ReleasePackage -PackagePath $extra -ExtensionPath (Join-Path $root 'PersonalCloudLibrarySource\extension.yaml') } 'unexpected.*Leaked.cs'
     }
 
+    Test-Case 'Package inspection refuses traversal duplicate and file-parent conflicts without extraction' {
+        $root = Join-Path $testRoot 'unsafe-package'
+        New-TestRepository $root
+        $extension = Join-Path $root 'PersonalCloudLibrarySource\extension.yaml'
+        $fixtures = @(
+            @{ Name = '../outside.txt'; Pattern = 'Unsafe package entry path' },
+            @{ Name = 'ICON.PNG'; Pattern = 'Duplicate package entry' },
+            @{ Name = 'icon.png/child'; Pattern = 'file/parent conflict' }
+        )
+        foreach ($fixture in $fixtures) {
+            $path = Join-Path $root ('case-' + [guid]::NewGuid().ToString('N') + '\PersonalCloudLibrarySource-0.3.2.pext')
+            New-Item (Split-Path $path) -ItemType Directory -Force | Out-Null
+            New-TestPackage $root $path
+            $archive = [IO.Compression.ZipFile]::Open($path, [IO.Compression.ZipArchiveMode]::Update)
+            try {
+                $stream = $archive.CreateEntry($fixture.Name).Open()
+                try { $stream.WriteByte(0) } finally { $stream.Dispose() }
+            }
+            finally { $archive.Dispose() }
+            Assert-ThrowsLike { Test-ReleasePackage -PackagePath $path -ExtensionPath $extension } $fixture.Pattern
+        }
+    }
+
     Test-Case 'Official Toolbox output must use the Toolbox identity and version filename' {
         $root = Join-Path $testRoot 'official-name'
         New-TestRepository $root

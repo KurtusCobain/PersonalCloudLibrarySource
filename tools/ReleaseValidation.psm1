@@ -14,7 +14,15 @@ function Read-DistributionYaml {
     param([Parameter(Mandatory)][string]$Path)
 
     $resolved = (Resolve-Path -LiteralPath $Path).Path
+    if ((Get-Item -LiteralPath $resolved).Length -gt 65536) { throw 'YAML document exceeds inspection budget.' }
     $text = Get-Content -LiteralPath $resolved -Raw
+    Read-DistributionYamlText -Text $text -Path $resolved
+}
+
+function Read-DistributionYamlText {
+    param([string]$Text, [string]$Path)
+    $resolved = $Path
+    if ($text.Length -gt 65536) { throw 'YAML document exceeds inspection budget.' }
     if ([string]::IsNullOrWhiteSpace($text)) { throw "YAML document is empty: $resolved" }
 
     $tokens = New-Object System.Collections.ArrayList
@@ -25,6 +33,7 @@ function Read-DistributionYaml {
         if ($rawLine -match '^\s*$' -or $rawLine -match '^\s*#') { continue }
         $indent = $rawLine.Length - $rawLine.TrimStart(' ').Length
         if (($indent % 2) -ne 0) { throw "YAML indentation at line $lineNumber must use two-space levels." }
+        if ($indent -gt 128) { throw "YAML nesting exceeds inspection budget at line $lineNumber." }
         [void]$tokens.Add([pscustomobject]@{ Line = $lineNumber; Indent = $indent; Text = $rawLine.TrimStart(' ') })
     }
     if ($tokens.Count -eq 0) { throw "YAML document is empty: $resolved" }
@@ -224,6 +233,87 @@ function Assert-ReleaseSurfaces {
     [pscustomobject]@{ Id = $id; Name = $name; Version = $version; PackageName = "PersonalCloudLibrarySource-$version.pext" }
 }
 
+# Inspect a bounded ZIP directory without expanding untrusted paths. Keep the
+# baseline and official Toolbox validators on the same archive safety contract.
+function Open-PclsPackageArchive {
+    param([Parameter(Mandatory)][string]$Path)
+    $resolved = (Resolve-Path -LiteralPath $Path).Path
+    if ((Get-Item -LiteralPath $resolved).Length -gt 67108864) { throw 'Package exceeds inspection byte budget.' }
+    Add-Type -AssemblyName System.IO.Compression
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::OpenRead($resolved)
+}
+
+function Get-PclsPackageIndex {
+    param([Parameter(Mandatory)]$Archive)
+    $files = [System.Collections.Generic.Dictionary[string,System.IO.Compression.ZipArchiveEntry]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    $totalBytes = [long]0
+    if ($Archive.Entries.Count -gt 4096) { throw 'Package entry count exceeds inspection budget.' }
+    foreach ($entry in $Archive.Entries) {
+        $name = $entry.FullName.Replace([char]0x5c, [char]0x2f)
+        $directory = $name.EndsWith('/')
+        $name = $name.TrimEnd([char]0x2f)
+        $segments = $name.Split('/')
+        if ([string]::IsNullOrWhiteSpace($name) -or $segments.Count -gt 64 -or
+            ($segments | Where-Object {
+                [string]::IsNullOrWhiteSpace($_) -or $_ -eq '.' -or $_ -eq '..' -or
+                $_ -match '[<>:"|?*\x00-\x1f]' -or $_.EndsWith('.') -or $_.EndsWith(' ') -or
+                $_ -match '^(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)'
+            })) {
+            throw "Unsafe package entry path: $name"
+        }
+        if (-not $seen.Add($name)) { throw "Duplicate package entry: $name" }
+        if ($entry.Length -lt 0 -or $entry.Length -gt 67108864 -or
+            $totalBytes -gt (134217728 - $entry.Length)) {
+            throw 'Package expanded byte count exceeds inspection budget.'
+        }
+        $totalBytes += $entry.Length
+        if ($directory -and $entry.Length -ne 0) { throw "Directory package entry contains data: $name" }
+        if ($entry.PSObject.Properties['ExternalAttributes']) {
+            $attributes = $entry.ExternalAttributes
+            $unixType = ($attributes -shr 16) -band 0xF000
+            if (($attributes -band 0x400) -ne 0 -or
+                ($unixType -ne 0 -and $unixType -ne 0x8000 -and $unixType -ne 0x4000) -or
+                ($unixType -eq 0x4000 -and -not $directory) -or
+                ($unixType -eq 0x8000 -and $directory)) {
+                throw "Linked or special package entry: $name"
+            }
+        }
+        if (-not $directory) { $files.Add($name, $entry) }
+    }
+    foreach ($name in $seen) {
+        $slash = $name.LastIndexOf('/')
+        while ($slash -gt 0) {
+            $parent = $name.Substring(0, $slash)
+            if ($files.ContainsKey($parent)) { throw "Package file/parent conflict: $name" }
+            $slash = $name.LastIndexOf('/', $slash - 1)
+        }
+    }
+    return ,$files
+}
+
+function Read-PclsPackageMetadata {
+    param([Parameter(Mandatory)]$Entry)
+    $limit = 65536
+    if ($Entry.Length -gt $limit) { throw 'Package metadata exceeds inspection budget.' }
+    $stream = $Entry.Open()
+    try {
+        $buffer = New-Object byte[] 4096
+        $data = New-Object System.IO.MemoryStream
+        try {
+            while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
+                if ($data.Length + $read -gt $limit) { throw 'Package metadata exceeds inspection budget.' }
+                $data.Write($buffer, 0, $read)
+            }
+            if ($data.Length -ne $Entry.Length) { throw 'Package metadata size mismatch.' }
+            return [System.Text.Encoding]::UTF8.GetString($data.ToArray()).TrimStart([char]0xFEFF)
+        }
+        finally { $data.Dispose() }
+    }
+    finally { $stream.Dispose() }
+}
+
 function Test-ReleasePackage {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$PackagePath, [Parameter(Mandatory)][string]$ExtensionPath)
@@ -231,23 +321,25 @@ function Test-ReleasePackage {
     $version = Get-RequiredYamlScalar $extension 'Version'
     $expectedName = "PersonalCloudLibrarySource-$version.pext"
     if ([IO.Path]::GetFileName($PackagePath) -ne $expectedName) { throw "Package filename must be derived from extension.yaml: $expectedName" }
-    $temp = Join-Path ([IO.Path]::GetTempPath()) ('pcls-release-inspect-' + [guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $temp -Force | Out-Null
+    $archive = Open-PclsPackageArchive -Path $PackagePath
     try {
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        [IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path $PackagePath).Path, $temp)
         $required = @('PersonalCloudLibrarySource.dll','extension.yaml','LICENSE','icon.png','Localization/en_US.xaml','Assets/pcls-logo-wide.png')
-        $actual = @(Get-ChildItem -LiteralPath $temp -File -Recurse | ForEach-Object { $_.FullName.Substring($temp.Length).TrimStart('\','/').Replace('\','/') })
-        foreach ($path in $required) { if ($actual -notcontains $path) { throw "Package is missing required file: $path" } }
+        $files = Get-PclsPackageIndex -Archive $archive
+        $actual = @($files.Keys)
+        foreach ($path in $required) { if (-not $files.ContainsKey($path)) { throw "Package is missing required file: $path" } }
         $extra = @($actual | Where-Object { $required -notcontains $_ })
         if ($extra.Count) { throw "Package contains unexpected file(s): $($extra -join ', ')" }
-        $packed = Read-DistributionYaml (Join-Path $temp 'extension.yaml')
+        $packed = Read-DistributionYamlText -Text (Read-PclsPackageMetadata $files['extension.yaml']) -Path 'package:extension.yaml'
+        $license = Read-PclsPackageMetadata $files['LICENSE']
+        if (-not $license.Contains('MIT License') -or -not $license.Contains('The Bearclaw & ztwslayer')) {
+            throw 'Package is missing required MIT attribution.'
+        }
         foreach ($key in @('Id','Name','Version','Module','Type','Icon')) {
             if ((Get-RequiredYamlScalar $packed $key) -ne (Get-RequiredYamlScalar $extension $key)) { throw "Packaged extension.yaml $key does not match source." }
         }
         [pscustomobject]@{ Version = $version; PackageName = $expectedName; Files = $actual }
     }
-    finally { Remove-Item -LiteralPath $temp -Recurse -Force -ErrorAction SilentlyContinue }
+    finally { $archive.Dispose() }
 }
 
 function Test-OfficialToolboxOutput {
@@ -278,4 +370,4 @@ function Test-OfficialToolboxOutput {
     }
 }
 
-Export-ModuleMember -Function Find-PlayniteToolbox, Read-DistributionYaml, Assert-ReleaseSurfaces, Test-ReleasePackage, Test-OfficialToolboxOutput
+Export-ModuleMember -Function Find-PlayniteToolbox, Read-DistributionYaml, Assert-ReleaseSurfaces, Test-ReleasePackage, Test-OfficialToolboxOutput, Open-PclsPackageArchive, Get-PclsPackageIndex, Read-PclsPackageMetadata

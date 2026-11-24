@@ -56,32 +56,10 @@ if ($PackagePath) {
         throw "Package filename does not match extension.yaml. Expected: $expectedName"
     }
 
-    # Inspect the ZIP directory and small metadata streams directly. This works
-    # in Windows PowerShell 5.1 and PowerShell 7 and never extracts untrusted paths.
-    Add-Type -AssemblyName System.IO.Compression
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $archive = [System.IO.Compression.ZipFile]::OpenRead($resolvedPackagePath)
+    Import-Module (Join-Path $PSScriptRoot 'ReleaseValidation.psm1') -Force
+    $archive = Open-PclsPackageArchive -Path $resolvedPackagePath
     try {
-        $files = [System.Collections.Generic.Dictionary[string,System.IO.Compression.ZipArchiveEntry]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        $seen = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
-        if ($archive.Entries.Count -gt 4096) { throw 'Package entry count exceeds inspection budget.' }
-
-        foreach ($entry in $archive.Entries) {
-            $name = $entry.FullName.Replace([char]0x5c, [char]0x2f)
-            $directory = $name.EndsWith('/')
-            $name = $name.TrimEnd([char]0x2f)
-            $segments = $name.Split('/')
-            if ([string]::IsNullOrWhiteSpace($name) -or $segments.Count -gt 64 -or
-                ($segments | Where-Object {
-                    [string]::IsNullOrWhiteSpace($_) -or $_ -eq '.' -or $_ -eq '..' -or
-                    $_ -match '[<>:"|?*\x00-\x1f]' -or $_.EndsWith('.') -or $_.EndsWith(' ') -or
-                    $_ -match '^(?i:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)'
-                })) {
-                throw "Unsafe package entry path: $name"
-            }
-            if (-not $seen.Add($name)) { throw "Duplicate package entry: $name" }
-            if (-not $directory) { $files.Add($name, $entry) }
-        }
+        $files = Get-PclsPackageIndex -Archive $archive
 
         $requiredPaths = @(
             'PersonalCloudLibrarySource.dll',
@@ -110,32 +88,11 @@ if ($PackagePath) {
             throw "Packaged extension contains forbidden file(s): $($forbiddenFiles -join ', ')"
         }
 
-        function Read-PackageMetadata {
-            param([System.IO.Compression.ZipArchiveEntry]$Entry)
-            $limit = 65536
-            if ($Entry.Length -gt $limit) { throw 'Package metadata exceeds inspection budget.' }
-            $stream = $Entry.Open()
-            try {
-                $buffer = New-Object byte[] 4096
-                $data = New-Object System.IO.MemoryStream
-                try {
-                    while (($read = $stream.Read($buffer, 0, $buffer.Length)) -gt 0) {
-                        if ($data.Length + $read -gt $limit) { throw 'Package metadata exceeds inspection budget.' }
-                        $data.Write($buffer, 0, $read)
-                    }
-                    if ($data.Length -ne $Entry.Length) { throw 'Package metadata size mismatch.' }
-                    return [System.Text.Encoding]::UTF8.GetString($data.ToArray()).TrimStart([char]0xFEFF)
-                }
-                finally { $data.Dispose() }
-            }
-            finally { $stream.Dispose() }
-        }
-
-        $licenseNotice = Read-PackageMetadata $files['LICENSE']
+        $licenseNotice = Read-PclsPackageMetadata $files['LICENSE']
         Assert-Contains $licenseNotice 'MIT License' 'Package must retain the MIT license.'
         Assert-Contains $licenseNotice 'The Bearclaw & ztwslayer' 'Package must retain the contributor copyright attribution.'
 
-        $manifestText = Read-PackageMetadata $files['extension.yaml']
+        $manifestText = Read-PclsPackageMetadata $files['extension.yaml']
         $match = [regex]::Match($manifestText, '(?m)^Version:\s*(.+)$')
         $packagedVersion = $match.Groups[1].Value.Trim()
         if (-not $match.Success -or $packagedVersion -ne $version) {
