@@ -22,6 +22,20 @@
 | [ee96a5b9](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45353276912) | 856 pass, 0 fail, 2 skips; 0 warnings | Worker and retry execution guard |
 | [b17f6a75](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45353470187) | 858 pass, 0 fail, 2 skips; 0 warnings | Hosted retry intent and fresh controller routing |
 | [14e7ff8d](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45353612000) | 859 pass, 0 fail, 2 skips; 0 warnings | Reservation indexing and benchmark |
+| [a72d780e](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45354060663) | 862 pass, 0 fail, 2 skips; 0 warnings | Transactional catalog generation |
+| [8acd241f](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45354166828) | 863 pass, 0 fail, 2 skips; 0 warnings | Committed dashboard state; archive and CodeQL passed |
+| [06543920](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45355357537) | Debug test compilation failed | Internal-method access in fixture; corrected at 38c15dcf; not qualified |
+| [38c15dcf](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45355426471) | 866 pass, 0 fail, 2 skips; 0 warnings | Superseded retry refusal; archive and CodeQL passed |
+| [b1630ffc](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45355538787) | 867 pass, 0 fail, 2 skips; 0 warnings | Recovery path observations; archive and CodeQL passed |
+| [2b5dbd3f](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45355721004) | 868 pass, 0 fail, 2 skips; 0 warnings | Superseded retry-context release; archive passed |
+| [33f53ba6](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45355786366) | 869 pass, 0 fail, 2 skips; 0 warnings | Stable attempt order and manager retry guard; archive passed |
+| [9f273e80](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45355888084) | 872 pass, 0 fail, 2 skips; 0 warnings | Ambiguous launch and late setup cancellation; archive passed |
+
+### Pending candidates (not qualified at this ledger entry)
+
+- [301cb214](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45356172933): batched in-memory history retention; tests for completion ownership, retry fences and quarantine.
+- [9d563062](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45356246805): additional 550-transfer automatic-pruning fixture.
+- Later CodeQL conclusions must be read against the exact candidate SHA; no success assumed.
 
 Windows build and CodeQL workflow conclusions are not proof of absence of vulnerabilities or native Playnite acceptance. A passing archive compatibility workflow only qualifies the isolated decoder probe, not shipping 7z/RAR install behavior. Review current run evidence by exact commit.
 
@@ -39,10 +53,10 @@ Windows build and CodeQL workflow conclusions are not proof of absence of vulner
 | Main/tag protection and release authorization | Recommendations documented; owner approval required for repository settings |
 | Consolidation | Original branches retained; PR #22 overlap review recorded in ledger; review remaining unique work and preserve history |
 | Semantic source audit | Structural compile inventory and targeted repairs complete; comprehensive member/reference analysis and scripts/configuration review incomplete |
-| Security | No automatic permanent ZIP cleanup; verify filesystem replacement races, hardlinks, process-tree containment, malformed journal and power-loss recovery |
-| Transfer history | Session history still grows; design bounded retention without dropping unresolved evidence or latest retries |
+| Security | Ambiguous rclone launch and late cancellation hardened; no automatic permanent ZIP cleanup. Verify filesystem replacement races, hardlinks, process-tree containment, malformed journal and power-loss recovery. |
+| Transfer history | Soft-cap candidate implemented: 512 ordinary terminal attempts, batched pruning, protected unclaimed results/latest retry/fences/quarantine; exact candidate CI and native host acceptance pending. Protected history may exceed cap. |
 | Runtime settings and retry | Native Playnite database reconciliation and stale controller/action cases require qualification |
-| Recovery | Persistent reservation refusal and read-only menu review implemented and regression-tested; manual resolution and native host presentation still require qualification |
+| Recovery | Persistent reservation refusal and read-only path observations implemented and regression-tested; explicit manual resolution remains blocked by process/ownership/handle identity evidence and native host presentation. |
 | Multi-source | Experimental activation and isolated identity routing; verify real host import/refresh/migration and source disappearance |
 | Archive support | Shipping ZIP path only; 7z/RAR decoder is isolated compatibility evidence; do not claim full support |
 | UI | Localized resource audit passed; keyboard/controller, DPI, theme and genuine screenshot review pending |
