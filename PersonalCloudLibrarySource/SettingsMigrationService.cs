@@ -114,7 +114,8 @@ namespace PersonalCloudLibrarySource
                 appliedVersions.Add(settings.SettingsVersion);
             }
 
-            if (settings.TransferConcurrency < 1 || settings.TransferConcurrency > 4)
+            var normalizedConcurrency = settings.TransferConcurrency < 1 || settings.TransferConcurrency > 4;
+            if (normalizedConcurrency)
             {
                 settings.TransferConcurrency = 1;
             }
@@ -130,7 +131,7 @@ namespace PersonalCloudLibrarySource
             return new SettingsMigrationResult(
                 settings,
                 previousVersion,
-                appliedVersions.Count > 0 || normalizedUninstall,
+                appliedVersions.Count > 0 || normalizedUninstall || normalizedConcurrency,
                 appliedVersions);
         }
 
@@ -205,13 +206,16 @@ namespace PersonalCloudLibrarySource
             // instead of reopening the first-run wizard.
             if (!settings.SetupCompleted && !settings.SetupDismissed)
             {
-                settings.SetupCompleted = HasPriorSetupConfiguration(settings);
+                settings.SetupCompleted = HasConfiguredSource(settings);
             }
             settings.SettingsVersion = 5;
         }
 
-        private static bool HasPriorSetupConfiguration(PersonalCloudLibrarySourceSettings settings)
+        // Configuration presence is distinct from current accessibility,
+        // enablement, wizard validation and permission to execute transfers.
+        internal static bool HasConfiguredSource(PersonalCloudLibrarySourceSettings settings)
         {
+            if (settings == null) return false;
             var provider = PersonalCloudLibrarySource.GetProviderType(settings);
             if (string.Equals(provider, PersonalCloudLibrarySourceSettings.LocalFileProviderType, StringComparison.OrdinalIgnoreCase))
             {

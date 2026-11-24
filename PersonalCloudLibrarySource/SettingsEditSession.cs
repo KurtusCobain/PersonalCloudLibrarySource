@@ -53,8 +53,11 @@ namespace PersonalCloudLibrarySource
 
             // Persistence and later runtime consumers receive a stable copy,
             // never the mutable object still referenced by the settings UI.
-            committedSnapshot = SettingsMigrationService.CloneForEditing(current);
-            save(SettingsMigrationService.CloneForEditing(committedSnapshot));
+            var candidate = SettingsMigrationService.CloneForEditing(current);
+            save(SettingsMigrationService.CloneForEditing(candidate));
+            // Publish only after successful persistence. A failed save leaves
+            // the edit active and does not expose an uncommitted snapshot.
+            committedSnapshot = candidate;
             preEditSnapshot = null;
             isActive = false;
             return true;

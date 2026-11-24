@@ -34,32 +34,8 @@ namespace PersonalCloudLibrarySource
 
         public bool IsSetupComplete(PersonalCloudLibrarySourceSettings settings)
         {
-            if (settings == null || !settings.Enabled)
-            {
-                return false;
-            }
-
-            var providerType = PersonalCloudLibrarySource.GetProviderType(settings);
-            if (string.Equals(providerType, PersonalCloudLibrarySourceSettings.LocalFileProviderType, StringComparison.OrdinalIgnoreCase))
-            {
-                return !string.IsNullOrWhiteSpace(settings.LocalManifestPath);
-            }
-
-            if (string.Equals(providerType, PersonalCloudLibrarySourceSettings.LocalFolderProviderType, StringComparison.OrdinalIgnoreCase))
-            {
-                return !string.IsNullOrWhiteSpace(settings.LocalLibraryRoot) &&
-                       (!string.IsNullOrWhiteSpace(settings.LocalManifestPath) ||
-                        !string.IsNullOrWhiteSpace(settings.ManifestRelativePath));
-            }
-
-            if (string.Equals(providerType, PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType, StringComparison.OrdinalIgnoreCase))
-            {
-                return !string.IsNullOrWhiteSpace(settings.RcloneExecutablePath) &&
-                       !string.IsNullOrWhiteSpace(settings.RcloneRemoteName) &&
-                       !string.IsNullOrWhiteSpace(settings.RcloneManifestPath);
-            }
-
-            return false;
+            return settings != null && settings.Enabled &&
+                SettingsMigrationService.HasConfiguredSource(settings);
         }
 
         private static DashboardStatusKind ResolveStatus(bool setupComplete, LibraryStatusContext context)

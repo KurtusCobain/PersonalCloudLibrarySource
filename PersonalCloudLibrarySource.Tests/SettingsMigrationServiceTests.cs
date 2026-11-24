@@ -142,6 +142,34 @@ namespace PersonalCloudLibrarySource.Tests
         }
 
         [Test]
+        public void Migrate_CurrentVersionInvalidConcurrencyReportsRepairOnce()
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                SettingsVersion = PersonalCloudLibrarySourceSettingsV3.CurrentSettingsVersion,
+                TransferConcurrency = 99
+            };
+            Assert.That(SettingsMigrationService.Migrate(settings).WasMigrated, Is.True);
+            Assert.That(settings.TransferConcurrency, Is.EqualTo(1));
+            Assert.That(SettingsMigrationService.Migrate(settings).WasMigrated, Is.False);
+        }
+
+        [Test]
+        public void Migrate_DisabledConfiguredSourceRetainsPriorSetupButDashboardIsNotReady()
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                Enabled = false,
+                SettingsVersion = 4,
+                SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType,
+                LocalManifestPath = "catalog.json"
+            };
+            SettingsMigrationService.Migrate(settings);
+            Assert.That(settings.SetupCompleted, Is.True);
+            Assert.That(new LibraryStatusService().IsSetupComplete(settings), Is.False);
+        }
+
+        [Test]
         public void Migrate_CurrentVersionAskEachTime_NormalizesOnceWithoutDroppingPaths()
         {
             var settings = new PersonalCloudLibrarySourceSettingsV3

@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using System.Linq;
+using System.IO;
 
 namespace PersonalCloudLibrarySource.Tests
 {
@@ -87,6 +88,38 @@ namespace PersonalCloudLibrarySource.Tests
             isValid = true;
             Assert.That(session.EndEdit(working), Is.True);
             Assert.That(saveCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void FailedSaveDoesNotPublishCandidateAndAllowsCorrection()
+        {
+            var settings = CreateConfiguredSettings();
+            var fail = true;
+            var session = new SettingsEditSession(() => true, saved =>
+            {
+                if (fail) throw new IOException("fixture save failure");
+            });
+            session.BeginEdit(settings);
+            settings.LibraryDisplayName = "Unsaved";
+            Assert.Throws<IOException>(() => session.EndEdit(settings));
+            Assert.That(session.GetCommittedSnapshot(), Is.Null);
+            fail = false;
+            settings.LibraryDisplayName = "Corrected";
+            Assert.That(session.EndEdit(settings), Is.True);
+            Assert.That(session.GetCommittedSnapshot().LibraryDisplayName, Is.EqualTo("Corrected"));
+        }
+
+        [Test]
+        public void FailedSaveThenCancelRestoresOriginal()
+        {
+            var settings = CreateConfiguredSettings();
+            var session = new SettingsEditSession(() => true, saved => throw new IOException("fixture"));
+            session.BeginEdit(settings);
+            settings.LibraryDisplayName = "Unsaved";
+            Assert.Throws<IOException>(() => session.EndEdit(settings));
+            session.CancelEdit(settings);
+            Assert.That(settings.LibraryDisplayName, Is.EqualTo("Original"));
+            Assert.That(session.GetCommittedSnapshot(), Is.Null);
         }
 
         [Test]
