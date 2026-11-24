@@ -15,11 +15,14 @@ namespace PersonalCloudLibrarySource
         public CacheDeletionAuthorization Authorize(string cacheRoot, string targetPath, bool allowOutsideCache)
         {
             if (string.IsNullOrWhiteSpace(targetPath)) return Refuse("uninstall target path is empty");
-            if (!IsFullyRooted(targetPath)) return Refuse("uninstall target path must be fully rooted");
             string target;
             string cache;
             try
             {
+                if (!IsFullyRooted(targetPath)) return Refuse("uninstall target path must be fully rooted");
+                if (IsUnsupportedWindowsPath(targetPath) ||
+                    (!string.IsNullOrWhiteSpace(cacheRoot) && IsUnsupportedWindowsPath(cacheRoot)))
+                    return Refuse("device namespaces, alternate streams and ambiguous Windows paths are unsupported");
                 if (IsVolumeOrShareRoot(targetPath)) return Refuse("uninstall target is a drive or share root");
                 target = PathBoundary.Normalize(targetPath);
                 cache = string.IsNullOrWhiteSpace(cacheRoot) ? string.Empty : PathBoundary.Normalize(cacheRoot);
@@ -31,6 +34,10 @@ namespace PersonalCloudLibrarySource
 
             if (!string.IsNullOrWhiteSpace(cache) && string.Equals(target, cache, StringComparison.OrdinalIgnoreCase))
                 return Refuse("uninstall target is LocalCacheFolder itself");
+            // Outside-cache opt-in never authorizes an ancestor of the cache.
+            // This invariant also applies to the legacy directory executor.
+            if (!string.IsNullOrWhiteSpace(cache) && PathBoundary.IsContained(target, cache))
+                return Refuse("uninstall target is an ancestor of LocalCacheFolder");
             if (!allowOutsideCache && !PathBoundary.IsContained(cache, target))
                 return Refuse("uninstall target is outside LocalCacheFolder");
 
@@ -46,11 +53,13 @@ namespace PersonalCloudLibrarySource
             {
                 try
                 {
-                    if ((File.Exists(current) || Directory.Exists(current)) &&
-                        (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) return current;
+                    if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0) return current;
                 }
+                catch (FileNotFoundException) { }
+                catch (DirectoryNotFoundException) { }
                 catch
                 {
+                    // Access denied or unknown state is not proof of absence.
                     return current;
                 }
                 var parent = Path.GetDirectoryName(current);
@@ -68,6 +77,36 @@ namespace PersonalCloudLibrarySource
                 full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
                 root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
                 StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Selective adaptation of the path-hardening review in CH-Rm's MIT
+        // fork (ce15ba47); keep upstream policy and avoid device/ADS aliases.
+        private static bool IsUnsupportedWindowsPath(string path)
+        {
+            var value = path.Replace('/', '\\');
+            if (value.StartsWith(@"\\?\", StringComparison.Ordinal) ||
+                value.StartsWith(@"\\.\", StringComparison.Ordinal) ||
+                value.StartsWith(@"\??\", StringComparison.Ordinal) ||
+                value.StartsWith(@"\Device\", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // The only permitted colon is the drive-letter separator.
+            var start = value.Length >= 2 && char.IsLetter(value[0]) && value[1] == ':' ? 2 : 0;
+            if (value.IndexOf(':', start) >= 0) return true;
+            foreach (var segment in value.Split(new[] { '\\' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (segment == "." || segment == "..") continue;
+                if (segment.EndsWith(" ", StringComparison.Ordinal) ||
+                    segment.EndsWith(".", StringComparison.Ordinal))
+                    return true;
+                var name = segment.Split('.')[0].TrimEnd(' ');
+                if (System.Text.RegularExpressions.Regex.IsMatch(name,
+                    @"^(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])$",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase |
+                    System.Text.RegularExpressions.RegexOptions.CultureInvariant))
+                    return true;
+            }
+            return false;
         }
 
         private static bool IsFullyRooted(string path)

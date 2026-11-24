@@ -65,6 +65,24 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(policy.Authorize(cacheRoot, Path.GetPathRoot(cacheRoot), true).Allowed, Is.False);
         }
 
+        [TestCase(@"\\?\C:\game.exe")]
+        [TestCase(@"\\.\C:\game.exe")]
+        [TestCase(@"C:\game.exe:alternate")]
+        [TestCase(@"C:\folder\NUL.txt")]
+        [TestCase(@"C:\folder\game.exe.")]
+        public void Authorize_UnsupportedWindowsAlias_IsRefused(string target)
+        {
+            Assert.That(new SafeCacheDeletionPolicy().Authorize(cacheRoot, target, true).Allowed, Is.False);
+        }
+
+        [Test]
+        public void Authorize_OutsideOptInNeverAuthorizesCacheAncestor()
+        {
+            var policy = new SafeCacheDeletionPolicy();
+            Assert.That(policy.Authorize(cacheRoot, testRoot, true).Allowed, Is.False);
+            Assert.That(policy.Authorize(cacheRoot, Path.Combine(cacheRoot, ".."), true).Allowed, Is.False);
+        }
+
         [Test]
         public void Authorize_UncShareRoot_IsRefusedWithoutAccessingShare()
         {
