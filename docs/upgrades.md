@@ -1,6 +1,6 @@
 # Upgrades
 
-The live development version is 0.3.2. The 1.0 release candidate includes the migration behavior below, but a final 1.0 package has not been published from this branch.
+The current **public** release is [v0.3.2](https://github.com/KurtusCobain/PersonalCloudLibrarySource/releases/tag/v0.3.2), published November 1, 2026. The 1.0 milestone remains future work; version 1.0 has not been published.
 
 ## Before upgrading
 
@@ -26,6 +26,6 @@ If any catalog uses an absolute path outside your cache, **do not move or delete
 
 ## Qualification status
 
-Automated fixtures cover sequential and idempotent migration, older/default values, custom values, corrupt input fallback, and save/cancel behavior. Installed upgrades from 0.1.1 and 0.2.0 are still release-qualification rows. Do not treat them as manually passed until the release checklist records the Playnite run.
+Automated fixtures cover sequential and idempotent migration, older/default values, custom values, corrupt input fallback and save/cancel behavior. **An isolated installed v0.2.0 → v0.3.2 upgrade passed Windows acceptance** on November 1, 2026: both disposable games, IDs, installed states and eight source/cache/manifest hashes were preserved; 24 legacy settings were unchanged and the default timeout migrated 30 → 90 seconds. An installed v0.1.1 → v0.3.2 upgrade and upgrades with real cloud/NAS configurations have **not** been separately verified. Do not generalize the two-game fixture result to every personal library.
 
 If an upgrade does not behave as expected, restore the backup and attach the public-safe verification report and relevant diagnostics to a private support report. Do not publish credentials or a complete private manifest.

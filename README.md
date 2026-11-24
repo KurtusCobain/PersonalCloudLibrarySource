@@ -10,9 +10,9 @@ PCLS is the Playnite library for files you already own: catalog games from your 
 
 Windows acceptance covered the Desktop and Fullscreen game workflow, an isolated v0.2.0 upgrade and local-only rclone cancellation/retry. Recursive directory cache uninstall remains disabled, third-party cloud/NAS cases vary by provider, and some keyboard/high-DPI scenarios remain untested. The future **1.0 release candidate** is a separate milestone. See [Current release status](docs/release-status.md) and [Known limits](docs/known-limits.md).
 
-## Release-candidate tour
+## v0.3.2 UI tour
 
-The screenshots below use a disposable demonstration library. They show the real current plugin UI without private library data.
+The images below are existing repository demonstration assets; the separately captured genuine November 2026 Windows QA screenshots are staged for privacy and visual review before publication in the upstream Playnite listing.
 
 ### Guided setup
 
@@ -96,7 +96,7 @@ Cache deletion is deliberately narrow. With **default settings**, Uninstall remo
 
 Desktop owns setup, settings, manifest generation, verification reports, the dashboard, and custom details views. Fullscreen does not have a dedicated setup wizard or dashboard.
 
-Imported game metadata and standard Playnite play/install/uninstall controllers do not depend on Desktop-only windows. Notifications provide workflow feedback outside those windows. Automated contracts cover this boundary, but the installed Fullscreen matrix has not yet been manually qualified.
+Imported game metadata and standard Playnite play/install/uninstall controllers do not depend on Desktop-only windows. Notifications provide workflow feedback outside those windows. Automated tests and disposable Windows QA observed imported-game Play actions in Fullscreen. Additional keyboard/controller-navigation and alternate-DPI acceptance remains outstanding.
 
 ## Upgrades
 
@@ -115,7 +115,7 @@ PCLS does not provide games, ROMs, BIOS files, cracks, keys, copyrighted content
 
 ## Known limits
 
-PCLS is a catalog-and-cache workflow, not streaming. It does not auto-download a whole library at startup. Dedicated Fullscreen management UI is out of scope. Removable/mapped/NAS availability and real-provider behavior depend on the environment and still require installed qualification. See the complete [Known limits](docs/known-limits.md).
+PCLS is a catalog-and-cache workflow, not streaming. It does not auto-download a whole library at startup. Dedicated Fullscreen management UI is out of scope. Removable/mapped/NAS availability and real-provider behavior depend on the environment and still require installed qualification. See the current [Known limits](docs/known-limits.md) and proposed [roadmap to 1.0](docs/roadmap-v1.0.md).
 
 ## Development and packaging
 
