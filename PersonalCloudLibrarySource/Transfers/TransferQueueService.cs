@@ -38,7 +38,8 @@ namespace PersonalCloudLibrarySource
         private readonly List<QueueRequest> pending = new List<QueueRequest>();
         private readonly Dictionary<Guid, QueueRequest> requests = new Dictionary<Guid, QueueRequest>();
         private readonly HashSet<Guid> publishedTerminalJobs = new HashSet<Guid>();
-        private readonly SemaphoreSlim signal = new SemaphoreSlim(0);
+        private const int WorkerCount = 5;
+        private readonly SemaphoreSlim signal = new SemaphoreSlim(0, WorkerCount);
         private readonly Task[] workers;
         private bool stopping;
         private bool disposed;
@@ -49,7 +50,7 @@ namespace PersonalCloudLibrarySource
             this.manager = manager ?? throw new ArgumentNullException(nameof(manager));
             this.executor = executor ?? throw new ArgumentNullException(nameof(executor));
             this.recoveryJournal = recoveryJournal;
-            workers = Enumerable.Range(0, 5)
+            workers = Enumerable.Range(0, WorkerCount)
                 .Select(_ => Task.Run(WorkerLoopAsync))
                 .ToArray();
         }
@@ -95,19 +96,23 @@ namespace PersonalCloudLibrarySource
 
         public bool Cancel(Guid jobId)
         {
-            var accepted = manager.Cancel(jobId);
-            if (accepted)
+            lock (syncRoot)
             {
-                signal.Release();
+                if (stopping || disposed) return false;
+                var accepted = manager.Cancel(jobId);
+                if (accepted) WakeWorkersLocked();
+                return accepted;
             }
-
-            return accepted;
         }
 
         public void SetMaxConcurrentTransfers(int value)
         {
-            manager.SetMaxConcurrentTransfers(value);
-            signal.Release(workers.Length);
+            lock (syncRoot)
+            {
+                if (stopping || disposed) return;
+                manager.SetMaxConcurrentTransfers(value);
+                WakeWorkersLocked();
+            }
         }
 
         public CloudTransferJob Retry(
@@ -135,7 +140,7 @@ namespace PersonalCloudLibrarySource
                         "Transfer source or cache settings changed. Refresh the library and start a new download.");
                 var retry = manager.Retry(failedJobId);
                 AddRequestLocked(retry, previous.IsRclone, settingsSnapshot ?? previous.Settings);
-                signal.Release();
+                WakeWorkersLocked();
                 return retry;
             }
         }
@@ -152,7 +157,7 @@ namespace PersonalCloudLibrarySource
                         manager.Cancel(job.Id);
                     }
 
-                    signal.Release(workers.Length);
+                    WakeWorkersLocked();
                 }
             }
 
@@ -168,15 +173,25 @@ namespace PersonalCloudLibrarySource
 
         public void Dispose()
         {
-            if (disposed)
+            lock (syncRoot)
             {
-                return;
+                if (disposed) return;
+                disposed = true;
             }
 
-            disposed = true;
             if (Shutdown(TimeSpan.FromSeconds(5)))
             {
-                signal.Dispose();
+                lock (syncRoot) signal.Dispose();
+            }
+            else
+            {
+                // A timed-out worker still owns the semaphore. Dispose only
+                // when every worker has exited, even if a worker faults.
+                Task.WhenAll(workers).ContinueWith(completed =>
+                {
+                    var ignored = completed.Exception;
+                    lock (syncRoot) signal.Dispose();
+                }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
             }
         }
 
@@ -201,7 +216,7 @@ namespace PersonalCloudLibrarySource
                 RefuseBlockedDestination(gameId, destination);
                 var job = manager.Enqueue(gameId, displayName, source, destination, providerType, isDirectory);
                 AddRequestLocked(job, isRclone, settings);
-                signal.Release();
+                WakeWorkersLocked();
                 return job;
             }
         }
@@ -249,17 +264,22 @@ namespace PersonalCloudLibrarySource
                 }
 
                 ExecuteObserved(request);
-                signal.Release(workers.Length);
 
                 lock (syncRoot)
                 {
-                    if (stopping && pending.Count == 0)
-                    {
-                        signal.Release(workers.Length);
-                        return;
-                    }
+                    WakeWorkersLocked();
+                    if (stopping && pending.Count == 0) return;
                 }
             }
+        }
+
+        // All producers hold syncRoot; consumers can only reduce the count.
+        // Cap outstanding wakeups at the number of workers, not the number
+        // of historical jobs or settings/progress notifications.
+        private void WakeWorkersLocked()
+        {
+            var available = WorkerCount - signal.CurrentCount;
+            if (available > 0) signal.Release(available);
         }
 
         private void ExecuteObserved(QueueRequest request)
@@ -320,6 +340,8 @@ namespace PersonalCloudLibrarySource
                     string.IsNullOrWhiteSpace(request.Job.ErrorSummary)
                         ? "Transfer failed." : request.Job.ErrorSummary,
                     requiresManualRecovery: request.Job.RequiresManualRecovery);
+
+            result.RequiresManualRecovery |= request.Job.RequiresManualRecovery;
 
             // Completed/quarantined attempts cannot be retried. Retain
             // their history and result, but release the configuration object.
@@ -391,7 +413,10 @@ namespace PersonalCloudLibrarySource
         {
             foreach (var job in manager.Jobs)
             {
-                if (job.IsTerminal && !job.RequiresManualRecovery) continue;
+                QueueRequest existingRequest;
+                var stillObserved = requests.TryGetValue(job.Id, out existingRequest) &&
+                    !existingRequest.Completion.Task.IsCompleted;
+                if (job.IsTerminal && !job.RequiresManualRecovery && !stillObserved) continue;
                 var overlaps = job.GameId == gameId ||
                     PathBoundary.IsContained(job.Destination, destination) ||
                     PathBoundary.IsContained(destination, job.Destination);

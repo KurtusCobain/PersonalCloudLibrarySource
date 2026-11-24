@@ -343,6 +343,65 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void DisposeRejectsLateCancellationAndConcurrencyUpdatesWithoutFault()
+        {
+            var manager = new CloudTransferManager(1);
+            var queue = new TransferQueueService(manager, new ImmediateSuccessExecutor(manager));
+            var job = queue.EnqueueLocal(Guid.NewGuid(), "Complete", "source", "dest", "LocalFolder", false);
+            Assert.That(queue.GetCompletion(job.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+            queue.Dispose();
+            Assert.DoesNotThrow(() => queue.Dispose());
+            Assert.That(queue.Cancel(job.Id), Is.False);
+            Assert.DoesNotThrow(() => queue.SetMaxConcurrentTransfers(4));
+            Assert.That(manager.MaxConcurrentTransfers, Is.EqualTo(1));
+            Assert.That(queue.Shutdown(TimeSpan.FromSeconds(1)), Is.True);
+        }
+
+        [Test]
+        public void ThrowingCancellationCallbackDoesNotStrandShutdown()
+        {
+            var manager = new CloudTransferManager(1);
+            var executor = new CancellationAwareExecutor(manager);
+            using (var queue = new TransferQueueService(manager, executor))
+            {
+                var job = queue.EnqueueLocal(Guid.NewGuid(), "Active", "source", "dest", "LocalFolder", false);
+                Assert.That(executor.Started.Wait(TimeSpan.FromSeconds(3)), Is.True);
+                using (job.CancellationToken.Register(() => { throw new InvalidOperationException("fixture callback"); }))
+                {
+                    Assert.That(queue.Shutdown(TimeSpan.FromSeconds(3)), Is.True);
+                    Assert.That(queue.GetCompletion(job.Id).IsCompleted, Is.True);
+                    Assert.That(job.State, Is.EqualTo(CloudTransferState.Cancelled));
+                }
+            }
+        }
+
+        [Test]
+        public void TerminalObserverDoesNotReleaseDestinationBeforeCompletion()
+        {
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager, new ImmediateSuccessExecutor(manager)))
+            using (var entered = new ManualResetEventSlim())
+            using (var release = new ManualResetEventSlim())
+            {
+                queue.JobTerminated += (sender, args) =>
+                {
+                    entered.Set();
+                    release.Wait(TimeSpan.FromSeconds(5));
+                };
+                var first = queue.EnqueueLocal(Guid.NewGuid(), "First", "source", "dest", "LocalFolder", false);
+                try
+                {
+                    Assert.That(entered.Wait(TimeSpan.FromSeconds(3)), Is.True);
+                    Assert.That(first.State, Is.EqualTo(CloudTransferState.Completed));
+                    Assert.Throws<TransferRetryRefusedException>(() =>
+                        queue.EnqueueLocal(Guid.NewGuid(), "Conflict", "source", "dest", "LocalFolder", false));
+                }
+                finally { release.Set(); }
+                Assert.That(queue.GetCompletion(first.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+            }
+        }
+
+        [Test]
         public void CancellationCleanupFailure_RemainsFailedInsteadOfCancelled()
         {
             var manager = new CloudTransferManager(1);

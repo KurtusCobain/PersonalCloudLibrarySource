@@ -153,7 +153,12 @@ namespace PersonalCloudLibrarySource
         {
             if (!cancellationSource.IsCancellationRequested)
             {
-                cancellationSource.Cancel();
+                try { cancellationSource.Cancel(); }
+                catch (AggregateException)
+                {
+                    // Cancellation is already requested. A faulty subscriber
+                    // must not strand the queue or prevent other callbacks.
+                }
             }
         }
     }
