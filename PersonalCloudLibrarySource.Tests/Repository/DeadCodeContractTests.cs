@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Xml;
 
 namespace PersonalCloudLibrarySource.Tests.Repository
 {
@@ -45,6 +46,34 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             Assert.That(references, Is.Empty,
                 "Removed implementation paths must stay absent from production:" + Environment.NewLine +
                 string.Join(Environment.NewLine, references));
+        }
+
+        [TestCase("PersonalCloudLibrarySource")]
+        [TestCase("PersonalCloudLibrarySource.Tests")]
+        public void ExplicitCompileInventoryMatchesTrackedSources(string projectName)
+        {
+            var root = FindRepositoryRoot();
+            var projectPath = Path.Combine(root, projectName, projectName + ".csproj");
+            var document = new XmlDocument { XmlResolver = null };
+            document.Load(projectPath);
+            var ns = new XmlNamespaceManager(document.NameTable);
+            ns.AddNamespace("m", "http://schemas.microsoft.com/developer/msbuild/2003");
+            var includes = document.SelectNodes("//m:Compile[@Include]", ns)
+                .Cast<XmlElement>()
+                .Select(element => projectName + "/" + element.GetAttribute("Include").Replace('\\', '/'))
+                .ToArray();
+            var tracked = RunGit(root, "ls-files --cached -z")
+                .Split(new[] { '\0' }, StringSplitOptions.RemoveEmptyEntries)
+                .Where(path => path.StartsWith(projectName + "/", StringComparison.Ordinal) &&
+                    path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+
+            Assert.That(includes.Distinct(StringComparer.OrdinalIgnoreCase).Count(), Is.EqualTo(includes.Length),
+                "Compile includes must not be duplicated.");
+            Assert.That(includes, Is.EquivalentTo(tracked),
+                "All tracked C# sources must be included exactly once.");
+            foreach (var path in includes)
+                Assert.That(File.Exists(Path.Combine(root, path)), Is.True, path);
         }
 
         [Test]

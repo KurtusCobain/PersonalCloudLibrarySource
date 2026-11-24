@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace PersonalCloudLibrarySource
 {
     public sealed class DashboardStateStore : ObservableObject

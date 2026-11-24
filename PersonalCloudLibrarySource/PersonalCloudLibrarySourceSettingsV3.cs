@@ -1,5 +1,3 @@
-using Playnite.SDK;
-
 namespace PersonalCloudLibrarySource
 {
     public class PersonalCloudLibrarySourceSettingsV3 : PersonalCloudLibrarySourceSettings
