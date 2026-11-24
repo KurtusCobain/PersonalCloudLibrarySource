@@ -62,7 +62,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
-        public void RcloneFailure_CleansPartialAndNeverIssuesReceipt()
+        public void RcloneFailure_PreservesUnownedDescendantsAndNeverIssuesReceipt()
         {
             var runner = new FixtureRunner(request =>
             {
@@ -77,7 +77,8 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
                     manager.Jobs[0].IsTerminal, 10000), Is.True);
                 Assert.That(manager.Jobs[0].State, Is.EqualTo(CloudTransferState.Failed));
                 Assert.That(Directory.Exists(destination), Is.False);
-                Assert.That(Directory.Exists(runner.LastRequest.DestinationPath), Is.False);
+                Assert.That(File.ReadAllText(Path.Combine(runner.LastRequest.DestinationPath, "incomplete.bin")), Is.EqualTo("partial"));
+                Assert.That(manager.Jobs[0].RequiresManualRecovery, Is.True);
                 CacheOwnershipReceipt receipt;
                 Assert.That(receipts.TryRead(cache, "remote-game", out receipt), Is.False);
                 Assert.That(game.IsInstalled, Is.False);
@@ -85,7 +86,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
-        public void RcloneCancellation_CleansPartialAndNeverIssuesReceipt()
+        public void RcloneCancellation_PreservesUnownedDescendantsAndNeverIssuesReceipt()
         {
             var runner = new FixtureRunner(request =>
             {
@@ -98,9 +99,10 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
                 controller.Install(new InstallActionArgs());
                 Assert.That(SpinWait.SpinUntil(() => manager.Jobs.Count > 0 &&
                     manager.Jobs[0].IsTerminal, 10000), Is.True);
-                Assert.That(manager.Jobs[0].State, Is.EqualTo(CloudTransferState.Cancelled));
+                Assert.That(manager.Jobs[0].State, Is.EqualTo(CloudTransferState.Failed));
                 Assert.That(Directory.Exists(destination), Is.False);
-                Assert.That(Directory.Exists(runner.LastRequest.DestinationPath), Is.False);
+                Assert.That(File.ReadAllText(Path.Combine(runner.LastRequest.DestinationPath, "incomplete.bin")), Is.EqualTo("partial"));
+                Assert.That(manager.Jobs[0].RequiresManualRecovery, Is.True);
                 CacheOwnershipReceipt receipt;
                 Assert.That(receipts.TryRead(cache, "remote-game", out receipt), Is.False);
                 Assert.That(game.IsInstalled, Is.False);

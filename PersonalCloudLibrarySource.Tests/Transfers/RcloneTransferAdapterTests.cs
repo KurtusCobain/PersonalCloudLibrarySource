@@ -259,7 +259,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
                 var runner = new FakeRcloneProcessRunner(request =>
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(request.DestinationPath));
-                    lockStream = new FileStream(request.DestinationPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                    lockStream = new FileStream(request.DestinationPath, FileMode.Open, FileAccess.Write, FileShare.None);
                     lockStream.WriteByte(1);
                     lockStream.Flush();
                     return RcloneProcessResult.Cancelled("cancelled");
@@ -298,6 +298,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             var sentinel = Path.Combine(partial, "keep.txt");
             var runner = new FakeRcloneProcessRunner(request =>
             {
+                File.Delete(request.DestinationPath);
                 Directory.CreateDirectory(request.DestinationPath);
                 File.WriteAllText(sentinel, "preserve");
                 return RcloneProcessResult.Success("unexpected type");
@@ -307,6 +308,30 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(result.Succeeded, Is.False);
             Assert.That(result.RequiresManualRecovery, Is.True);
             Assert.That(File.ReadAllText(sentinel), Is.EqualTo("preserve"));
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Copy_FileIdentityReplacementIsNeverPublishedOrDeleted(bool cancel)
+        {
+            var destination = Path.Combine(testRoot, "game.zip");
+            var id = Guid.NewGuid();
+            var original = Path.Combine(testRoot, "original-stage.bin");
+            var partial = TransferPartialPathPolicy.Create(destination, id);
+            var runner = new FakeRcloneProcessRunner(request =>
+            {
+                File.WriteAllText(request.DestinationPath, "original");
+                File.Move(request.DestinationPath, original);
+                File.WriteAllText(request.DestinationPath, "original");
+                return cancel ? RcloneProcessResult.Cancelled("fixture") : RcloneProcessResult.Success("fixture");
+            });
+            var result = new RcloneTransferAdapter(runner).Copy(CreateSettings(), "game.zip",
+                destination, false, id, CancellationToken.None, null);
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.RequiresManualRecovery, Is.True);
+            Assert.That(File.ReadAllText(partial), Is.EqualTo("original"));
+            Assert.That(File.ReadAllText(original), Is.EqualTo("original"));
+            Assert.That(File.Exists(destination), Is.False);
         }
 
         [Test]
