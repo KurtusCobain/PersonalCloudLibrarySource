@@ -153,6 +153,11 @@ namespace PersonalCloudLibrarySource
                 throw new InvalidOperationException("An output manifest path is required.");
             }
 
+            if (!previewOnly && !options.NoReport && !string.IsNullOrWhiteSpace(options.ReportPath) &&
+                string.Equals(Path.GetFullPath(options.OutputPath), Path.GetFullPath(options.ReportPath),
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Manifest and report must have different output paths.");
+
             var includeExtensions = options.IncludeExtensions.Count == 0
                 ? DefaultSingleFileExtensions
                 : options.IncludeExtensions.ToArray();
@@ -362,10 +367,6 @@ namespace PersonalCloudLibrarySource
             // character limit. Validate both before replacing an existing file.
             var json = Serialization.ToJson(report.Manifest);
             ValidateSerializedManifest(json);
-            if (!options.NoReport && !string.IsNullOrWhiteSpace(options.ReportPath) &&
-                string.Equals(Path.GetFullPath(options.OutputPath), Path.GetFullPath(options.ReportPath),
-                    StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Manifest and report must have different output paths.");
 
             var outputDirectory = Path.GetDirectoryName(options.OutputPath);
             cancellationToken.ThrowIfCancellationRequested();
