@@ -94,7 +94,8 @@ namespace PersonalCloudLibrarySource
                 navigationService,
                 GetTransferManager(),
                 dashboardActivityService,
-                new DashboardTransferActions(queue, settings.GetRuntimeSettingsSnapshot),
+                new DashboardTransferActions(queue, settings.GetRuntimeSettingsSnapshot,
+                    message => playniteApi.Dialogs.ShowMessage(message)),
                 startupUiDispatcher);
         }
 

@@ -18,7 +18,9 @@ namespace PersonalCloudLibrarySource
             DisplayName = string.IsNullOrWhiteSpace(job.DisplayName)
                 ? PclsResources.Get("LOCPLSTransferUnnamed", "Unnamed transfer")
                 : job.DisplayName;
-            StateText = GetStateText(job.State);
+            StateText = job.RequiresManualRecovery
+                ? PclsResources.Get("LOCPLSTransferRecoveryRequired", "Recovery required")
+                : GetStateText(job.State);
             ProgressText = GetProgressText(job);
             CanCancel = !job.IsTerminal &&
                 job.State != CloudTransferState.Finalizing &&
@@ -80,6 +82,9 @@ namespace PersonalCloudLibrarySource
 
         private static string GetProgressText(CloudTransferJob job)
         {
+            if (job.RequiresManualRecovery)
+                return PclsResources.Get("LOCPLSTransferRecoveryDetail",
+                    "Preserved recovery evidence needs review. Do not retry or remove staging files automatically.");
             if (job.State == CloudTransferState.Failed && !string.IsNullOrWhiteSpace(job.ErrorSummary))
             {
                 return job.ErrorSummary;

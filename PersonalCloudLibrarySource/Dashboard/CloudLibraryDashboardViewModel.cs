@@ -197,7 +197,7 @@ namespace PersonalCloudLibrarySource
         private void RefreshTransferPresentation()
         {
             var jobs = transferManager.Jobs
-                .Where(job => job != null && job.State != CloudTransferState.Completed)
+                .Where(job => job != null && (job.State != CloudTransferState.Completed || job.RequiresManualRecovery))
                 .OrderByDescending(job => job.CreatedAt)
                 .Select(job => new CloudTransferQueueItemViewModel(
                     job,

@@ -291,17 +291,17 @@ namespace PersonalCloudLibrarySource
                             // install. Preserve that outcome, but quarantine future
                             // attempts until the retained reservation is reviewed.
                             result.RequiresManualRecovery = true;
-                            request.Job.RequiresManualRecovery = true;
+                            manager.MarkRequiresManualRecovery(request.Job.Id);
                         }
                     }
                 }
 
-                if (result.RequiresManualRecovery) request.Job.RequiresManualRecovery = true;
+                if (result.RequiresManualRecovery) manager.MarkRequiresManualRecovery(request.Job.Id);
                 EnsureTerminal(request.Job, result);
             }
             catch (Exception ex)
             {
-                if (reservationWritten) request.Job.RequiresManualRecovery = true;
+                if (reservationWritten) manager.MarkRequiresManualRecovery(request.Job.Id);
                 result = CloudTransferExecutionResult.Failure(ex.Message, ex,
                     requiresManualRecovery: reservationWritten);
                 if (!request.Job.IsTerminal)

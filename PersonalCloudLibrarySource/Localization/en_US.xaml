@@ -245,6 +245,8 @@
     <sys:String x:Key="LOCPLSTransferStateVerifying">Verifying</sys:String>
     <sys:String x:Key="LOCPLSTransferStateFinalizing">Finalizing</sys:String>
     <sys:String x:Key="LOCPLSTransferStateCompleted">Completed</sys:String>
+    <sys:String x:Key="LOCPLSTransferRecoveryRequired">Recovery required</sys:String>
+    <sys:String x:Key="LOCPLSTransferRecoveryDetail">Preserved recovery evidence needs review. Do not retry or remove staging files automatically.</sys:String>
     <sys:String x:Key="LOCPLSTransferStateCancelled">Cancelled</sys:String>
     <sys:String x:Key="LOCPLSTransferStateFailed">Failed</sys:String>
     <sys:String x:Key="LOCPLSTransferStateUnknown">Unknown</sys:String>

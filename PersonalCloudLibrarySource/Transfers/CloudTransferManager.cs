@@ -149,6 +149,18 @@ namespace PersonalCloudLibrarySource
             }
         }
 
+        internal void MarkRequiresManualRecovery(Guid jobId)
+        {
+            lock (syncRoot)
+            {
+                var job = FindJobLocked(jobId);
+                if (job.RequiresManualRecovery) return;
+                job.RequiresManualRecovery = true;
+                lifecycleRevision++;
+            }
+            OnChanged();
+        }
+
         public void SetMaxConcurrentTransfers(int value)
         {
             lock (syncRoot)

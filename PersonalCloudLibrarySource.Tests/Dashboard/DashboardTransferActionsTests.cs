@@ -41,6 +41,26 @@ namespace PersonalCloudLibrarySource.Tests.Dashboard
         }
 
         [Test]
+        public void ChangedSettingsRefusalIsPresentedToUser()
+        {
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager, new FailThenBlockExecutor()))
+            {
+                var settings = new PersonalCloudLibrarySourceSettingsV3 { Enabled = true, AllowDownloads = true };
+                var failed = queue.EnqueueLocal(Guid.NewGuid(), "Example", "source", "destination",
+                    "LocalFolder", false, settings);
+                Assert.That(queue.GetCompletion(failed.Id).Wait(TimeSpan.FromSeconds(5)), Is.True);
+                string refusal = null;
+                var actions = new DashboardTransferActions(queue,
+                    () => new PersonalCloudLibrarySourceSettingsV3 { Enabled = false },
+                    message => refusal = message);
+                actions.Retry(failed.Id);
+                Assert.That(refusal, Does.Contain("settings changed"));
+                Assert.That(manager.Jobs.Count, Is.EqualTo(1));
+            }
+        }
+
+        [Test]
         public void RetryCompletedJob_UnrelatedInvalidStateStillPropagates()
         {
             var manager = new CloudTransferManager(1);

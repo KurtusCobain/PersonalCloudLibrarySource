@@ -19,14 +19,17 @@ namespace PersonalCloudLibrarySource
             "A transfer attempt is already active for this game.";
         private readonly TransferQueueService queue;
         private readonly Func<PersonalCloudLibrarySourceSettings> settingsSnapshotFactory;
+        private readonly Action<string> showRefusal;
 
         public DashboardTransferActions(
             TransferQueueService queue,
-            Func<PersonalCloudLibrarySourceSettings> settingsSnapshotFactory)
+            Func<PersonalCloudLibrarySourceSettings> settingsSnapshotFactory,
+            Action<string> showRefusal = null)
         {
             this.queue = queue ?? throw new ArgumentNullException(nameof(queue));
             this.settingsSnapshotFactory = settingsSnapshotFactory ??
                 throw new ArgumentNullException(nameof(settingsSnapshotFactory));
+            this.showRefusal = showRefusal;
         }
 
         public void Cancel(Guid jobId)
@@ -43,6 +46,7 @@ namespace PersonalCloudLibrarySource
             catch (TransferRetryRefusedException ex)
             {
                 Playnite.SDK.LogManager.GetLogger().Warn(ex.Message);
+                showRefusal?.Invoke(ex.Message);
             }
             catch (InvalidOperationException ex) when (
                 string.Equals(ex.Message, DuplicateActiveTransferMessage, StringComparison.Ordinal))

@@ -57,6 +57,41 @@ namespace PersonalCloudLibrarySource.Tests.Dashboard
         }
 
         [Test]
+        public void CompletedTransferWithRecoveryRequirementRemainsVisible()
+        {
+            var manager = new CloudTransferManager(1);
+            var dispatcher = new QueuedDispatcher();
+            var viewModel = CreateViewModel(manager, new DashboardActivityService(), dispatcher, new RecordingActions());
+            using (var queue = new TransferQueueService(manager, new RecoveryRequiredExecutor(manager)))
+            {
+                var job = queue.EnqueueLocal(Guid.NewGuid(), "Recovery fixture", "source", "destination",
+                    "LocalFolder", false);
+                Assert.That(queue.GetCompletion(job.Id).Wait(TimeSpan.FromSeconds(5)), Is.True);
+                dispatcher.ExecuteAll();
+                Assert.That(job.State, Is.EqualTo(CloudTransferState.Completed));
+                Assert.That(viewModel.TransferQueueItems, Has.Count.EqualTo(1));
+                Assert.That(viewModel.TransferQueueItems[0].StateText, Is.EqualTo("Recovery required"));
+                Assert.That(viewModel.TransferQueueItems[0].CanRetry, Is.False);
+            }
+            viewModel.Dispose();
+        }
+
+        private sealed class RecoveryRequiredExecutor : ICloudTransferExecutor
+        {
+            private readonly CloudTransferManager manager;
+            public RecoveryRequiredExecutor(CloudTransferManager manager) { this.manager = manager; }
+            public CloudTransferExecutionResult ExecuteLocal(Guid id, bool directory)
+            {
+                manager.Transition(id, CloudTransferState.Transferring);
+                var result = CloudTransferExecutionResult.Success(0, 0);
+                result.RequiresManualRecovery = true;
+                return result;
+            }
+            public CloudTransferExecutionResult ExecuteRclone(Guid id, PersonalCloudLibrarySourceSettings settings)
+                => ExecuteLocal(id, false);
+        }
+
+        [Test]
         public void QueueItemCommands_UseTransferQueueActions()
         {
             var manager = new CloudTransferManager(1);

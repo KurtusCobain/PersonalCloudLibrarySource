@@ -110,3 +110,7 @@ Receipt footprint probes now conservatively block legacy uninstall when storage 
 ## Restore proven dashboard namespace dependency
 
 The explicit Playnite.SDK import correction at 9b0966ec did not resolve CS0246. Restore DashboardStateStore.cs byte-for-byte from the last successful Windows checkpoint c62426cc (including System.Collections.Generic). Do not classify this import as unused. The five project-reference reductions remain independently subject to CI; the last verified test count remains 822.
+
+## UI recovery visibility and localization audit
+
+At de4cf887, the English resource dictionary had 441 unique keys; all LOCPLS references in the four UI views resolved (dashboard 28, settings 113, details 18, wizard 37 per-view distinct keys), and the only external resource referenced by those views was host TextBrush. Settings already omit legacy no-effect toggles under localization regression coverage; retain serialized properties for migration compatibility. Completed jobs requiring recovery remain visible in the transfer list, with localized recovery label and guidance and no retry action. Queue quarantine changes notify presentation even after terminal state. Expected retry refusals are surfaced through the host dialog instead of log-only reporting. Two regression fixtures added. Persistent recovery listing across restart and a separately authorized recovery action remain open; no deletion or fork work.
