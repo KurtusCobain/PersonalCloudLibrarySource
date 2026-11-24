@@ -7,6 +7,7 @@ namespace PersonalCloudLibrarySource
         private CloudTransferManager transferManager;
         private CloudTransferExecutor transferExecutor;
         private TransferQueueService transferQueue;
+        private TransferRecoveryJournal transferRecoveryJournal;
         private DashboardTransferActivityBridge transferActivityBridge;
         private readonly DashboardRefreshPostGate dashboardTransferRefreshGate = new DashboardRefreshPostGate();
         private bool transferPresentationDisposed;
@@ -43,13 +44,58 @@ namespace PersonalCloudLibrarySource
             if (transferQueue == null)
             {
                 transferQueue = new TransferQueueService(GetTransferManager(), GetTransferExecutor(),
-                    new TransferRecoveryJournal(System.IO.Path.Combine(GetPluginDataDirectory(), "transfer-recovery")));
+                    GetTransferRecoveryJournal());
                 transferActivityBridge = new DashboardTransferActivityBridge(
                     transferQueue,
                     dashboardActivityService);
             }
 
             return transferQueue;
+        }
+
+        private TransferRecoveryJournal GetTransferRecoveryJournal()
+        {
+            if (transferRecoveryJournal == null)
+                transferRecoveryJournal = new TransferRecoveryJournal(
+                    System.IO.Path.Combine(GetPluginDataDirectory(), "transfer-recovery"));
+            return transferRecoveryJournal;
+        }
+
+        private async void ReviewTransferRecovery()
+        {
+            var title = PclsResources.Get("LOCPLSTransferRecoveryReview", "Review Transfer Recovery");
+            try
+            {
+                var journal = GetTransferRecoveryJournal();
+                var snapshot = await System.Threading.Tasks.Task.Run(() => journal.Inspect());
+                if (transferPresentationDisposed) return;
+                var message = new System.Text.StringBuilder();
+                message.AppendLine(PclsResources.Format("LOCPLSTransferRecoverySummary",
+                    "Pending reservations: {0}; unreadable records: {1}.",
+                    snapshot.Records.Count, snapshot.UnreadableCount));
+                if (!snapshot.IsComplete)
+                    message.AppendLine(PclsResources.Get("LOCPLSTransferRecoveryIncomplete",
+                        "The journal could not be fully verified. Do not assume recovery is clear."));
+                message.AppendLine(PclsResources.Get("LOCPLSTransferRecoveryAdvisory",
+                    "Reservations may belong to active or interrupted transfers. This review does not authorize retry, deletion, or release. Preserve all staging and journal files."));
+                foreach (var record in System.Linq.Enumerable.Take(snapshot.Records, 20))
+                {
+                    message.AppendLine();
+                    message.AppendLine(PclsResources.Format("LOCPLSTransferRecoveryRecord",
+                        "Job: {0}{1}Destination: {2}{1}Staging: {3}",
+                        record.JobId, Environment.NewLine, record.Destination, record.StagingPath));
+                }
+                if (snapshot.Records.Count > 20)
+                    message.AppendLine(PclsResources.Get("LOCPLSTransferRecoveryTruncated",
+                        "Additional reservations are not displayed."));
+                playniteApi.Dialogs.ShowMessage(message.ToString(), title);
+            }
+            catch (Exception)
+            {
+                if (!transferPresentationDisposed)
+                    playniteApi.Dialogs.ShowMessage(PclsResources.Get("LOCPLSTransferRecoveryIncomplete",
+                        "The journal could not be fully verified. Do not assume recovery is clear."), title);
+            }
         }
 
         private int GetActiveTransferCount()

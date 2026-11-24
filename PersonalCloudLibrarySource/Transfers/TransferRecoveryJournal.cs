@@ -3,9 +3,39 @@ using System.IO;
 using System.Diagnostics;
 using System.Threading;
 using System.Text;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 namespace PersonalCloudLibrarySource
 {
+    public sealed class TransferRecoveryRecord
+    {
+        internal TransferRecoveryRecord(Guid gameId, Guid jobId, string destination, string stagingPath)
+        {
+            GameId = gameId;
+            JobId = jobId;
+            Destination = destination;
+            StagingPath = stagingPath;
+        }
+        public Guid GameId { get; }
+        public Guid JobId { get; }
+        public string Destination { get; }
+        public string StagingPath { get; }
+    }
+
+    public sealed class TransferRecoverySnapshot
+    {
+        internal TransferRecoverySnapshot(List<TransferRecoveryRecord> records, int unreadableCount, bool complete)
+        {
+            Records = new ReadOnlyCollection<TransferRecoveryRecord>(records);
+            UnreadableCount = unreadableCount;
+            IsComplete = complete;
+        }
+        public IReadOnlyList<TransferRecoveryRecord> Records { get; }
+        public int UnreadableCount { get; }
+        public bool IsComplete { get; }
+    }
+
     // A write-ahead reservation, not a deletion receipt or resume instruction.
     // An interrupted/corrupt journal fails closed. Only the originating job
     // may release its record after confirmed cleanup/publication.
@@ -23,6 +53,48 @@ namespace PersonalCloudLibrarySource
                 throw new ArgumentException("Recovery journal directory is required.", nameof(directory));
             this.directory = Path.GetFullPath(directory);
         }
+
+        // Advisory snapshot only. Never creates a directory or lock file,
+        // changes a marker, or treats a missing marker as cleanup permission.
+        public TransferRecoverySnapshot Inspect()
+        {
+            var records = new List<TransferRecoveryRecord>();
+            var unreadable = 0;
+            var complete = true;
+            lock (syncRoot)
+            {
+                try
+                {
+                    TransferPartialPathPolicy.RequireSafePath(directory);
+                    FileAttributes attributes;
+                    try { attributes = File.GetAttributes(directory); }
+                    catch (FileNotFoundException) { return new TransferRecoverySnapshot(records, 0, true); }
+                    catch (DirectoryNotFoundException) { return new TransferRecoverySnapshot(records, 0, true); }
+                    if ((attributes & FileAttributes.Directory) == 0)
+                        return new TransferRecoverySnapshot(records, 0, false);
+
+                    var count = 0;
+                    foreach (var marker in Directory.EnumerateFileSystemEntries(directory, "*.pending", SearchOption.TopDirectoryOnly))
+                    {
+                        if (++count > MaxRecords) { complete = false; break; }
+                        try
+                        {
+                            var record = Read(marker);
+                            var staging = TransferPartialPathPolicy.Create(record.Item2, record.Item3);
+                            records.Add(new TransferRecoveryRecord(record.Item1, record.Item3, record.Item2, staging));
+                        }
+                        catch (Exception ex) when (IsInspectionFailure(ex)) { unreadable++; }
+                    }
+                }
+                catch (Exception ex) when (IsInspectionFailure(ex)) { complete = false; }
+            }
+            return new TransferRecoverySnapshot(records, unreadable, complete && unreadable == 0);
+        }
+
+        private static bool IsInspectionFailure(Exception error) =>
+            error is IOException || error is UnauthorizedAccessException ||
+            error is ArgumentException || error is NotSupportedException ||
+            error is System.Security.SecurityException;
 
         public void Begin(CloudTransferJob job)
         {

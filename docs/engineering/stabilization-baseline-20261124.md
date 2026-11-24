@@ -170,3 +170,7 @@ Package script now creates a uniquely named invocation staging directory, writes
 ### Follow-up qualification corrections
 
 The four-wrapper cleanup produced zero lexical private-member candidates (333 tracked files, 118 production C# files); the full build failed an obsolete source-text assertion referring to the removed wrapper. Update the assertion to check the live validated loader and import mapper, not the obsolete method. The new repository audit also rejected malformed packaging version-guard syntax before execution. Restore the complete guard and package-path assignment. Neither failed candidate is qualified. Standalone generator's four fixtures and release validator's seven cases passed independently. Full requalification required.
+
+## Read-only persistent transfer recovery review
+
+Add bounded advisory journal inspection that never creates a missing directory or lock, changes reservations, reads payload content or authorizes deletion/retry. Corrupt/unavailable records are distinguished from an empty journal. Add localized Playnite menu action Review Transfer Recovery, background read and capped presentation (20 reservation details), no logs of private paths. Active and interrupted reservations are intentionally not distinguished by inference. Three tests cover missing, corrupt plus valid and unexpected journal type. No manual-release feature or automatic deletion. Native host/UI qualification pending; CH-Rm deferred.

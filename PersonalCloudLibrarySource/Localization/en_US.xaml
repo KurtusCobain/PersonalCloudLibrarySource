@@ -447,4 +447,10 @@
     <sys:String x:Key="LOCPLSProfilesBackupRestoreConfirm">Restore the inspected source profile settings? All current profile identities must be preserved. The current file will become a separate rollback backup. This does not activate multi-source mode.</sys:String>
     <sys:String x:Key="LOCPLSProfilesBackupRestored">Restored the selected profile backup. The previous current configuration was backed up. Multi-source mode remains off.</sys:String>
     <sys:String x:Key="LOCPLSProfilesBackupRestoreFailed">Restore refused: {0}</sys:String>
+    <sys:String x:Key="LOCPLSTransferRecoveryReview">Review Transfer Recovery</sys:String>
+    <sys:String x:Key="LOCPLSTransferRecoverySummary">Pending reservations: {0}; unreadable records: {1}.</sys:String>
+    <sys:String x:Key="LOCPLSTransferRecoveryIncomplete">The journal could not be fully verified. Do not assume recovery is clear.</sys:String>
+    <sys:String x:Key="LOCPLSTransferRecoveryAdvisory">Reservations may belong to active or interrupted transfers. This review does not authorize retry, deletion, or release. Preserve all staging and journal files.</sys:String>
+    <sys:String x:Key="LOCPLSTransferRecoveryRecord">Job: {0}{1}Destination: {2}{1}Staging: {3}</sys:String>
+    <sys:String x:Key="LOCPLSTransferRecoveryTruncated">Additional reservations are not displayed.</sys:String>
 </ResourceDictionary>

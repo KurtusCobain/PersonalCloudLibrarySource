@@ -33,6 +33,43 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void Inspect_MissingJournalDoesNotCreateAnyFiles()
+        {
+            var snapshot = new TransferRecoveryJournal(records).Inspect();
+            Assert.That(snapshot.IsComplete, Is.True);
+            Assert.That(snapshot.Records, Is.Empty);
+            Assert.That(Directory.Exists(records), Is.False);
+        }
+
+        [Test]
+        public void Inspect_ValidAndCorruptRecordsRemainReserved()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var job = Job("file.zip");
+            journal.Begin(job);
+            var marker = Path.Combine(records, Guid.NewGuid().ToString("N") + ".pending");
+            File.WriteAllText(marker, "invalid");
+            var snapshot = new TransferRecoveryJournal(records).Inspect();
+            Assert.That(snapshot.IsComplete, Is.False);
+            Assert.That(snapshot.UnreadableCount, Is.EqualTo(1));
+            Assert.That(snapshot.Records.Count, Is.EqualTo(1));
+            Assert.That(snapshot.Records[0].JobId, Is.EqualTo(job.Id));
+            Assert.That(snapshot.Records[0].StagingPath, Is.EqualTo(
+                TransferPartialPathPolicy.Create(job.Destination, job.Id)));
+            Assert.That(File.ReadAllText(marker), Is.EqualTo("invalid"));
+            Assert.That(Directory.GetFiles(records, "*.pending").Length, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void Inspect_UnexpectedJournalTypeIsNotReportedAsEmptySuccess()
+        {
+            File.WriteAllText(records, "preserve");
+            var snapshot = new TransferRecoveryJournal(records).Inspect();
+            Assert.That(snapshot.IsComplete, Is.False);
+            Assert.That(File.ReadAllText(records), Is.EqualTo("preserve"));
+        }
+
+        [Test]
         public void InterruptedReservationBlocksOverlappingAttemptAfterReopen()
         {
             var job = Job("cache");

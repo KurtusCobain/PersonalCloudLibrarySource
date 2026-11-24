@@ -205,6 +205,7 @@ namespace PersonalCloudLibrarySource
             }
 
             yield return CreateMainMenuItem(menuSection, "LOCPLSOpenCacheFolder", "Open Cache Folder", navigationService.OpenCacheFolder, iconPath);
+            yield return CreateMainMenuItem(menuSection, "LOCPLSTransferRecoveryReview", "Review Transfer Recovery", ReviewTransferRecovery, iconPath);
             yield return CreateMainMenuItem(menuSection, "LOCPLSOpenLatestReport", "Open Latest Report", navigationService.OpenLatestReport, iconPath);
             yield return CreateMainMenuItem(menuSection, "LOCPLSOpenSettings", "Settings", navigationService.OpenSettings, iconPath);
         }
