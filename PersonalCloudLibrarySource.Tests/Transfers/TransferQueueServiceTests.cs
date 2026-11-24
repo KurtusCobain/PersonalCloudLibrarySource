@@ -111,6 +111,37 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void HistoryRetentionAutomaticallyBoundsObservedCompletedAttempts()
+        {
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager, new ImmediateSuccessExecutor(manager)))
+            {
+                CloudTransferJob first = null;
+                System.Threading.Tasks.Task<CloudTransferExecutionResult> firstCompletion = null;
+                var clock = System.Diagnostics.Stopwatch.StartNew();
+                for (var index = 0; index < 550; index++)
+                {
+                    var job = queue.EnqueueLocal(Guid.NewGuid(), "History " + index, "source",
+                        "destination", "LocalFolder", false);
+                    var completion = queue.GetCompletion(job.Id);
+                    Assert.That(completion.Wait(TimeSpan.FromSeconds(3)), Is.True);
+                    if (index == 0) { first = job; firstCompletion = completion; }
+                }
+
+                // Taking the queue lock also fences the final worker's
+                // completion bookkeeping before inspecting retained history.
+                Assert.That(queue.Cancel(first.Id), Is.False);
+                Assert.That(manager.Jobs.Count, Is.LessThanOrEqualTo(543));
+                Assert.That(manager.GetReservationSnapshot(), Is.Empty);
+                Assert.That(manager.Jobs.All(job => job.State == CloudTransferState.Completed), Is.True);
+                Assert.That(firstCompletion.Result.Succeeded, Is.True);
+                Assert.Throws<System.Collections.Generic.KeyNotFoundException>(() => queue.GetCompletion(first.Id));
+                TestContext.WriteLine("PCLS_HISTORY_RETENTION: 550 observed transfers, " +
+                    manager.Jobs.Count + " retained, " + clock.Elapsed.TotalMilliseconds.ToString("F3") + " ms");
+            }
+        }
+
+        [Test]
         public void HistoryRetentionNeverEvictsQuarantine()
         {
             var manager = new CloudTransferManager(1);
