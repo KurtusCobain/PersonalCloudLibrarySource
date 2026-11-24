@@ -73,6 +73,37 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void NewAttemptReleasesSupersededRetryContextButPreservesCompletion()
+        {
+            var manager = new CloudTransferManager(1);
+            var executor = new ImmediateSuccessExecutor(manager);
+            var settings = new PersonalCloudLibrarySourceSettingsV3 { Enabled = true, AllowDownloads = true };
+            using (var queue = new TransferQueueService(manager, executor))
+            {
+                var first = queue.EnqueueLocal(Guid.NewGuid(), "First", "source", "dest",
+                    "LocalFolder", false, settings, () => false);
+                var completion = queue.GetCompletion(first.Id);
+                Assert.That(completion.Wait(TimeSpan.FromSeconds(3)), Is.True);
+                var next = queue.Retry(first.Id, settings);
+                Assert.That(queue.GetCompletion(next.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                Assert.That(next.State, Is.EqualTo(CloudTransferState.Failed));
+                Assert.That(queue.GetCompletion(first.Id), Is.SameAs(completion));
+
+                var field = typeof(TransferQueueService).GetField("requests",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                Assert.That(field, Is.Not.Null);
+                var requests = (System.Collections.IDictionary)field.GetValue(queue);
+                var oldRequest = requests[first.Id];
+                var currentRequest = requests[next.Id];
+                Assert.That(oldRequest.GetType().GetProperty("Settings").GetValue(oldRequest), Is.Null);
+                Assert.That(oldRequest.GetType().GetProperty("ExecutionAuthorized").GetValue(oldRequest), Is.Null);
+                Assert.That(currentRequest.GetType().GetProperty("Settings").GetValue(currentRequest), Is.Not.Null);
+                Assert.That(currentRequest.GetType().GetProperty("ExecutionAuthorized").GetValue(currentRequest), Is.Not.Null);
+                Assert.That(manager.GetLatestRetryableJobForGame(first.GameId), Is.SameAs(next));
+            }
+        }
+
+        [Test]
         public void HostedRetryFreshActionPreservesAttemptIdentityAndRequiresNewGuard()
         {
             var manager = new CloudTransferManager(1);

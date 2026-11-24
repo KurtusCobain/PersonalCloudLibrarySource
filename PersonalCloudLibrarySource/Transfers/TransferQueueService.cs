@@ -315,6 +315,19 @@ namespace PersonalCloudLibrarySource
             requests.Add(job.Id, request);
             awaitingCompletion.Add(job.Id, job);
             pending.Add(request);
+
+            // The new request already owns a cloned settings snapshot and its
+            // execution guard. Older retry contexts are no longer actionable:
+            // the active attempt blocks retry until its terminal outcome, which
+            // then supersedes the previous attempt. Preserve history and tasks.
+            var previousJob = manager.GetLatestRetryableJobForGame(job.GameId);
+            QueueRequest previousRequest;
+            if (previousJob != null && previousJob.Id != job.Id &&
+                requests.TryGetValue(previousJob.Id, out previousRequest))
+            {
+                previousRequest.Settings = null;
+                previousRequest.ExecutionAuthorized = null;
+            }
         }
 
         private async Task WorkerLoopAsync()
