@@ -1,4 +1,4 @@
-using Playnite.SDK;
+using System.Collections.Generic;
 
 namespace PersonalCloudLibrarySource
 {

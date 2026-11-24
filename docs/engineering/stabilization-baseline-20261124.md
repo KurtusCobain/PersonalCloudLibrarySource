@@ -106,3 +106,7 @@ Recovery boundary candidate c62426cc verified 822 passing tests, zero failures/c
 ## Ownership evidence and plan freshness
 
 Receipt footprint probes now conservatively block legacy uninstall when storage is malformed, inaccessible, overlapping cache, linked or cannot establish absence. Receipt reads have a fixed 4097-character cap and path preflight. Managed ZIP footprint checks consult the receipt even if the cache directory is absent, and fail closed on invalid identity or unverified path. Multi-source action plan revalidation rechecks reference identity under the publication lock before returning a previously validated plan. This closes a stale-plan return window, not all subsequent execution races. Three disposable fixture regression cases added. Permanent ZIP cleanup remains disabled; no fork work performed.
+
+## Restore proven dashboard namespace dependency
+
+The explicit Playnite.SDK import correction at 9b0966ec did not resolve CS0246. Restore DashboardStateStore.cs byte-for-byte from the last successful Windows checkpoint c62426cc (including System.Collections.Generic). Do not classify this import as unused. The five project-reference reductions remain independently subject to CI; the last verified test count remains 822.
