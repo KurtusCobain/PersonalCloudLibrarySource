@@ -73,6 +73,64 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void HistoryRetentionPreservesUnclaimedResultsAndLatestRetry()
+        {
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager, new ImmediateSuccessExecutor(manager)))
+            {
+                var first = queue.EnqueueLocal(Guid.NewGuid(), "First", "source", "dest",
+                    "LocalFolder", false, executionAuthorized: () => false);
+                var firstCompletion = queue.GetCompletion(first.Id);
+                Assert.That(firstCompletion.Wait(TimeSpan.FromSeconds(3)), Is.True);
+                var successor = queue.EnqueueLocal(first.GameId, "Success", "source", "dest",
+                    "LocalFolder", false);
+                Assert.That(queue.GetCompletion(successor.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                var latestFailure = queue.EnqueueLocal(Guid.NewGuid(), "Retryable", "source", "other",
+                    "LocalFolder", false, executionAuthorized: () => false);
+                Assert.That(queue.GetCompletion(latestFailure.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                var unclaimed = queue.EnqueueLocal(Guid.NewGuid(), "Unclaimed", "source", "last",
+                    "LocalFolder", false);
+                Assert.That(SpinWait.SpinUntil(() => unclaimed.IsTerminal, TimeSpan.FromSeconds(3)), Is.True);
+
+                var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                var prune = typeof(TransferQueueService).GetMethod("TrimCompletedHistoryLocked", flags);
+                var sync = typeof(TransferQueueService).GetField("syncRoot", flags);
+                Assert.That(prune, Is.Not.Null);
+                Assert.That(sync, Is.Not.Null);
+                lock (sync.GetValue(queue)) prune.Invoke(queue, new object[] { 1 });
+
+                Assert.That(manager.Jobs.Select(job => job.Id), Is.EquivalentTo(new[] { latestFailure.Id, unclaimed.Id }));
+                Assert.That(manager.GetLatestRetryableJobForGame(first.GameId), Is.Null);
+                Assert.That(manager.GetLatestRetryableJobForGame(latestFailure.GameId), Is.SameAs(latestFailure));
+                Assert.That(firstCompletion.Result.Succeeded, Is.False);
+                Assert.Throws<System.Collections.Generic.KeyNotFoundException>(() => queue.GetCompletion(first.Id));
+                Assert.That(queue.Cancel(first.Id), Is.False);
+                Assert.Throws<TransferRetryRefusedException>(() => queue.Retry(first.Id));
+                Assert.That(queue.GetCompletion(unclaimed.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+            }
+        }
+
+        [Test]
+        public void HistoryRetentionNeverEvictsQuarantine()
+        {
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager, new RecoveryRequiredExecutor()))
+            {
+                var job = queue.EnqueueLocal(Guid.NewGuid(), "Recovery", "source", "dest", "LocalFolder", false);
+                Assert.That(queue.GetCompletion(job.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                var flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+                var prune = typeof(TransferQueueService).GetMethod("TrimCompletedHistoryLocked", flags);
+                var sync = typeof(TransferQueueService).GetField("syncRoot", flags);
+                Assert.That(prune, Is.Not.Null);
+                Assert.That(sync, Is.Not.Null);
+                lock (sync.GetValue(queue)) prune.Invoke(queue, new object[] { 0 });
+                Assert.That(manager.GetReservationSnapshot().Single(), Is.SameAs(job));
+                Assert.That(manager.GetJob(job.Id), Is.SameAs(job));
+                Assert.That(queue.GetCompletion(job.Id).Result.RequiresManualRecovery, Is.True);
+            }
+        }
+
+        [Test]
         public void NewAttemptReleasesSupersededRetryContextButPreservesCompletion()
         {
             var manager = new CloudTransferManager(1);

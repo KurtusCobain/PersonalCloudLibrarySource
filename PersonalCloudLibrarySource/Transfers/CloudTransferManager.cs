@@ -156,6 +156,49 @@ namespace PersonalCloudLibrarySource
             }
         }
 
+        // The queue supplies only completed requests whose result task has
+        // already been obtained by a consumer. This never changes a journal,
+        // an active reservation, or a recovery-required attempt.
+        internal IReadOnlyList<Guid> PruneTerminalHistory(ISet<Guid> eligible, int keepCount)
+        {
+            if (eligible == null) throw new ArgumentNullException(nameof(eligible));
+            if (keepCount < 0) throw new ArgumentOutOfRangeException(nameof(keepCount));
+            var removed = new HashSet<Guid>();
+            lock (syncRoot)
+            {
+                var ordinaryCount = jobs.Count(job => job.IsTerminal && !job.RequiresManualRecovery);
+                foreach (var job in jobs)
+                {
+                    if (ordinaryCount <= keepCount) break;
+                    if (!job.IsTerminal || job.RequiresManualRecovery ||
+                        reservedJobs.ContainsKey(job.Id) || !eligible.Contains(job.Id))
+                        continue;
+                    var attempts = jobsByGame[job.GameId];
+                    var latestTerminal = attempts.FindLastIndex(attempt => attempt.IsTerminal);
+                    if (latestTerminal >= 0 && ReferenceEquals(attempts[latestTerminal], job))
+                    {
+                        // Keep the latest retryable attempt and any terminal
+                        // fence needed to suppress an older retained failure.
+                        if (job.CanRetry || attempts.Any(attempt => attempt.Id != job.Id && attempt.CanRetry))
+                            continue;
+                    }
+                    attempts.Remove(job);
+                    if (attempts.Count == 0) jobsByGame.Remove(job.GameId);
+                    jobsById.Remove(job.Id);
+                    if (job.State == CloudTransferState.Failed) failedCount--;
+                    removed.Add(job.Id);
+                    ordinaryCount--;
+                }
+                if (removed.Count > 0)
+                {
+                    jobs.RemoveAll(job => removed.Contains(job.Id));
+                    lifecycleRevision++;
+                }
+            }
+            if (removed.Count > 0) OnChanged();
+            return removed.ToArray();
+        }
+
         internal void MarkRequiresManualRecovery(Guid jobId)
         {
             lock (syncRoot)

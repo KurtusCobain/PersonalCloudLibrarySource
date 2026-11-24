@@ -1,13 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace PersonalCloudLibrarySource
 {
     public sealed class TransferActivityTracker
     {
         private readonly object syncRoot = new object();
-        private readonly HashSet<Guid> processedJobIds = new HashSet<Guid>();
+        // Do not keep an independent, unbounded index after the queue
+        // releases history. Job identity is immutable; a retained reference
+        // remains deduplicated, even across multiple presentations.
+        private readonly ConditionalWeakTable<CloudTransferJob, object> processedJobs =
+            new ConditionalWeakTable<CloudTransferJob, object>();
+        private static readonly object Processed = new object();
 
         public IReadOnlyList<DashboardActivityRecord> CollectNew(IEnumerable<CloudTransferJob> sourceJobs)
         {
@@ -20,10 +26,10 @@ namespace PersonalCloudLibrarySource
                     .Where(value => value != null && value.IsTerminal)
                     .OrderBy(value => value.CompletedAt ?? value.CreatedAt))
                 {
-                    if (!processedJobIds.Add(job.Id))
-                    {
+                    object ignored;
+                    if (processedJobs.TryGetValue(job, out ignored))
                         continue;
-                    }
+                    processedJobs.Add(job, Processed);
 
                     var record = CreateRecord(job);
                     if (record != null)

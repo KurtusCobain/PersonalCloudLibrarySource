@@ -313,6 +313,32 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void HistoryPruningDoesNotRemoveSupersessionFenceWhileOlderFailureRemains()
+        {
+            var manager = new CloudTransferManager(1);
+            var game = Guid.NewGuid();
+            var older = manager.Enqueue(game, "Older", "source", "dest", "LocalFolder");
+            manager.Transition(older.Id, CloudTransferState.Failed);
+            var newer = manager.Retry(older.Id);
+            manager.Transition(newer.Id, CloudTransferState.Transferring);
+            manager.Transition(newer.Id, CloudTransferState.Completed);
+            var prune = typeof(CloudTransferManager).GetMethod("PruneTerminalHistory",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.That(prune, Is.Not.Null);
+            var eligible = new System.Collections.Generic.HashSet<Guid> { newer.Id };
+            var removed = (System.Collections.Generic.IReadOnlyList<Guid>)prune.Invoke(
+                manager, new object[] { eligible, 0 });
+            Assert.That(removed, Is.Empty);
+            Assert.That(manager.GetLatestRetryableJobForGame(game), Is.Null);
+            eligible.Add(older.Id);
+            removed = (System.Collections.Generic.IReadOnlyList<Guid>)prune.Invoke(
+                manager, new object[] { eligible, 0 });
+            Assert.That(removed, Is.EquivalentTo(new[] { older.Id, newer.Id }));
+            Assert.That(manager.Jobs, Is.Empty);
+            Assert.That(manager.FailedCount, Is.Zero);
+        }
+
+        [Test]
         public void RetryLookupUsesRegistrationOrderInsteadOfCompletionTime()
         {
             var manager = new CloudTransferManager(2);

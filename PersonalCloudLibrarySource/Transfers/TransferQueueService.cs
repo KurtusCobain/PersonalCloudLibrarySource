@@ -31,6 +31,7 @@ namespace PersonalCloudLibrarySource
             public PersonalCloudLibrarySourceSettings Settings { get; set; }
             public Func<bool> ExecutionAuthorized { get; set; }
             public bool TerminalPublished { get; set; }
+            public bool CompletionClaimed { get; set; }
             public TaskCompletionSource<CloudTransferExecutionResult> Completion { get; set; }
         }
 
@@ -51,6 +52,9 @@ namespace PersonalCloudLibrarySource
         private readonly Dictionary<Guid, CloudTransferJob> awaitingCompletion =
             new Dictionary<Guid, CloudTransferJob>();
         private const int WorkerCount = 5;
+        private const int RetainedHistoryLimit = 512;
+        private const int RetentionBatchSize = 32;
+        private int completionsSincePrune;
         private readonly SemaphoreSlim signal = new SemaphoreSlim(0, WorkerCount);
         private readonly Task[] workers;
         private bool stopping;
@@ -104,6 +108,9 @@ namespace PersonalCloudLibrarySource
                     throw new KeyNotFoundException("Transfer request was not found: " + jobId);
                 }
 
+                // Once returned, the caller owns this task independently of
+                // the bounded history lookup; an unclaimed result is protected.
+                request.CompletionClaimed = true;
                 return request.Completion.Task;
             }
         }
@@ -112,7 +119,7 @@ namespace PersonalCloudLibrarySource
         {
             lock (syncRoot)
             {
-                if (stopping || disposed) return false;
+                if (stopping || disposed || !requests.ContainsKey(jobId)) return false;
                 var accepted = manager.Cancel(jobId);
                 if (accepted) WakeWorkersLocked();
                 return accepted;
@@ -176,7 +183,7 @@ namespace PersonalCloudLibrarySource
                 ThrowIfStoppingLocked();
                 if (!requests.TryGetValue(failedJobId, out previous))
                 {
-                    throw new KeyNotFoundException("Transfer request was not found: " + failedJobId);
+                    throw new TransferRetryRefusedException("Transfer history is no longer retained. Refresh the library.");
                 }
 
                 if (manager.GetActiveJobForGame(previous.Job.GameId) != null)
@@ -459,7 +466,26 @@ namespace PersonalCloudLibrarySource
             {
                 request.Completion.TrySetResult(result);
                 awaitingCompletion.Remove(request.Job.Id);
+                if (requests.Count > RetainedHistoryLimit &&
+                    ++completionsSincePrune >= RetentionBatchSize)
+                {
+                    completionsSincePrune = 0;
+                    TrimCompletedHistoryLocked(RetainedHistoryLimit);
+                }
             }
+        }
+
+        // A soft cap: live, unclaimed, latest retryable and quarantined
+        // attempts may exceed it. Never discard recovery or completion authority
+        // to meet a numerical target. Prune in batches, not on every progress tick.
+        private void TrimCompletedHistoryLocked(int keepCount)
+        {
+            var eligible = new HashSet<Guid>(requests.Values
+                .Where(request => request.CompletionClaimed && request.Completion.Task.IsCompleted &&
+                    request.TerminalPublished && !awaitingCompletion.ContainsKey(request.Job.Id))
+                .Select(request => request.Job.Id));
+            foreach (var id in manager.PruneTerminalHistory(eligible, keepCount))
+                requests.Remove(id);
         }
 
         private static bool IsExecutionAuthorized(QueueRequest request)
