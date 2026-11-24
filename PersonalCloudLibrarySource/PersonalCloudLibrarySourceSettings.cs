@@ -818,26 +818,6 @@ namespace PersonalCloudLibrarySource
             SetupStatusDetails = details.ToString().TrimEnd();
         }
 
-        private void RefreshSetupStatusFromErrors(List<string> errors)
-        {
-            SetupStatusHeadline = PclsResources.Get("LOCPLSSetupNeedsAttention", "Setup needs attention");
-            SetupStatusDetails = string.Join(Environment.NewLine, errors);
-        }
-
-        private void RefreshSetupStatusFromValidation(ManifestValidationSummary summary)
-        {
-            SetupStatusHeadline = PclsResources.Get("LOCPLSSetupLooksValid", "Setup looks valid");
-            SetupStatusDetails = PclsResources.Format(
-                "LOCPLSValidationStatusDetails",
-                "Items found: {1}{0}Download-eligible: {2}{0}Cached or installed: {3}{0}Warnings: {4}{0}Manifest: {5}",
-                Environment.NewLine,
-                summary.ItemsFound,
-                summary.DownloadEligible,
-                summary.CachedInstalled,
-                summary.Warnings,
-                plugin.DescribeManifestPath(Settings));
-        }
-
         private void RefreshSetupStatusFromVerificationReport(LibraryVerificationReport report)
         {
             var hasIssues =

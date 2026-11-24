@@ -39,10 +39,6 @@ jobs:
         shell: pwsh
         run: .\tools\test-release-baseline.ps1
 
-      - name: Run release validator regressions
-        shell: powershell
-        run: .\tools\test-release-validation.ps1
-
       - name: Run standalone manifest generator regressions
         shell: powershell
         run: .\tools\test-manifest-generator.ps1

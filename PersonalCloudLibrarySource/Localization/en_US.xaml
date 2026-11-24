@@ -366,7 +366,6 @@
     <sys:String x:Key="LOCPLSStatusCacheFolder">Cache folder: {0}</sys:String>
     <sys:String x:Key="LOCPLSStatusLastGenerated">Last generated: {0}</sys:String>
     <sys:String x:Key="LOCPLSStatusLastGeneratedItems">Last generated items: {0}</sys:String>
-    <sys:String x:Key="LOCPLSValidationStatusDetails">Items found: {1}{0}Download-eligible: {2}{0}Cached or installed: {3}{0}Warnings: {4}{0}Manifest: {5}</sys:String>
     <sys:String x:Key="LOCPLSVerificationStatusDetails">Manifest load: {1}{0}Items found: {2}{0}Download/cache-eligible: {3}{0}Cached or installed: {4}{0}Configuration errors: {5}{0}Warnings sampled: {6}{0}Verification report: {7}</sys:String>
     <sys:String x:Key="LOCPLSGenerationStatusDetails">Items detected: {1}{0}Skipped entries: {2}{0}Warnings: {3}{0}Manifest: {4}</sys:String>
     <sys:String x:Key="LOCPLSJsonFileFilter">JSON files ({0})|{0}|All files ({1})|{1}</sys:String>

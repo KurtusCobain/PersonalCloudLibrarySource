@@ -2,6 +2,7 @@ using NUnit.Framework;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Text.RegularExpressions;
 
 namespace PersonalCloudLibrarySource.Tests.Repository
 {
@@ -13,7 +14,11 @@ namespace PersonalCloudLibrarySource.Tests.Repository
         {
             var result = RunPowerShell(".\\tools\\test-release-validation.ps1");
             Assert.That(result.ExitCode, Is.EqualTo(0), result.Output);
-            StringAssert.Contains("6 passed, 0 failed", result.Output);
+            var summary = Regex.Match(result.Output, @"Release validator tests: (\d+) passed, (\d+) failed\.");
+            Assert.That(summary.Success, Is.True, result.Output);
+            Assert.That(int.Parse(summary.Groups[1].Value), Is.GreaterThanOrEqualTo(7), result.Output);
+            Assert.That(int.Parse(summary.Groups[2].Value), Is.Zero, result.Output);
+            Console.WriteLine(summary.Value);
         }
 
         [Test]

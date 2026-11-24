@@ -130,7 +130,9 @@ if (-not $DryRun) {
     if (-not $NoReport -and [string]::Equals($OutputPath, $ReportPath, [StringComparison]::OrdinalIgnoreCase)) {
         throw 'Manifest and report must have different output paths.'
     }
-    foreach ($target in @($OutputPath) + @($(if (-not $NoReport) { $ReportPath }))) {
+    $targets = @($OutputPath)
+    if (-not $NoReport) { $targets += $ReportPath }
+    foreach ($target in $targets) {
         if ((Test-Path -LiteralPath $target) -and (-not $Overwrite)) {
             throw "Output file already exists. Use -Overwrite to replace it: $target"
         }

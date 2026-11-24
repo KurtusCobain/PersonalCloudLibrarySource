@@ -508,21 +508,6 @@ namespace PersonalCloudLibrarySource
             return summary;
         }
 
-        private static PersonalCloudLibraryManifest ParseManifest(string json)
-        {
-            var result = new ManifestParserValidator().Parse(json);
-            if (!result.Succeeded) throw new InvalidOperationException(result.Error);
-            return result.CreateValidatedManifest();
-        }
-
-        private static List<GameMetadata> ConvertManifestItemsToGameMetadata(
-            PersonalCloudLibraryManifest manifest,
-            PersonalCloudLibrarySourceSettings pluginSettings,
-            List<string> diagnostics)
-        {
-            return new ManifestItemMapper().Map(manifest.Items, pluginSettings, diagnostics);
-        }
-
         public static string ResolveLaunchPath(PersonalCloudLibraryItem item, PersonalCloudLibrarySourceSettings pluginSettings)
         {
             return new CachePathResolver().Resolve(item, pluginSettings).LaunchPath;
