@@ -122,6 +122,12 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
                     RcloneRemoteName = ":local:",
                     RcloneTimeoutSeconds = 60
                 };
+                var manifest = Path.Combine(root, "manifest.json");
+                const string manifestJson = "{\"items\":[]}";
+                File.WriteAllText(manifest, manifestJson, new System.Text.UTF8Encoding(false));
+                settings.RcloneManifestPath = manifest.Replace('\\', '/');
+                Assert.That(new RcloneManifestReader().ReadManifestJson(settings),
+                    Is.EqualTo(manifestJson), "Real rclone manifest reads also use the contained launcher.");
                 var adapter = new RcloneTransferAdapter(new RcloneProcessRunner());
                 var result = adapter.Copy(settings, source.Replace('\\', '/'),
                     destination, true, CancellationToken.None, null);

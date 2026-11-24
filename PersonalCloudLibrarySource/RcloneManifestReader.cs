@@ -38,7 +38,7 @@ namespace PersonalCloudLibrarySource
             var timeoutSeconds = settings.RcloneTimeoutSeconds < 5 || settings.RcloneTimeoutSeconds > 86400
                 ? 30 : settings.RcloneTimeoutSeconds;
 
-            using (var process = new Process())
+            using (var process = new WindowsJobProcessHandle())
             {
                 process.StartInfo = new ProcessStartInfo
                 {
@@ -66,17 +66,26 @@ namespace PersonalCloudLibrarySource
                 try
                 {
                     var timer = Stopwatch.StartNew();
-                    var output = ReadBoundedAsync(process.StandardOutput,
-                        ManifestParserValidator.MaxManifestCharacters);
-                    var stderr = DrainAsync(process.StandardError);
+                    // The native pipes are synchronous handles. Start both
+                    // readers independently so one full pipe cannot starve the other.
+                    var output = Task.Run(() => ReadBoundedAsync(process.StandardOutput,
+                        ManifestParserValidator.MaxManifestCharacters));
+                    var stderr = Task.Run(() => DrainAsync(process.StandardError));
                     ObserveFailure(output);
                     ObserveFailure(stderr);
 
                     // Bound both process exit and pipe completion. Inherited
                     // pipe handles must not keep this caller blocked forever.
                     var exited = false;
+                    Stopwatch descendants = null;
                     while (!exited || !output.IsCompleted || !stderr.IsCompleted)
                     {
+                        if (!exited && process.RootExited)
+                        {
+                            if (descendants == null) descendants = Stopwatch.StartNew();
+                            if (descendants.Elapsed >= TimeSpan.FromSeconds(5))
+                                throw new InvalidOperationException("Rclone manifest descendants did not finish after root exit.");
+                        }
                         if (output.IsFaulted)
                             throw new InvalidOperationException("Rclone manifest could not be read within its character limit.");
                         if (stderr.IsFaulted)
@@ -140,7 +149,7 @@ namespace PersonalCloudLibrarySource
                 TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         }
 
-        private static void StopProcess(Process process)
+        private static void StopProcess(IRcloneProcessHandle process)
         {
             try
             {
