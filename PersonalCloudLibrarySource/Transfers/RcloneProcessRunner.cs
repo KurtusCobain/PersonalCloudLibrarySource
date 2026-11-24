@@ -63,26 +63,31 @@ namespace PersonalCloudLibrarySource
                     var errorEnded = 0;
                     var launchAttempted = false;
 
-                    DataReceivedEventHandler outputHandler = (sender, args) =>
+                    var receiving = 1;
+                    Action<string> outputLine = line =>
                     {
-                        if (args.Data == null) { Interlocked.Exchange(ref outputEnded, 1); return; }
+                        if (Volatile.Read(ref receiving) == 0) return;
+                        if (line == null) { Interlocked.Exchange(ref outputEnded, 1); return; }
                         try
                         {
-                            HandleLine(args.Data, output, syncRoot, progress,
+                            HandleLine(line, output, syncRoot, progress,
                                 activityTimeout, epoch + clock.Elapsed);
                         }
                         catch { Interlocked.Exchange(ref callbackFailed, 1); }
                     };
-                    DataReceivedEventHandler errorHandler = (sender, args) =>
+                    Action<string> errorLine = line =>
                     {
-                        if (args.Data == null) { Interlocked.Exchange(ref errorEnded, 1); return; }
+                        if (Volatile.Read(ref receiving) == 0) return;
+                        if (line == null) { Interlocked.Exchange(ref errorEnded, 1); return; }
                         try
                         {
-                            HandleLine(args.Data, error, syncRoot, progress,
+                            HandleLine(line, error, syncRoot, progress,
                                 activityTimeout, epoch + clock.Elapsed);
                         }
                         catch { Interlocked.Exchange(ref callbackFailed, 1); }
                     };
+                    DataReceivedEventHandler outputHandler = (sender, args) => outputLine(args.Data);
+                    DataReceivedEventHandler errorHandler = (sender, args) => errorLine(args.Data);
                     process.OutputDataReceived += outputHandler;
                     process.ErrorDataReceived += errorHandler;
 
@@ -96,8 +101,19 @@ namespace PersonalCloudLibrarySource
                         launchAttempted = true;
                         if (!process.Start())
                             return RcloneProcessResult.Failure("rclone did not start.");
-                        process.BeginOutputReadLine();
-                        process.BeginErrorReadLine();
+                        var bounded = process as RcloneProcessHandle;
+                        if (bounded != null)
+                        {
+                            Action readFailed = () => Interlocked.Exchange(ref callbackFailed, 1);
+                            bounded.BeginBoundedOutputRead(outputLine, readFailed);
+                            bounded.BeginBoundedErrorRead(errorLine, readFailed);
+                        }
+                        else
+                        {
+                            // Retain the existing injected-process contract.
+                            process.BeginOutputReadLine();
+                            process.BeginErrorReadLine();
+                        }
 
                         while (!process.WaitForExit(200))
                         {
@@ -140,7 +156,8 @@ namespace PersonalCloudLibrarySource
                         var drain = Stopwatch.StartNew();
                         while (Volatile.Read(ref outputEnded) == 0 || Volatile.Read(ref errorEnded) == 0)
                         {
-                            if (drain.Elapsed >= TimeSpan.FromSeconds(5) || cancellationToken.IsCancellationRequested)
+                            if (Volatile.Read(ref callbackFailed) != 0 ||
+                                drain.Elapsed >= TimeSpan.FromSeconds(5) || cancellationToken.IsCancellationRequested)
                                 return RcloneProcessResult.Failure("rclone output drain was not confirmed.",
                                     processExitConfirmed: false);
                             Thread.Sleep(20);
@@ -173,6 +190,7 @@ namespace PersonalCloudLibrarySource
                     }
                     finally
                     {
+                        Interlocked.Exchange(ref receiving, 0);
                         process.OutputDataReceived -= outputHandler;
                         process.ErrorDataReceived -= errorHandler;
                     }

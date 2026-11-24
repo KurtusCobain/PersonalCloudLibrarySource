@@ -1,5 +1,8 @@
 using System;
 using System.Diagnostics;
+using System.IO;
+using System.Text;
+using System.Threading.Tasks;
 
 namespace PersonalCloudLibrarySource
 {
@@ -34,6 +37,9 @@ namespace PersonalCloudLibrarySource
     internal sealed class RcloneProcessHandle : IRcloneProcessHandle
     {
         private readonly Process process;
+        private TextReader boundedOutput;
+        private TextReader boundedError;
+        private const int DiagnosticLineLimit = 16 * 1024;
 
         public RcloneProcessHandle(Process process)
         {
@@ -66,6 +72,91 @@ namespace PersonalCloudLibrarySource
         public bool WaitForExit(int milliseconds) => process.WaitForExit(milliseconds);
         public void WaitForExit() => process.WaitForExit();
         public void Kill() => process.Kill();
-        public void Dispose() => process.Dispose();
+        internal void BeginBoundedOutputRead(Action<string> receive, Action failure)
+        {
+            boundedOutput = process.StandardOutput;
+            StartBoundedRead(boundedOutput, receive, failure);
+        }
+
+        internal void BeginBoundedErrorRead(Action<string> receive, Action failure)
+        {
+            boundedError = process.StandardError;
+            StartBoundedRead(boundedError, receive, failure);
+        }
+
+        private static void StartBoundedRead(TextReader reader, Action<string> receive, Action failure)
+        {
+            // Start both pipes independently; a constantly readable pipe must
+            // not prevent the other pipe from starting. All read faults are
+            // reported to the owning process runner.
+            Task.Run(async () =>
+            {
+                try
+                {
+                    await ReadBoundedLinesAsync(reader, receive, DiagnosticLineLimit).ConfigureAwait(false);
+                    receive(null);
+                }
+                catch { failure(); }
+            });
+        }
+
+        // Framework BeginOutputReadLine accumulates an entire line before the
+        // callback. Bound the actual production reader, not just the log tail.
+        // Oversized lines are omitted as a whole, never parsed as progress.
+        internal static async Task ReadBoundedLinesAsync(TextReader reader, Action<string> receive, int limit)
+        {
+            if (reader == null) throw new ArgumentNullException(nameof(reader));
+            if (receive == null) throw new ArgumentNullException(nameof(receive));
+            if (limit < 1) throw new ArgumentOutOfRangeException(nameof(limit));
+            const string omitted = "[rclone diagnostic line omitted]";
+            var buffer = new char[4096];
+            var line = new StringBuilder(Math.Min(limit, 4096));
+            var overflow = false;
+            var skipLf = false;
+            Action emit = () =>
+            {
+                receive(overflow ? omitted.Substring(0, Math.Min(limit, omitted.Length)) : line.ToString());
+                line.Clear();
+                overflow = false;
+            };
+            int count;
+            while ((count = await reader.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false)) != 0)
+            {
+                for (var index = 0; index < count; index++)
+                {
+                    var character = buffer[index];
+                    if (skipLf)
+                    {
+                        skipLf = false;
+                        if (character == '\n') continue;
+                    }
+                    if (character == '\r' || character == '\n')
+                    {
+                        emit();
+                        skipLf = character == '\r';
+                    }
+                    else if (!overflow)
+                    {
+                        if (line.Length == limit)
+                        {
+                            overflow = true;
+                            line.Clear();
+                        }
+                        else line.Append(character);
+                    }
+                }
+            }
+            if (overflow || line.Length > 0) emit();
+        }
+
+        public void Dispose()
+        {
+            try { boundedOutput?.Dispose(); }
+            finally
+            {
+                try { boundedError?.Dispose(); }
+                finally { process.Dispose(); }
+            }
+        }
     }
 }

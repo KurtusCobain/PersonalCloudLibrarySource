@@ -26,6 +26,70 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void BoundedProductionLineReaderOmitsOversizeLineAndPreservesFollowingData()
+        {
+            var handleType = typeof(RcloneProcessFactory).Assembly.GetType("PersonalCloudLibrarySource.RcloneProcessHandle");
+            var read = handleType.GetMethod("ReadBoundedLinesAsync",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.That(read, Is.Not.Null);
+            var lines = new System.Collections.Generic.List<string>();
+            var prefix = new string('p', 4095);
+            using (var source = new StringReader(prefix + "\r\n" + new string('x', 300000) +
+                "\rnext\n\nlast"))
+            {
+                var task = (System.Threading.Tasks.Task)read.Invoke(null,
+                    new object[] { source, (Action<string>)lines.Add, 4096 });
+                task.GetAwaiter().GetResult();
+            }
+            Assert.That(lines, Is.EqualTo(new[] { prefix, "[rclone diagnostic line omitted]", "next", "", "last" }));
+        }
+
+        [Test]
+        public void ProductionBoundedPipeReaderDrainsOversizeLineFromDisposableChild()
+        {
+            var executable = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
+                "WindowsPowerShell", "v1.0", "powershell.exe");
+            using (var process = new RcloneProcessFactory().Create())
+            using (var done = new ManualResetEventSlim())
+            {
+                var lines = new System.Collections.Concurrent.ConcurrentQueue<string>();
+                var failed = 0;
+                process.StartInfo = new ProcessStartInfo
+                {
+                    FileName = executable,
+                    Arguments = "-NoProfile -NonInteractive -Command \"[Console]::WriteLine('x'*100000); [Console]::WriteLine('tail')\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true
+                };
+                var started = false;
+                try
+                {
+                    started = process.Start();
+                    Assert.That(started, Is.True);
+                    var begin = process.GetType().GetMethod("BeginBoundedOutputRead",
+                        System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+                    Assert.That(begin, Is.Not.Null);
+                    Action<string> receive = line => { if (line == null) done.Set(); else lines.Enqueue(line); };
+                    Action failure = () => { Interlocked.Exchange(ref failed, 1); done.Set(); };
+                    begin.Invoke(process, new object[] { receive, failure });
+                    Assert.That(process.WaitForExit(10000), Is.True);
+                    Assert.That(done.Wait(TimeSpan.FromSeconds(5)), Is.True);
+                    Assert.That(Volatile.Read(ref failed), Is.Zero);
+                    Assert.That(lines.ToArray(), Is.EqualTo(new[] { "[rclone diagnostic line omitted]", "tail" }));
+                }
+                finally
+                {
+                    if (started && !process.HasExited)
+                    {
+                        process.Kill();
+                        process.WaitForExit(5000);
+                    }
+                }
+            }
+        }
+
+        [Test]
         public void Run_CancellationKillsAndWaitsForChildProcess()
         {
             var process = new FakeProcessHandle();
