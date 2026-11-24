@@ -49,13 +49,16 @@ namespace PersonalCloudLibrarySource
                 return CaptureDirectoryIdentity(handle);
         }
 
-        internal static void RequireDirectoryIdentity(string path, FileIdentity expected)
+        internal static FileIdentity ObserveDirectoryIdentity(string path)
         {
             using (var handle = OpenDirectoryForReview(path, false))
-            {
-                if (!SameIdentity(CaptureDirectoryIdentity(handle), expected))
-                    throw new IOException("Private directory identity changed.");
-            }
+                return CaptureDirectoryIdentity(handle);
+        }
+
+        internal static void RequireDirectoryIdentity(string path, FileIdentity expected)
+        {
+            if (!SameIdentity(ObserveDirectoryIdentity(path), expected))
+                throw new IOException("Private directory identity changed.");
         }
 
         internal static void DeleteOwnedEmptyDirectory(string path, FileIdentity expected)
@@ -176,7 +179,7 @@ namespace PersonalCloudLibrarySource
             return SameIdentity(current, expected);
         }
 
-        private static bool SameIdentity(FileIdentity current, FileIdentity expected)
+        internal static bool SameIdentity(FileIdentity current, FileIdentity expected)
         {
             return current.VolumeSerial == expected.VolumeSerial &&
                 current.IdLow == expected.IdLow && current.IdHigh == expected.IdHigh;

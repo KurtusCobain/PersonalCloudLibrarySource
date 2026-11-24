@@ -357,6 +357,57 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             }
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Copy_SameLengthEditAfterProcessExitIsPreserved(bool cancel)
+        {
+            var destination = Path.Combine(testRoot, "file.bin");
+            var job = Guid.NewGuid();
+            var partial = TransferPartialPathPolicy.Create(destination, job);
+            var runner = new FakeRcloneProcessRunner(request =>
+            {
+                File.WriteAllText(request.DestinationPath, "original");
+                return RcloneProcessResult.Success("ok");
+            }) { ReportProgress = false };
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var result = new RcloneTransferAdapter(runner).Copy(CreateSettings(), "file.bin", destination,
+                    false, job, cancellation.Token, null, state =>
+                    {
+                        if (state != CloudTransferState.Finalizing) return;
+                        File.WriteAllText(partial, "modified");
+                        if (cancel) cancellation.Cancel();
+                    });
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(result.RequiresManualRecovery, Is.True);
+                Assert.That(File.ReadAllText(partial), Is.EqualTo("modified"));
+                Assert.That(File.Exists(destination), Is.False);
+            }
+        }
+
+        [Test]
+        public void CopyDirectory_ZeroByteInjectionAfterProcessExitCannotPublish()
+        {
+            var destination = Path.Combine(testRoot, "game");
+            var job = Guid.NewGuid();
+            var partial = TransferPartialPathPolicy.Create(destination, job);
+            var foreign = Path.Combine(partial, "foreign.bin");
+            var runner = new FakeRcloneProcessRunner(request =>
+            {
+                File.WriteAllText(Path.Combine(request.DestinationPath, "game.bin"), "download");
+                return RcloneProcessResult.Success("ok");
+            });
+            var result = new RcloneTransferAdapter(runner).Copy(CreateSettings(), "game", destination,
+                true, job, CancellationToken.None, null, state =>
+                {
+                    if (state == CloudTransferState.Finalizing) File.WriteAllBytes(foreign, new byte[0]);
+                });
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.RequiresManualRecovery, Is.True);
+            Assert.That(File.Exists(foreign), Is.True);
+            Assert.That(Directory.Exists(destination), Is.False);
+        }
+
         [Test]
         public void Copy_DestinationAppearsAtFinalizationPreservesStaging()
         {

@@ -1,5 +1,8 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 
 namespace PersonalCloudLibrarySource
@@ -7,6 +10,21 @@ namespace PersonalCloudLibrarySource
     public sealed class RcloneTransferAdapter
     {
         private readonly IRcloneProcessRunner processRunner;
+
+        private sealed class StagedEntry
+        {
+            public TransferPartialPathPolicy.FileIdentity Identity;
+            public bool Directory;
+            public long Length;
+            public byte[] Digest;
+        }
+
+        private sealed class StagedSnapshot
+        {
+            public readonly Dictionary<string, StagedEntry> Entries =
+                new Dictionary<string, StagedEntry>(StringComparer.OrdinalIgnoreCase);
+            public long Bytes;
+        }
 
         public RcloneTransferAdapter(IRcloneProcessRunner processRunner)
         {
@@ -68,6 +86,7 @@ namespace PersonalCloudLibrarySource
             settings = settings ?? new PersonalCloudLibrarySourceSettings();
             var mayOwnPartial = false;
             TransferPartialPathPolicy.FileIdentity? stagingIdentity = null;
+            StagedSnapshot snapshot = null;
             var processExitConfirmed = true;
 
             try
@@ -141,7 +160,7 @@ namespace PersonalCloudLibrarySource
 
                 if (processResult.WasCancelled || cancellationToken.IsCancellationRequested)
                 {
-                    if (!TryDeletePartial(partialPath, isDirectory, stagingIdentity, out cleanupError))
+                    if (!TryDeletePartial(partialPath, isDirectory, stagingIdentity, snapshot, out cleanupError))
                     {
                         return CloudTransferExecutionResult.Failure("Transfer cancellation cleanup failed: " + cleanupError, requiresManualRecovery: true);
                     }
@@ -151,7 +170,7 @@ namespace PersonalCloudLibrarySource
 
                 if (!processResult.Succeeded)
                 {
-                    if (!TryDeletePartial(partialPath, isDirectory, stagingIdentity, out cleanupError))
+                    if (!TryDeletePartial(partialPath, isDirectory, stagingIdentity, snapshot, out cleanupError))
                     {
                         return CloudTransferExecutionResult.Failure(
                             "Transfer failed and partial cleanup failed: " + cleanupError,
@@ -161,20 +180,21 @@ namespace PersonalCloudLibrarySource
                     return CloudTransferExecutionResult.Failure(processResult.Message);
                 }
 
-                long copiedBytes;
-                phase?.Invoke(CloudTransferState.Verifying);
-                if (!SafeFileTreeTraversal.TryMeasure(partialPath, isDirectory, cancellationToken, out copiedBytes))
+                // Freeze the observed output after confirmed process-tree exit
+                // and before calling external phase/progress handlers. This is
+                // a post-run integrity observation, not descendant ownership.
+                try
                 {
-                    if (!TryDeletePartial(partialPath, isDirectory, stagingIdentity, out cleanupError))
-                    {
-                        return CloudTransferExecutionResult.Failure(
-                            "Transfer verification failed and partial cleanup failed: " + cleanupError,
-                            requiresManualRecovery: true);
-                    }
-                    return CloudTransferExecutionResult.Failure(
-                        "rclone completed, but the partial destination did not pass verification.");
+                    snapshot = CaptureSnapshot(partialPath, isDirectory, stagingIdentity.Value, cancellationToken);
                 }
-
+                catch (Exception)
+                {
+                    return CloudTransferExecutionResult.Failure(
+                        "Transfer verification failed; cleanup was refused because staging could not be verified.",
+                        requiresManualRecovery: true);
+                }
+                var copiedBytes = snapshot.Bytes;
+                phase?.Invoke(CloudTransferState.Verifying);
                 progress?.Invoke(copiedBytes, copiedBytes);
                 cancellationToken.ThrowIfCancellationRequested();
                 phase?.Invoke(CloudTransferState.Finalizing);
@@ -183,14 +203,16 @@ namespace PersonalCloudLibrarySource
                 {
                     TransferPartialPathPolicy.RequirePublicationPaths(partialPath, normalizedDestination, isDirectory);
                     if (isDirectory)
+                    {
+                        VerifyDirectorySnapshot(partialPath, snapshot, cancellationToken);
+                        cancellationToken.ThrowIfCancellationRequested();
                         TransferPartialPathPolicy.PublishOwnedDirectory(partialPath, normalizedDestination, stagingIdentity.Value);
+                    }
                     else
                     {
                         using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(partialPath, true))
                         {
-                            if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(input.SafeFileHandle, stagingIdentity.Value) ||
-                                input.Length != copiedBytes)
-                                throw new IOException("rclone staging file identity or length changed.");
+                            VerifyFile(input, snapshot.Entries[partialPath], cancellationToken, new byte[64 * 1024]);
                             cancellationToken.ThrowIfCancellationRequested();
                             TransferPartialPathPolicy.PublishVerifiedHandle(input.SafeFileHandle, partialPath, normalizedDestination);
                         }
@@ -213,7 +235,7 @@ namespace PersonalCloudLibrarySource
                         requiresManualRecovery: true);
                 if (!mayOwnPartial) return CloudTransferExecutionResult.CancelledResult();
                 string cleanupError;
-                if (!TryDeletePartial(partialPath, isDirectory, stagingIdentity, out cleanupError))
+                if (!TryDeletePartial(partialPath, isDirectory, stagingIdentity, snapshot, out cleanupError))
                 {
                     return CloudTransferExecutionResult.Failure("Transfer cancellation cleanup failed: " + cleanupError, requiresManualRecovery: true);
                 }
@@ -227,11 +249,95 @@ namespace PersonalCloudLibrarySource
                         requiresManualRecovery: true);
                 if (!mayOwnPartial) return CloudTransferExecutionResult.Failure(ex.Message, ex);
                 string cleanupError;
-                return TryDeletePartial(partialPath, isDirectory, stagingIdentity, out cleanupError)
+                return TryDeletePartial(partialPath, isDirectory, stagingIdentity, snapshot, out cleanupError)
                     ? CloudTransferExecutionResult.Failure(ex.Message, ex)
                     : CloudTransferExecutionResult.Failure(ex.Message + " Partial cleanup failed: " + cleanupError, ex,
                         requiresManualRecovery: true);
             }
+        }
+
+        private static StagedSnapshot CaptureSnapshot(string root, bool directory,
+            TransferPartialPathPolicy.FileIdentity expected, CancellationToken token)
+        {
+            var snapshot = new StagedSnapshot();
+            var buffer = new byte[64 * 1024];
+            Action<string, FileAttributes> observe = (path, attributes) =>
+            {
+                token.ThrowIfCancellationRequested();
+                var entry = new StagedEntry { Directory = (attributes & FileAttributes.Directory) != 0 };
+                if (entry.Directory)
+                    entry.Identity = TransferPartialPathPolicy.ObserveDirectoryIdentity(path);
+                else
+                {
+                    using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
+                    {
+                        entry.Identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(input.SafeFileHandle);
+                        entry.Length = input.Length;
+                        entry.Digest = Digest(input, token, buffer);
+                    }
+                    snapshot.Bytes = checked(snapshot.Bytes + entry.Length);
+                }
+                snapshot.Entries.Add(path, entry);
+            };
+            observe(root, directory ? FileAttributes.Directory : FileAttributes.Normal);
+            if (!TransferPartialPathPolicy.SameIdentity(snapshot.Entries[root].Identity, expected))
+                throw new IOException("rclone staging root identity changed.");
+            if (directory)
+            {
+                var refusal = SafeFileTreeTraversal.Walk(root, SafeFileTreeTraversal.DefaultMaxEntries, token, observe);
+                if (!string.IsNullOrEmpty(refusal)) throw new IOException(refusal);
+            }
+            return snapshot;
+        }
+
+        private static byte[] Digest(FileStream input, CancellationToken token, byte[] buffer)
+        {
+            using (var digest = SHA256.Create())
+            {
+                while (true)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var count = input.Read(buffer, 0, buffer.Length);
+                    if (count == 0) break;
+                    digest.TransformBlock(buffer, 0, count, buffer, 0);
+                }
+                token.ThrowIfCancellationRequested();
+                digest.TransformFinalBlock(new byte[0], 0, 0);
+                return digest.Hash;
+            }
+        }
+
+        private static void VerifyFile(FileStream input, StagedEntry entry, CancellationToken token, byte[] buffer)
+        {
+            if (entry.Directory ||
+                !TransferPartialPathPolicy.MatchesPrivateFileIdentity(input.SafeFileHandle, entry.Identity) ||
+                input.Length != entry.Length || !Digest(input, token, buffer).SequenceEqual(entry.Digest))
+                throw new IOException("rclone staging file identity or content changed.");
+        }
+
+        private static void VerifyDirectorySnapshot(string root, StagedSnapshot snapshot, CancellationToken token)
+        {
+            TransferPartialPathPolicy.RequireDirectoryIdentity(root, snapshot.Entries[root].Identity);
+            var remaining = new HashSet<string>(snapshot.Entries.Keys, StringComparer.OrdinalIgnoreCase);
+            remaining.Remove(root);
+            var buffer = new byte[64 * 1024];
+            var refusal = SafeFileTreeTraversal.Walk(root, SafeFileTreeTraversal.DefaultMaxEntries, token,
+                (path, attributes) =>
+                {
+                    StagedEntry entry;
+                    if (!remaining.Remove(path) || !snapshot.Entries.TryGetValue(path, out entry) ||
+                        entry.Directory != ((attributes & FileAttributes.Directory) != 0))
+                        throw new IOException("rclone staging tree membership changed.");
+                    if (entry.Directory)
+                        TransferPartialPathPolicy.RequireDirectoryIdentity(path, entry.Identity);
+                    else
+                    {
+                        using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
+                            VerifyFile(input, entry, token, buffer);
+                    }
+                });
+            if (!string.IsNullOrEmpty(refusal) || remaining.Count != 0)
+                throw new IOException("rclone staging tree membership changed.");
         }
 
         private static string Validate(
@@ -278,7 +384,7 @@ namespace PersonalCloudLibrarySource
         }
 
         private static bool TryDeletePartial(string path, bool isDirectory,
-            TransferPartialPathPolicy.FileIdentity? identity, out string error)
+            TransferPartialPathPolicy.FileIdentity? identity, StagedSnapshot snapshot, out string error)
         {
             error = string.Empty;
             if (string.IsNullOrWhiteSpace(path))
@@ -305,6 +411,8 @@ namespace PersonalCloudLibrarySource
                     {
                         if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(input.SafeFileHandle, identity.Value))
                             throw new IOException("Staging file identity changed.");
+                        if (snapshot != null)
+                            VerifyFile(input, snapshot.Entries[path], CancellationToken.None, new byte[64 * 1024]);
                         TransferPartialPathPolicy.DeleteVerifiedFileHandle(input.SafeFileHandle);
                     }
                     TransferPartialPathPolicy.RequireVacant(path);
