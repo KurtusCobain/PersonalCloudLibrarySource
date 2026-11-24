@@ -98,3 +98,7 @@ Verified 78721afc: 820 passed, no failures or compiler warnings, two opt-in skip
 ## Compile inventory regression and framework-reference reduction candidate
 
 Added a tracked-source compile inventory regression for both legacy C# projects. It compares git's tracked source paths with XML Compile includes and rejects duplicate, missing or unlisted sources. Removed five candidate legacy framework references (System.Data.DataSetExtensions, System.Data, Microsoft.CSharp, System.Net.Http and System.Xml.Linq) from the shipping project and two unused imports in settings/dashboard sources. Retain only if Debug/Release/WPF compilation, tests and package verification pass; native host loading still requires acceptance. This is a scoped reference cleanup candidate, not a claim of comprehensive semantic dead-code elimination. The isolated archive project and its explicit dependencies are unchanged.
+
+## Compile cleanup correction
+
+Recovery boundary candidate c62426cc verified 822 passing tests, zero failures/compiler warnings, two opt-in skips and successful packaging/archive gate. Candidate d498ac30 failed compilation with CS0246 for DashboardStateStore.ObservableObject. Explicitly import Playnite.SDK, the existing SDK namespace used by the base settings class. Framework reference removals remain candidates until Windows build and regression pass. No main/feed change.

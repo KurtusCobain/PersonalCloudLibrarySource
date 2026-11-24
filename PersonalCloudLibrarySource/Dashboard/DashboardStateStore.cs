@@ -1,3 +1,5 @@
+using Playnite.SDK;
+
 namespace PersonalCloudLibrarySource
 {
     public sealed class DashboardStateStore : ObservableObject
