@@ -42,6 +42,27 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void CopyDirectory_MixedFileSizesAndEmptyDirectoryPreserveContent()
+        {
+            var source = Path.Combine(testRoot, "source");
+            var destination = Path.Combine(testRoot, "cache", "game");
+            Directory.CreateDirectory(Path.Combine(source, "empty"));
+            var large = new byte[1024 * 1024 + 31];
+            large[large.Length - 1] = 123;
+            File.WriteAllBytes(Path.Combine(source, "large.bin"), large);
+            File.WriteAllText(Path.Combine(source, "small.txt"), "abc");
+            File.WriteAllBytes(Path.Combine(source, "zero.bin"), new byte[0]);
+            var result = new LocalTransferAdapter().CopyDirectory(source, destination,
+                Guid.NewGuid(), CancellationToken.None, null);
+            Assert.That(result.Succeeded, Is.True, result.Message);
+            Assert.That(result.TotalBytes, Is.EqualTo(large.Length + 3L));
+            Assert.That(File.ReadAllBytes(Path.Combine(destination, "large.bin")), Is.EqualTo(large));
+            Assert.That(File.ReadAllText(Path.Combine(destination, "small.txt")), Is.EqualTo("abc"));
+            Assert.That(new FileInfo(Path.Combine(destination, "zero.bin")).Length, Is.Zero);
+            Assert.That(Directory.Exists(Path.Combine(destination, "empty")), Is.True);
+        }
+
+        [Test]
         public void CopyFile_UsesPartialFileAndMovesVerifiedResultIntoPlace()
         {
             var source = Path.Combine(testRoot, "source.bin");

@@ -213,38 +213,10 @@ namespace PersonalCloudLibrarySource
 
         private static bool VerifyDestination(string destination, bool isDirectory, long? expectedBytes)
         {
-            if (isDirectory)
-            {
-                if (!Directory.Exists(destination) ||
-                    !string.IsNullOrWhiteSpace(
-                        SafeCacheDeletionExecutor.GetUnsafeDescendantReason(destination)))
-                {
-                    // A staged tree may have changed before final verification.
-                    // Never follow unexpected junctions/symlinks here.
-                    return false;
-                }
-
-                if (!expectedBytes.HasValue)
-                {
-                    return true;
-                }
-
-                var actualBytes = 0L;
-                foreach (var file in Directory.GetFiles(destination, "*", SearchOption.AllDirectories))
-                {
-                    actualBytes += new FileInfo(file).Length;
-                }
-
-                return actualBytes == expectedBytes.Value;
-            }
-
-            if (!File.Exists(destination) ||
-                (File.GetAttributes(destination) & FileAttributes.ReparsePoint) != 0)
-            {
-                return false;
-            }
-
-            return !expectedBytes.HasValue || new FileInfo(destination).Length == expectedBytes.Value;
+            long actualBytes;
+            return SafeFileTreeTraversal.TryMeasure(destination, isDirectory,
+                CancellationToken.None, out actualBytes) &&
+                (!expectedBytes.HasValue || actualBytes == expectedBytes.Value);
         }
     }
 }

@@ -90,10 +90,13 @@ namespace PersonalCloudLibrarySource
                     totalBytes,
                     0,
                     progress,
+                    new byte[bufferSize],
                     () => ownsPartial = true);
 
                 phase?.Invoke(CloudTransferState.Verifying);
-                if (!File.Exists(partialPath) || new FileInfo(partialPath).Length != totalBytes)
+                long copiedBytes;
+                if (!SafeFileTreeTraversal.TryMeasure(partialPath, false, cancellationToken, out copiedBytes) ||
+                    copiedBytes != totalBytes)
                 {
                     throw new IOException("The copied file did not pass size verification.");
                 }
@@ -216,6 +219,7 @@ namespace PersonalCloudLibrarySource
                     Directory.CreateDirectory(Path.Combine(partialDirectory, GetRelativePath(sourceRoot, directory)));
                 }
 
+                var copyBuffer = new byte[bufferSize];
                 foreach (var sourceFile in files)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -233,15 +237,14 @@ namespace PersonalCloudLibrarySource
                         cancellationToken,
                         totalBytes,
                         transferred,
-                        progress);
+                        progress,
+                        copyBuffer);
                 }
 
                 phase?.Invoke(CloudTransferState.Verifying);
-                List<string> verifiedDirectories;
-                List<string> verifiedFiles;
-                CollectSafeSourceTree(partialDirectory, cancellationToken, out verifiedDirectories, out verifiedFiles);
-                var copiedBytes = verifiedFiles.Sum(file => new FileInfo(file).Length);
-                if (copiedBytes != totalBytes)
+                long copiedBytes;
+                if (!SafeFileTreeTraversal.TryMeasure(partialDirectory, true, cancellationToken, out copiedBytes) ||
+                    copiedBytes != totalBytes)
                 {
                     throw new IOException("The copied directory did not pass size verification.");
                 }
@@ -271,38 +274,17 @@ namespace PersonalCloudLibrarySource
             string root, CancellationToken token,
             out List<string> directories, out List<string> files)
         {
-            if (!IsSafeCopyEntry(File.GetAttributes(root)))
-                throw new IOException("Source library folder is a link or junction.");
-
-            directories = new List<string>();
-            files = new List<string>();
-            var pending = new Stack<string>();
-            pending.Push(root);
-            while (pending.Count > 0)
-            {
-                token.ThrowIfCancellationRequested();
-                var current = pending.Pop();
-                foreach (var directory in Directory.GetDirectories(current, "*", SearchOption.TopDirectoryOnly))
+            var directoryList = new List<string>();
+            var fileList = new List<string>();
+            var refusal = SafeFileTreeTraversal.Walk(root, SafeFileTreeTraversal.DefaultMaxEntries,
+                token, (path, attributes) =>
                 {
-                    token.ThrowIfCancellationRequested();
-                    if (!IsSafeCopyEntry(File.GetAttributes(directory)))
-                        throw new IOException("Source directory contains a link or junction: " + directory);
-                    if (!PathBoundary.IsContained(root, directory))
-                        throw new IOException("Source directory escapes the chosen library folder.");
-                    directories.Add(directory);
-                    pending.Push(directory);
-                }
-
-                foreach (var file in Directory.GetFiles(current, "*", SearchOption.TopDirectoryOnly))
-                {
-                    token.ThrowIfCancellationRequested();
-                    if (!IsSafeCopyEntry(File.GetAttributes(file)))
-                        throw new IOException("Source directory contains a linked file: " + file);
-                    if (!PathBoundary.IsContained(root, file))
-                        throw new IOException("Source file escapes the chosen library folder.");
-                    files.Add(file);
-                }
-            }
+                    if ((attributes & FileAttributes.Directory) != 0) directoryList.Add(path);
+                    else fileList.Add(path);
+                });
+            if (!string.IsNullOrEmpty(refusal)) throw new IOException(refusal);
+            directories = directoryList;
+            files = fileList;
         }
 
         internal static bool IsSafeCopyEntry(FileAttributes attributes)
@@ -353,10 +335,9 @@ namespace PersonalCloudLibrarySource
             CancellationToken cancellationToken,
             long totalBytes,
             long alreadyTransferred,
-            Action<long, long?> progress, Action created = null)
+            Action<long, long?> progress, byte[] buffer, Action created = null)
         {
             var transferred = alreadyTransferred;
-            var buffer = new byte[bufferSize];
             using (var source = new FileStream(
                 sourcePath,
                 FileMode.Open,

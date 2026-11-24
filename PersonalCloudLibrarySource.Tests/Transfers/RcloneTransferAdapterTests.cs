@@ -290,6 +290,26 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void Copy_FileStagingReplacedByDirectoryPreservesContentsAndRequiresRecovery()
+        {
+            var destination = Path.Combine(testRoot, "cache", "game.zip");
+            var id = Guid.NewGuid();
+            var partial = TransferPartialPathPolicy.Create(destination, id);
+            var sentinel = Path.Combine(partial, "keep.txt");
+            var runner = new FakeRcloneProcessRunner(request =>
+            {
+                Directory.CreateDirectory(request.DestinationPath);
+                File.WriteAllText(sentinel, "preserve");
+                return RcloneProcessResult.Success("unexpected type");
+            }) { ReportProgress = false };
+            var result = new RcloneTransferAdapter(runner).Copy(CreateSettings(), "game.zip",
+                destination, false, id, CancellationToken.None, null);
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.RequiresManualRecovery, Is.True);
+            Assert.That(File.ReadAllText(sentinel), Is.EqualTo("preserve"));
+        }
+
+        [Test]
         public void Copy_UnconfirmedChildExitPreservesStagingEvenWhenCancelled()
         {
             var destination = Path.Combine(testRoot, "cache", "uncertain.zip");

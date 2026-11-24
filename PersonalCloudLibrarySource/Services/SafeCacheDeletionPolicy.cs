@@ -147,26 +147,8 @@ namespace PersonalCloudLibrarySource
 
         internal static string GetUnsafeDescendantReason(string root, int maxEntries = 150000)
         {
-            var stack = new System.Collections.Generic.Stack<string>();
-            stack.Push(root);
-            var entries = 0;
-            while (stack.Count > 0)
-            {
-                var current = stack.Pop();
-                if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
-                    return "cache tree contains a directory link or junction: " + current;
-                foreach (var entry in Directory.EnumerateFileSystemEntries(current, "*", SearchOption.TopDirectoryOnly))
-                {
-                    if (++entries > maxEntries)
-                        return "cache tree is too large to verify safely before deletion";
-                    var attributes = File.GetAttributes(entry);
-                    if ((attributes & FileAttributes.ReparsePoint) != 0)
-                        return "cache tree contains a linked file or directory: " + entry;
-                    if ((attributes & FileAttributes.Directory) != 0)
-                        stack.Push(entry);
-                }
-            }
-            return string.Empty;
+            return SafeFileTreeTraversal.Walk(root, maxEntries,
+                System.Threading.CancellationToken.None, null);
         }
 
         // File-only permission must never fall through to recursive removal
@@ -200,6 +182,84 @@ namespace PersonalCloudLibrarySource
             }
             else return new CacheDeletionAuthorization { Reason = "uninstall target does not exist" };
             return authorization;
+        }
+    }
+
+    // Shared bounded top-down traversal. A visitor sees only validated entries;
+    // no recursive framework enumeration follows an unchecked descendant.
+    internal static class SafeFileTreeTraversal
+    {
+        internal const int DefaultMaxEntries = 150000;
+
+        internal static string Walk(string root, int maxEntries,
+            System.Threading.CancellationToken token, Action<string, FileAttributes> visit)
+        {
+            var stack = new System.Collections.Generic.Stack<string>();
+            stack.Push(root);
+            var entries = 0;
+            while (stack.Count > 0)
+            {
+                token.ThrowIfCancellationRequested();
+                var current = stack.Pop();
+                var currentAttributes = File.GetAttributes(current);
+                if ((currentAttributes & FileAttributes.ReparsePoint) != 0 ||
+                    (currentAttributes & FileAttributes.Directory) == 0)
+                    return "cache tree contains a directory link, junction or changed entry: " + current;
+                foreach (var entry in Directory.EnumerateFileSystemEntries(current, "*", SearchOption.TopDirectoryOnly))
+                {
+                    token.ThrowIfCancellationRequested();
+                    if (++entries > maxEntries)
+                        return "cache tree is too large to verify safely";
+                    var attributes = File.GetAttributes(entry);
+                    if ((attributes & FileAttributes.ReparsePoint) != 0)
+                        return "cache tree contains a linked file or directory: " + entry;
+                    if (!PathBoundary.IsContained(root, entry))
+                        return "cache tree entry escapes its root";
+                    visit?.Invoke(entry, attributes);
+                    if ((attributes & FileAttributes.Directory) != 0)
+                        stack.Push(entry);
+                }
+            }
+            return string.Empty;
+        }
+
+        internal static bool TryMeasure(string path, bool directory,
+            System.Threading.CancellationToken token, out long bytes)
+        {
+            bytes = 0;
+            try
+            {
+                token.ThrowIfCancellationRequested();
+                var attributes = File.GetAttributes(path);
+                if ((attributes & FileAttributes.ReparsePoint) != 0 ||
+                    ((attributes & FileAttributes.Directory) != 0) != directory)
+                    return false;
+                if (!directory)
+                {
+                    bytes = new FileInfo(path).Length;
+                    return true;
+                }
+
+                long measured = 0;
+                var refusal = Walk(path, DefaultMaxEntries, token, (entry, entryAttributes) =>
+                {
+                    if ((entryAttributes & FileAttributes.Directory) == 0)
+                    {
+                        // Refresh the file attributes rather than accepting a
+                        // directory/link substitution between enumeration and sizing.
+                        var info = new FileInfo(entry);
+                        if ((info.Attributes & (FileAttributes.ReparsePoint | FileAttributes.Directory)) != 0)
+                            throw new IOException("Transfer file changed during verification.");
+                        measured = checked(measured + info.Length);
+                    }
+                });
+                if (!string.IsNullOrEmpty(refusal)) return false;
+                bytes = measured;
+                return true;
+            }
+            catch (IOException) { return false; }
+            catch (UnauthorizedAccessException) { return false; }
+            catch (OverflowException) { return false; }
         }
     }
 }

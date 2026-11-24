@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Threading;
 
 namespace PersonalCloudLibrarySource
@@ -121,9 +120,9 @@ namespace PersonalCloudLibrarySource
 
                 if (processResult.WasCancelled || cancellationToken.IsCancellationRequested)
                 {
-                    if (!TryDeletePartial(partialPath, out cleanupError))
+                    if (!TryDeletePartial(partialPath, isDirectory, out cleanupError))
                     {
-                        return CloudTransferExecutionResult.Failure("Transfer cancellation cleanup failed: " + cleanupError);
+                        return CloudTransferExecutionResult.Failure("Transfer cancellation cleanup failed: " + cleanupError, requiresManualRecovery: true);
                     }
 
                     return CloudTransferExecutionResult.CancelledResult(processResult.Message);
@@ -131,11 +130,11 @@ namespace PersonalCloudLibrarySource
 
                 if (!processResult.Succeeded)
                 {
-                    if (!TryDeletePartial(partialPath, out cleanupError))
+                    if (!TryDeletePartial(partialPath, isDirectory, out cleanupError))
                     {
                         return CloudTransferExecutionResult.Failure(
                             "Transfer failed and partial cleanup failed: " + cleanupError,
-                            processResult.Exception);
+                            requiresManualRecovery: true);
                     }
                     // Do not propagate arbitrary provider stderr or exception text.
                     return CloudTransferExecutionResult.Failure(processResult.Message);
@@ -143,12 +142,13 @@ namespace PersonalCloudLibrarySource
 
                 long copiedBytes;
                 phase?.Invoke(CloudTransferState.Verifying);
-                if (!VerifyPartial(partialPath, isDirectory, out copiedBytes))
+                if (!SafeFileTreeTraversal.TryMeasure(partialPath, isDirectory, cancellationToken, out copiedBytes))
                 {
-                    if (!TryDeletePartial(partialPath, out cleanupError))
+                    if (!TryDeletePartial(partialPath, isDirectory, out cleanupError))
                     {
                         return CloudTransferExecutionResult.Failure(
-                            "Transfer verification failed and partial cleanup failed: " + cleanupError);
+                            "Transfer verification failed and partial cleanup failed: " + cleanupError,
+                            requiresManualRecovery: true);
                     }
                     return CloudTransferExecutionResult.Failure(
                         "rclone completed, but the partial destination did not pass verification.");
@@ -176,9 +176,9 @@ namespace PersonalCloudLibrarySource
                         requiresManualRecovery: true);
                 if (!mayOwnPartial) return CloudTransferExecutionResult.CancelledResult();
                 string cleanupError;
-                if (!TryDeletePartial(partialPath, out cleanupError))
+                if (!TryDeletePartial(partialPath, isDirectory, out cleanupError))
                 {
-                    return CloudTransferExecutionResult.Failure("Transfer cancellation cleanup failed: " + cleanupError);
+                    return CloudTransferExecutionResult.Failure("Transfer cancellation cleanup failed: " + cleanupError, requiresManualRecovery: true);
                 }
 
                 return CloudTransferExecutionResult.CancelledResult();
@@ -190,9 +190,10 @@ namespace PersonalCloudLibrarySource
                         requiresManualRecovery: true);
                 if (!mayOwnPartial) return CloudTransferExecutionResult.Failure(ex.Message, ex);
                 string cleanupError;
-                return TryDeletePartial(partialPath, out cleanupError)
+                return TryDeletePartial(partialPath, isDirectory, out cleanupError)
                     ? CloudTransferExecutionResult.Failure(ex.Message, ex)
-                    : CloudTransferExecutionResult.Failure(ex.Message + " Partial cleanup failed: " + cleanupError, ex);
+                    : CloudTransferExecutionResult.Failure(ex.Message + " Partial cleanup failed: " + cleanupError, ex,
+                        requiresManualRecovery: true);
             }
         }
 
@@ -224,39 +225,6 @@ namespace PersonalCloudLibrarySource
             return string.Empty;
         }
 
-        private static bool VerifyPartial(string partialPath, bool isDirectory, out long copiedBytes)
-        {
-            copiedBytes = 0;
-            if (isDirectory)
-            {
-                if (!Directory.Exists(partialPath) ||
-                    !IsSafeStagedEntry(File.GetAttributes(partialPath)) ||
-                    !string.IsNullOrWhiteSpace(
-                        SafeCacheDeletionExecutor.GetUnsafeDescendantReason(partialPath)))
-                {
-                    // Never verify or finalize an rclone staging tree containing
-                    // junctions, symlinks, or an unbounded number of entries.
-                    return false;
-                }
-
-                var files = Directory.GetFiles(partialPath, "*", SearchOption.AllDirectories);
-                copiedBytes = files.Sum(file => new FileInfo(file).Length);
-                // An empty directory is a valid transfer. This checks presence/structure,
-                // not cryptographic integrity or remote-to-local content equality.
-                return true;
-            }
-
-            if (!File.Exists(partialPath) ||
-                !IsSafeStagedEntry(File.GetAttributes(partialPath)))
-            {
-                return false;
-            }
-
-            copiedBytes = new FileInfo(partialPath).Length;
-            // A zero-byte file is valid; successful rclone exit plus file existence is sufficient here.
-            return true;
-        }
-
         private static string NormalizeDestination(string destinationPath, bool isDirectory)
         {
             return isDirectory
@@ -269,7 +237,7 @@ namespace PersonalCloudLibrarySource
             return (attributes & FileAttributes.ReparsePoint) == 0;
         }
 
-        private static bool TryDeletePartial(string path, out string error)
+        private static bool TryDeletePartial(string path, bool isDirectory, out string error)
         {
             error = string.Empty;
             if (string.IsNullOrWhiteSpace(path))
@@ -285,6 +253,9 @@ namespace PersonalCloudLibrarySource
                 if ((File.Exists(path) || Directory.Exists(path)) &&
                     !IsSafeStagedEntry(File.GetAttributes(path)))
                     throw new IOException("Refusing to clean a linked partial transfer path.");
+
+                if ((isDirectory && File.Exists(path)) || (!isDirectory && Directory.Exists(path)))
+                    throw new IOException("Transfer staging type changed; refusing cleanup.");
 
                 if (File.Exists(path))
                 {
