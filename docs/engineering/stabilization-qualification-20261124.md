@@ -31,10 +31,12 @@
 | [33f53ba6](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45355786366) | 869 pass, 0 fail, 2 skips; 0 warnings | Stable attempt order and manager retry guard; archive passed |
 | [9f273e80](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45355888084) | 872 pass, 0 fail, 2 skips; 0 warnings | Ambiguous launch and late setup cancellation; archive passed |
 
-### Pending candidates (not qualified at this ledger entry)
+| [301cb214](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45356172933) | 875 pass, 0 fail, 2 skips; 0 warnings | Batched history retention, completion ownership, retry fences and quarantine; archive passed |
+| [9d563062](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45356246805) | 876 pass, 0 fail, 2 skips; 0 warnings | Automatic retention fixture over 550 transfers; archive passed |
 
-- [301cb214](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45356172933): batched in-memory history retention; tests for completion ownership, retry fences and quarantine.
-- [9d563062](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45356246805): additional 550-transfer automatic-pruning fixture.
+### Pending candidate (not qualified at this ledger entry)
+
+- [5bdc79dc](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45356517759): actual production pipe line allocation bound; framing and real disposable-child fixture.
 - Later CodeQL conclusions must be read against the exact candidate SHA; no success assumed.
 
 Windows build and CodeQL workflow conclusions are not proof of absence of vulnerabilities or native Playnite acceptance. A passing archive compatibility workflow only qualifies the isolated decoder probe, not shipping 7z/RAR install behavior. Review current run evidence by exact commit.
@@ -44,6 +46,7 @@ Windows build and CodeQL workflow conclusions are not proof of absence of vulner
 - 5,000 historical jobs, 4 active, 2,000 progress reads: reference 294.432 ms / indexed 0.675 ms at c6270bf2; 225.171 ms / 0.483 ms at 0ed191f0. Exact byte totals matched.
 - 2,500 synthetic packages / 7,500 synthetic entries: 55.771 ms at d13d0ed7. Exact item count, identity uniqueness and launch priority checked.
 - 5,000 historical jobs, six reserved, 2,000 reservation snapshot reads: 108.283 ms reference / 0.120 ms indexed at 14e7ff8d, identical counts.
+- 550 sequential synthetic successful transfers, 518 history entries retained, 18.585 ms at 9d563062. Claimed completion remains valid and live reservations are empty. This is not real download throughput.
 - These are hosted synthetic measurements, not general application speed, actual disk/NAS throughput, startup latency or memory certifications.
 
 ## Remaining gate register
@@ -54,7 +57,7 @@ Windows build and CodeQL workflow conclusions are not proof of absence of vulner
 | Consolidation | Original branches retained; PR #22 overlap review recorded in ledger; review remaining unique work and preserve history |
 | Semantic source audit | Structural compile inventory and targeted repairs complete; comprehensive member/reference analysis and scripts/configuration review incomplete |
 | Security | Ambiguous rclone launch and late cancellation hardened; no automatic permanent ZIP cleanup. Verify filesystem replacement races, hardlinks, process-tree containment, malformed journal and power-loss recovery. |
-| Transfer history | Soft-cap candidate implemented: 512 ordinary terminal attempts, batched pruning, protected unclaimed results/latest retry/fences/quarantine; exact candidate CI and native host acceptance pending. Protected history may exceed cap. |
+| Transfer history | Soft cap verified in Windows fixtures: 512 ordinary terminal attempts, batched pruning, protected unclaimed results/latest retry/fences/quarantine; 550-transfer fixture passed. Native host acceptance pending; protected history may exceed cap. |
 | Runtime settings and retry | Native Playnite database reconciliation and stale controller/action cases require qualification |
 | Recovery | Persistent reservation refusal and read-only path observations implemented and regression-tested; explicit manual resolution remains blocked by process/ownership/handle identity evidence and native host presentation. |
 | Multi-source | Experimental activation and isolated identity routing; verify real host import/refresh/migration and source disappearance |
