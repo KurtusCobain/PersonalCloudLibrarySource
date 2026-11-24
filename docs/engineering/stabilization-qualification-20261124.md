@@ -53,10 +53,13 @@
 | [4a7b644c](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45493002705) | 902 pass, 0 fail, 2 skips; 0 warnings | Originating marker identity and handle completion; archive passed |
 | [9e5bcceb](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45493158781) | 904 pass, 0 fail, 2 skips; 0 warnings | rclone root identity and nonempty directory quarantine; archive passed |
 
+| [d1e68d99](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45493288423) | 907 pass, 0 fail, 2 skips; 0 warnings | Post-exit rclone integrity snapshot; archive passed |
+| [b0e594f8](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45493407725) | 907 standard pass, 0 fail, 2 standard skips; 0 warnings; **2/2 separate real-rclone cases passed** | Official pinned v1.76.0 isolated local-only gate; archive passed |
+
 ### Pending candidates (not qualified at this ledger entry)
 
-- [d1e68d99](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45493288423): post-exit rclone snapshot and exact finalization verification.
-- [b0e594f8](https://github.com/KurtusCobain/PersonalCloudLibrarySource/commit/b0e594f8bf1e962740ca05e8c0f8042264d9b78e): branch-only digest-pinned real-rclone integration gate.
+- [d1d74d74](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45493710010): parent-bound no-replace publication and source/destination identity checks.
+- [3b363641](https://github.com/KurtusCobain/PersonalCloudLibrarySource/commit/3b36364132fb8551e2a465d77469700e210333a1): no-follow journal lock and concurrent reservation fixtures.
 - Later CodeQL conclusions must be read against the exact candidate SHA; no success assumed.
 
 Windows build and CodeQL workflow conclusions are not proof of absence of vulnerabilities or native Playnite acceptance. A passing archive compatibility workflow only qualifies the isolated decoder probe, not shipping 7z/RAR install behavior. Review current run evidence by exact commit.
@@ -76,7 +79,7 @@ Windows build and CodeQL workflow conclusions are not proof of absence of vulner
 | Main/tag protection and release authorization | Recommendations documented; owner approval required for repository settings |
 | Consolidation | Original branches retained; PR #22 overlap review recorded in ledger; review remaining unique work and preserve history |
 | Semantic source audit | Structural compile inventory and targeted repairs complete; comprehensive member/reference analysis and scripts/configuration review incomplete |
-| Security | Windows fixtures qualify local/ZIP file and directory identities, local/ZIP no-replace source-handle publication, rclone whole-job launch containment, originating marker identity, and rclone root ownership. Post-exit rclone integrity and real binary gate pending. Full ancestor pinning, create-to-open race, directory/member publication transaction, receipt-bound uninstall, malformed journal and power-loss recovery remain open. No automatic permanent ZIP cleanup or recovery release. |
+| Security | Windows fixtures qualify local/ZIP file and directory identities, local/ZIP no-replace source-handle publication, rclone whole-job launch containment, originating marker identity, and rclone root ownership. Post-exit rclone integrity and separate 2/2 real binary gate passed. Parent-bound publication and no-follow journal lock candidates pending. Full ancestor pinning, create-to-open race, directory/member publication transaction, receipt-bound uninstall, malformed journal and power-loss recovery remain open. No automatic permanent ZIP cleanup or recovery release. |
 | Transfer history | Soft cap verified in Windows fixtures: 512 ordinary terminal attempts, batched pruning, protected unclaimed results/latest retry/fences/quarantine; 550-transfer fixture passed. Native host acceptance pending; protected history may exceed cap. |
 | Runtime settings and retry | Native Playnite database reconciliation and stale controller/action cases require qualification |
 | Recovery | Originating marker identity enforced; restarted instances remain read-only for completion. Nonempty rclone directory failures/cancellations preserve staging and quarantine the job. Explicit recovery release remains blocked by persistent process/ownership evidence, ancestor identity, and native host presentation. |
@@ -85,7 +88,7 @@ Windows build and CodeQL workflow conclusions are not proof of absence of vulner
 | UI | Localized resource audit passed; keyboard/controller, DPI, theme and genuine screenshot review pending |
 | Performance | Synthetic progress, preview and retention measurements recorded; filesystem identity checks need local/NAS compatibility and large-tree cost qualification. Actual library startup, memory and cancellation under I/O faults pending. |
 | Independent review | Grok/Claude review of a frozen internal candidate, resolve findings before acceptance |
-| Native acceptance | Disposable Windows Playnite upgrade/install/uninstall/reinstall, digest-pinned real-rclone fixture gate (pending), safe provider fixtures, official Toolbox and package provenance |
+| Native acceptance | Disposable Windows Playnite upgrade/install/uninstall/reinstall, digest-pinned real-rclone fixture gate (2/2 passed on hosted Windows), safe provider fixtures, official Toolbox and package provenance |
 | CH-Rm | Deferred until internal PCLS remediation and review are complete; selective review only, with independent regression after any eventual port |
 | Publication | Separate owner approval after all required gates; no feed or release mutation |
 
