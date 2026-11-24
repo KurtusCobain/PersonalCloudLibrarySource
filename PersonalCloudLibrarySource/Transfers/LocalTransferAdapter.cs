@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Threading;
 
 namespace PersonalCloudLibrarySource
@@ -9,6 +10,13 @@ namespace PersonalCloudLibrarySource
     public sealed class LocalTransferAdapter
     {
         private readonly int bufferSize;
+
+        private sealed class WrittenFile
+        {
+            public TransferPartialPathPolicy.FileIdentity? Identity;
+            public long Length;
+            public byte[] Digest;
+        }
 
         public LocalTransferAdapter(int bufferSize = 1024 * 1024)
         {
@@ -56,7 +64,7 @@ namespace PersonalCloudLibrarySource
             Action<CloudTransferState> phase)
         {
             var ownsPartial = false;
-            TransferPartialPathPolicy.FileIdentity? identity = null;
+            var written = new WrittenFile();
             try
             {
                 if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
@@ -94,7 +102,7 @@ namespace PersonalCloudLibrarySource
                     progress,
                     new byte[bufferSize],
                     () => ownsPartial = true,
-                    handle => identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(handle));
+                    written);
 
                 phase?.Invoke(CloudTransferState.Verifying);
                 long copiedBytes;
@@ -112,9 +120,8 @@ namespace PersonalCloudLibrarySource
                     TransferPartialPathPolicy.RequirePublicationPaths(partialPath, destinationPath, false);
                     using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(partialPath, false))
                     {
-                        if (!identity.HasValue ||
-                            !TransferPartialPathPolicy.MatchesPrivateFileIdentity(input.SafeFileHandle, identity.Value) ||
-                            input.Length != totalBytes)
+                        if (written.Length != totalBytes ||
+                            !MatchesWrittenFile(input, written, cancellationToken))
                             throw new IOException("Private staging file identity or length changed.");
                     }
                 }
@@ -129,12 +136,12 @@ namespace PersonalCloudLibrarySource
             }
             catch (OperationCanceledException)
             {
-                return CleanupOwnedFile(ownsPartial, partialPath, identity,
+                return CleanupOwnedFile(ownsPartial, partialPath, written,
                     CloudTransferExecutionResult.CancelledResult());
             }
             catch (Exception ex)
             {
-                return CleanupOwnedFile(ownsPartial, partialPath, identity,
+                return CleanupOwnedFile(ownsPartial, partialPath, written,
                     CloudTransferExecutionResult.Failure(ex.Message, ex));
             }
         }
@@ -182,7 +189,7 @@ namespace PersonalCloudLibrarySource
             Action<CloudTransferState> phase)
         {
             var ownedDirectories = new List<string>();
-            var ownedFiles = new Dictionary<string, TransferPartialPathPolicy.FileIdentity?>(StringComparer.OrdinalIgnoreCase);
+            var ownedFiles = new Dictionary<string, WrittenFile>(StringComparer.OrdinalIgnoreCase);
             try
             {
                 if (string.IsNullOrWhiteSpace(sourceDirectory) || !Directory.Exists(sourceDirectory))
@@ -261,6 +268,7 @@ namespace PersonalCloudLibrarySource
                     var destinationFile = Path.Combine(partialDirectory, relativePath);
                     var targetDirectory = Path.GetDirectoryName(destinationFile);
                     var fileCreated = false;
+                    var written = new WrittenFile();
                     try
                     {
                         if (!string.IsNullOrWhiteSpace(targetDirectory))
@@ -281,10 +289,9 @@ namespace PersonalCloudLibrarySource
                             () =>
                             {
                                 fileCreated = true;
-                                ownedFiles.Add(destinationFile, null);
+                                ownedFiles.Add(destinationFile, written);
                             },
-                            handle => ownedFiles[destinationFile] =
-                                TransferPartialPathPolicy.CapturePrivateFileIdentity(handle));
+                            written);
                     }
                     catch (Exception) when (!fileCreated)
                     {
@@ -396,8 +403,8 @@ namespace PersonalCloudLibrarySource
             CancellationToken cancellationToken,
             long totalBytes,
             long alreadyTransferred,
-            Action<long, long?> progress, byte[] buffer, Action created = null,
-            Action<Microsoft.Win32.SafeHandles.SafeFileHandle> captureIdentity = null)
+            Action<long, long?> progress, byte[] buffer, Action created,
+            WrittenFile written)
         {
             var transferred = alreadyTransferred;
             TransferPartialPathPolicy.RequireSafePath(sourcePath);
@@ -412,28 +419,36 @@ namespace PersonalCloudLibrarySource
             using (var destination = new FileStream(
                 destinationPath,
                 FileMode.CreateNew,
-                captureIdentity == null ? FileAccess.Write : FileAccess.ReadWrite,
+                FileAccess.ReadWrite,
                 FileShare.None,
                 bufferSize,
                 FileOptions.SequentialScan))
             {
                 created?.Invoke();
-                captureIdentity?.Invoke(destination.SafeFileHandle);
-                while (true)
+                written.Identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(destination.SafeFileHandle);
+                using (var digest = SHA256.Create())
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var bytesRead = source.Read(buffer, 0, buffer.Length);
-                    if (bytesRead <= 0)
+                    try
                     {
-                        break;
+                        while (true)
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            var bytesRead = source.Read(buffer, 0, buffer.Length);
+                            if (bytesRead <= 0) break;
+                            destination.Write(buffer, 0, bytesRead);
+                            digest.TransformBlock(buffer, 0, bytesRead, buffer, 0);
+                            written.Length = checked(written.Length + bytesRead);
+                            transferred = checked(transferred + bytesRead);
+                            progress?.Invoke(transferred, totalBytes);
+                        }
+                        destination.Flush(true);
                     }
-
-                    destination.Write(buffer, 0, bytesRead);
-                    transferred += bytesRead;
-                    progress?.Invoke(transferred, totalBytes);
+                    finally
+                    {
+                        digest.TransformFinalBlock(new byte[0], 0, 0);
+                        written.Digest = digest.Hash;
+                    }
                 }
-
-                destination.Flush(true);
             }
 
             return transferred;
@@ -453,17 +468,15 @@ namespace PersonalCloudLibrarySource
         }
 
         private static CloudTransferExecutionResult CleanupOwnedFile(bool owned, string path,
-            TransferPartialPathPolicy.FileIdentity? identity, CloudTransferExecutionResult result)
+            WrittenFile written, CloudTransferExecutionResult result)
         {
             if (!owned) return result;
             try
             {
-                if (!identity.HasValue)
-                    throw new IOException("Private staging identity was not recorded.");
                 using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, true))
                 {
-                    if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(input.SafeFileHandle, identity.Value))
-                        throw new IOException("Private staging identity changed.");
+                    if (!MatchesWrittenFile(input, written, CancellationToken.None))
+                        throw new IOException("Private staging identity or contents changed.");
                     TransferPartialPathPolicy.DeleteVerifiedFileHandle(input.SafeFileHandle);
                 }
                 TransferPartialPathPolicy.RequireVacant(path);
@@ -477,8 +490,30 @@ namespace PersonalCloudLibrarySource
             }
         }
 
+        private static bool MatchesWrittenFile(FileStream input, WrittenFile written, CancellationToken token)
+        {
+            if (!written.Identity.HasValue || written.Digest == null ||
+                !TransferPartialPathPolicy.MatchesPrivateFileIdentity(input.SafeFileHandle, written.Identity.Value) ||
+                input.Length != written.Length)
+                return false;
+
+            using (var digest = SHA256.Create())
+            {
+                var buffer = new byte[64 * 1024];
+                int count;
+                while ((count = input.Read(buffer, 0, buffer.Length)) != 0)
+                {
+                    token.ThrowIfCancellationRequested();
+                    digest.TransformBlock(buffer, 0, count, buffer, 0);
+                }
+                token.ThrowIfCancellationRequested();
+                digest.TransformFinalBlock(new byte[0], 0, 0);
+                return digest.Hash.SequenceEqual(written.Digest);
+            }
+        }
+
         private static void VerifyOwnedDirectory(string root, IList<string> directories,
-            IDictionary<string, TransferPartialPathPolicy.FileIdentity?> files, long expectedBytes,
+            IDictionary<string, WrittenFile> files, long expectedBytes,
             CancellationToken token)
         {
             var remainingDirectories = new HashSet<string>(directories, StringComparer.OrdinalIgnoreCase);
@@ -495,13 +530,13 @@ namespace PersonalCloudLibrarySource
                             throw new IOException("Unexpected private staging directory.");
                         return;
                     }
-                    TransferPartialPathPolicy.FileIdentity? identity;
-                    if (!remainingFiles.Remove(path) || !files.TryGetValue(path, out identity) || !identity.HasValue)
+                    WrittenFile written;
+                    if (!remainingFiles.Remove(path) || !files.TryGetValue(path, out written))
                         throw new IOException("Unexpected private staging file.");
                     using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
                     {
-                        if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(input.SafeFileHandle, identity.Value))
-                            throw new IOException("Private staging file identity changed.");
+                        if (!MatchesWrittenFile(input, written, token))
+                            throw new IOException("Private staging file identity or contents changed.");
                         observedBytes = checked(observedBytes + input.Length);
                     }
                 });
@@ -511,7 +546,7 @@ namespace PersonalCloudLibrarySource
         }
 
         private static CloudTransferExecutionResult CleanupOwnedDirectory(IList<string> directories,
-            IDictionary<string, TransferPartialPathPolicy.FileIdentity?> files, CloudTransferExecutionResult result)
+            IDictionary<string, WrittenFile> files, CloudTransferExecutionResult result)
         {
             var clean = true;
             foreach (var entry in files)

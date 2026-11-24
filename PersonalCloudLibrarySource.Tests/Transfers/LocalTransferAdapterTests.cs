@@ -303,6 +303,31 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
 
         [TestCase(false)]
         [TestCase(true)]
+        public void CopyFile_SameLengthModificationIsPreserved(bool cancel)
+        {
+            var source = Path.Combine(testRoot, "source.txt");
+            var destination = Path.Combine(testRoot, "destination.txt");
+            File.WriteAllText(source, "original");
+            var jobId = Guid.NewGuid();
+            var partial = TransferPartialPathPolicy.Create(destination, jobId);
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var result = new LocalTransferAdapter().CopyFile(source, destination, jobId,
+                    cancellation.Token, null, state =>
+                    {
+                        if (state != CloudTransferState.Finalizing) return;
+                        File.WriteAllText(partial, "modified");
+                        if (cancel) cancellation.Cancel();
+                    });
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(result.RequiresManualRecovery, Is.True);
+                Assert.That(File.ReadAllText(partial), Is.EqualTo("modified"));
+                Assert.That(File.Exists(destination), Is.False);
+            }
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
         public void CopyFile_SameByteReplacementIsPreserved(bool cancel)
         {
             var source = Path.Combine(testRoot, "source.txt");
