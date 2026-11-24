@@ -186,6 +186,29 @@ namespace PersonalCloudLibrarySource
                 current.IdLow == expected.IdLow && current.IdHigh == expected.IdHigh;
         }
 
+        internal static FileStream OpenJournalLock(string path)
+        {
+            RequireSafePath(path);
+            // GENERIC_READ | GENERIC_WRITE, exclusive sharing, OPEN_ALWAYS,
+            // OPEN_REPARSE_POINT. Never follow a substituted lock-file link.
+            var handle = OpenNativeFile(Path.GetFullPath(path), 0xC0000000u, 0u,
+                IntPtr.Zero, 4u, 0x00200000u, IntPtr.Zero);
+            if (handle.IsInvalid)
+            {
+                var error = Marshal.GetLastWin32Error();
+                handle.Dispose();
+                // Preserve sharing-violation HRESULT for bounded contention.
+                throw new IOException("Recovery journal lock could not be opened.",
+                    unchecked((int)(0x80070000u | ((uint)error & 0xffffu))));
+            }
+            try
+            {
+                CapturePrivateFileIdentity(handle);
+                return new FileStream(handle, FileAccess.ReadWrite);
+            }
+            catch { handle.Dispose(); throw; }
+        }
+
         internal static FileStream OpenPrivateFileForReview(string path, bool deleteAccess)
         {
             RequireSafePath(path);

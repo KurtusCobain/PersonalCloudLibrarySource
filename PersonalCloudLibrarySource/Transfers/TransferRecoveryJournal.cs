@@ -213,16 +213,7 @@ namespace PersonalCloudLibrarySource
             var timer = Stopwatch.StartNew();
             while (true)
             {
-                try
-                {
-                    var stream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-                    try
-                    {
-                        TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
-                        return stream;
-                    }
-                    catch { stream.Dispose(); throw; }
-                }
+                try { return TransferPartialPathPolicy.OpenJournalLock(path); }
                 catch (IOException ex) when ((ex.HResult & 0xffff) == 32 && timer.ElapsedMilliseconds < 2000)
                 {
                     // Another instance owns the short journal transaction.

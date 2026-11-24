@@ -128,6 +128,52 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(Directory.Exists(records), Is.False);
         }
 
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW",
+            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CreateHardLinkNative(string link, string existing, IntPtr reserved);
+
+        [Test]
+        public void JournalLockHardlinkIsRefusedWithoutModifyingOriginal()
+        {
+            Directory.CreateDirectory(records);
+            var original = Path.Combine(root, "important.txt");
+            File.WriteAllText(original, "preserve");
+            var linked = Path.Combine(records, "journal.lock");
+            Assert.That(CreateHardLinkNative(linked, original, IntPtr.Zero), Is.True);
+            Assert.Throws<IOException>(() => new TransferRecoveryJournal(records).Begin(Job("file.zip")));
+            Assert.That(File.ReadAllText(original), Is.EqualTo("preserve"));
+            Assert.That(File.ReadAllText(linked), Is.EqualTo("preserve"));
+            Assert.That(Directory.GetFiles(records, "*.pending"), Is.Empty);
+        }
+
+        [Test]
+        public void ConcurrentJournalInstancesCannotReserveOverlappingDestinations()
+        {
+            var first = Job("file.zip");
+            var second = Job("file.zip");
+            var one = new TransferRecoveryJournal(records);
+            var two = new TransferRecoveryJournal(records);
+            using (var start = new System.Threading.ManualResetEventSlim())
+            {
+                Func<TransferRecoveryJournal, CloudTransferJob, bool> reserve = (journal, job) =>
+                {
+                    start.Wait();
+                    try { journal.Begin(job); return true; }
+                    catch (TransferRetryRefusedException) { return false; }
+                };
+                var a = System.Threading.Tasks.Task.Run(() => reserve(one, first));
+                var b = System.Threading.Tasks.Task.Run(() => reserve(two, second));
+                start.Set();
+                Assert.That(System.Threading.Tasks.Task.WaitAll(new System.Threading.Tasks.Task[] { a, b },
+                    TimeSpan.FromSeconds(10)), Is.True);
+                Assert.That(a.Result, Is.Not.EqualTo(b.Result));
+                Assert.That(Directory.GetFiles(records, "*.pending").Length, Is.EqualTo(1));
+                if (a.Result) one.Complete(first); else two.Complete(second);
+                Assert.That(Directory.GetFiles(records, "*.pending"), Is.Empty);
+            }
+        }
+
         [Test]
         public void CleanCompletionReleasesOnlyItsOwnReservation()
         {
