@@ -277,3 +277,5 @@ finally {
 
 Write-Host "Release validator tests: $script:passed passed, $script:failed failed."
 if ($script:failed -ne 0) { exit 1 }
+# Expected failing child-process fixtures must not leak their exit status.
+exit 0
