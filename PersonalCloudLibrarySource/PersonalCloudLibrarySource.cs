@@ -714,8 +714,9 @@ namespace PersonalCloudLibrarySource
 
             if (string.Equals(providerType, PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType, StringComparison.OrdinalIgnoreCase))
             {
-                return !string.IsNullOrWhiteSpace(pluginSettings.RcloneRemoteName) &&
-                    !string.IsNullOrWhiteSpace(ResolveRcloneSourcePath(pluginSettings, sourcePath));
+                string operand;
+                return RcloneCommandBuilder.TryBuildRemoteOperand(pluginSettings.RcloneRemoteName,
+                    ResolveRcloneSourcePath(pluginSettings, sourcePath), true, out operand);
             }
 
             if (string.Equals(providerType, PersonalCloudLibrarySourceSettings.LocalFolderProviderType, StringComparison.OrdinalIgnoreCase) ||

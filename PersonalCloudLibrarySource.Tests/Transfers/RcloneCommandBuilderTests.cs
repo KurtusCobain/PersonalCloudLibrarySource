@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using System;
 
 namespace PersonalCloudLibrarySource.Tests.Transfers
 {
@@ -52,6 +53,30 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             });
 
             Assert.That(args, Does.Contain("\"C:\\Cache\\My Folder\\\\\""));
+        }
+
+        [TestCase("--config", "game.exe")]
+        [TestCase("games,token=fixture", "game.exe")]
+        [TestCase(":sftp:", "game.exe")]
+        [TestCase("games", "library/../outside.exe")]
+        [TestCase("games", @"library\..\outside.exe")]
+        [TestCase("games", "library/\nfile.exe")]
+        public void BuildArguments_RejectsInvalidRemoteOperand(string remote, string source)
+        {
+            Assert.Throws<ArgumentException>(() => RcloneCommandBuilder.BuildArguments(
+                new RcloneTransferRequest { RemoteName = remote, RemoteSourcePath = source,
+                    DestinationPath = @"C:\Cache\game.exe" }));
+        }
+
+        [Test]
+        public void BuildArguments_ExplicitLocalBackendPreservesAbsolutePath()
+        {
+            var args = RcloneCommandBuilder.BuildArguments(new RcloneTransferRequest
+            {
+                RemoteName = ":local:", RemoteSourcePath = @"C:\Fixture\game.exe",
+                DestinationPath = @"C:\Cache\game.exe"
+            });
+            Assert.That(args, Does.Contain("\":local:C:/Fixture/game.exe\""));
         }
 
         [Test]

@@ -12,15 +12,15 @@ namespace PersonalCloudLibrarySource
                 throw new ArgumentNullException(nameof(request));
             }
 
-            var remoteName = (request.RemoteName ?? string.Empty).Trim().TrimEnd(':');
-            var sourcePath = (request.RemoteSourcePath ?? string.Empty)
-                .Trim()
-                .Replace('\\', '/')
-                .TrimStart('/');
+            string remoteOperand;
+            if (!TryBuildRemoteOperand(request.RemoteName, request.RemoteSourcePath, true, out remoteOperand))
+                throw new ArgumentException("The rclone source is invalid.");
             var destinationPath = request.DestinationPath ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(destinationPath) || destinationPath.StartsWith("-", StringComparison.Ordinal))
+                throw new ArgumentException("The rclone destination is invalid.");
             var command = request.IsDirectory ? "copy" : "copyto";
             var arguments = command + " " +
-                            QuoteArgument(remoteName + ":" + sourcePath) + " " +
+                            QuoteArgument(remoteOperand) + " " +
                             QuoteArgument(destinationPath) +
                             " --stats=1s --stats-one-line --progress";
 
@@ -35,6 +35,37 @@ namespace PersonalCloudLibrarySource
             }
 
             return arguments;
+        }
+
+        // Named remotes only (plus the explicit local-only backend used for
+        // disposable fixtures). Do not reinterpret inline backend/config syntax.
+        internal static bool TryBuildRemoteOperand(string name, string path,
+            bool trimLeadingSlash, out string operand)
+        {
+            operand = string.Empty;
+            var remote = (name ?? string.Empty).Trim();
+            var source = (path ?? string.Empty).Trim().Replace('\\', '/');
+            if (string.IsNullOrWhiteSpace(source)) return false;
+            foreach (var ch in source)
+                if (char.IsControl(ch)) return false;
+            foreach (var segment in source.Split('/'))
+                if (segment == "." || segment == "..") return false;
+            if (string.Equals(remote, ":local:", StringComparison.Ordinal))
+            {
+                operand = ":local:" + source;
+                return true;
+            }
+            if (remote.EndsWith(":", StringComparison.Ordinal))
+                remote = remote.Substring(0, remote.Length - 1);
+            if (string.IsNullOrWhiteSpace(remote) || remote.StartsWith("-", StringComparison.Ordinal) ||
+                remote.IndexOfAny(new[] { ':', ',', '"', '\'', '/', '\\', '=' }) >= 0)
+                return false;
+            foreach (var ch in remote)
+                if (char.IsControl(ch)) return false;
+            if (trimLeadingSlash) source = source.TrimStart('/');
+            if (string.IsNullOrWhiteSpace(source)) return false;
+            operand = remote + ":" + source;
+            return true;
         }
 
         // Correct Windows command-line escaping for ProcessStartInfo.Arguments.

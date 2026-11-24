@@ -217,6 +217,9 @@ namespace PersonalCloudLibrarySource
                 return "The remote source path is empty.";
             }
 
+            string operand;
+            if (!RcloneCommandBuilder.TryBuildRemoteOperand(settings.RcloneRemoteName, remoteSourcePath, true, out operand))
+                return "The configured rclone source is invalid.";
             if (string.IsNullOrWhiteSpace(destinationPath))
             {
                 return "The local destination path is empty.";
@@ -248,25 +251,21 @@ namespace PersonalCloudLibrarySource
             try
             {
                 TransferPartialPathPolicy.RequireSafePath(path);
-                // Never recursively delete a junction/symlink planted at the
-                // temporary transfer destination, even on cancellation.
-                if ((File.Exists(path) || Directory.Exists(path)) &&
-                    !IsSafeStagedEntry(File.GetAttributes(path)))
-                    throw new IOException("Refusing to clean a linked partial transfer path.");
+                FileAttributes attributes;
+                try { attributes = File.GetAttributes(path); }
+                catch (FileNotFoundException) { return true; }
+                catch (DirectoryNotFoundException) { return true; }
+                if (!IsSafeStagedEntry(attributes) ||
+                    ((attributes & FileAttributes.Directory) != 0) != isDirectory)
+                    throw new IOException("Transfer staging type or link status changed; refusing cleanup.");
 
-                if ((isDirectory && File.Exists(path)) || (!isDirectory && Directory.Exists(path)))
-                    throw new IOException("Transfer staging type changed; refusing cleanup.");
-
-                if (File.Exists(path))
+                // Never fall through from file-only cleanup to recursion.
+                if (!isDirectory)
                 {
                     File.Delete(path);
                 }
-
-                if (Directory.Exists(path))
+                else
                 {
-                    // Recursive cleanup is destructive: refuse a staged tree with
-                    // linked descendants or an unbounded inventory. Leave it
-                    // intact for explicit inspection rather than following links.
                     var unsafeReason = SafeCacheDeletionExecutor.GetUnsafeDescendantReason(path);
                     if (!string.IsNullOrWhiteSpace(unsafeReason))
                         throw new IOException("Refusing unsafe partial cleanup: " + unsafeReason);

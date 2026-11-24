@@ -32,7 +32,9 @@ namespace PersonalCloudLibrarySource
                 throw new InvalidOperationException("Rclone manifest path is required.");
             }
 
-            var remoteManifestPath = $"{remoteName}:{manifestPath}";
+            string remoteManifestPath;
+            if (!RcloneCommandBuilder.TryBuildRemoteOperand(remoteName, manifestPath, false, out remoteManifestPath))
+                throw new InvalidOperationException("The configured rclone manifest source is invalid.");
             var timeoutSeconds = settings.RcloneTimeoutSeconds < 5 || settings.RcloneTimeoutSeconds > 86400
                 ? 30 : settings.RcloneTimeoutSeconds;
 
