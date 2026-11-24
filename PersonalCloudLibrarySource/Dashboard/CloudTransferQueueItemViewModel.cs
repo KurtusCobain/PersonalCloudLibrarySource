@@ -12,7 +12,8 @@ namespace PersonalCloudLibrarySource
         public CloudTransferQueueItemViewModel(
             CloudTransferJob job,
             Action cancel,
-            Action retry)
+            Action retry,
+            bool retryAllowed = true)
         {
             Job = job ?? throw new ArgumentNullException(nameof(job));
             DisplayName = string.IsNullOrWhiteSpace(job.DisplayName)
@@ -25,7 +26,7 @@ namespace PersonalCloudLibrarySource
             CanCancel = !job.IsTerminal &&
                 job.State != CloudTransferState.Finalizing &&
                 !job.CancellationToken.IsCancellationRequested;
-            retryAvailable = job.CanRetry ? 1 : 0;
+            retryAvailable = job.CanRetry && retryAllowed ? 1 : 0;
             this.retry = retry ?? (() => { });
             CancelCommand = new DelegateCommand(cancel ?? (() => { }), () => CanCancel);
             RetryCommand = new DelegateCommand(ExecuteRetry, () => CanRetry);

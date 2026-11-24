@@ -149,14 +149,16 @@ namespace PersonalCloudLibrarySource
                 CloudTransferJob newest = null;
                 foreach (var job in attempts)
                 {
-                    if (!job.CanRetry) continue;
+                    if (!job.IsTerminal) continue;
                     if (newest == null ||
                         (job.CompletedAt ?? job.CreatedAt) > (newest.CompletedAt ?? newest.CreatedAt) ||
                         ((job.CompletedAt ?? job.CreatedAt) == (newest.CompletedAt ?? newest.CreatedAt) &&
                             job.CreatedAt >= newest.CreatedAt))
                         newest = job;
                 }
-                return newest;
+                // A newer successful or quarantined terminal attempt supersedes
+                // earlier failures. Historical failures remain visible, not actionable.
+                return newest != null && newest.CanRetry ? newest : null;
             }
         }
 

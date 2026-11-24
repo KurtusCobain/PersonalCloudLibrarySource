@@ -202,7 +202,9 @@ namespace PersonalCloudLibrarySource
                 .Select(job => new CloudTransferQueueItemViewModel(
                     job,
                     () => transferActions.Cancel(job.Id),
-                    () => transferActions.Retry(job.Id)))
+                    () => transferActions.Retry(job.Id),
+                    job.CanRetry && transferManager.GetActiveJobForGame(job.GameId) == null &&
+                    ReferenceEquals(transferManager.GetLatestRetryableJobForGame(job.GameId), job)))
                 .ToList()
                 .AsReadOnly();
 

@@ -312,6 +312,24 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(retryable.Id, Is.EqualTo(cancelled.Id));
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void LatestTerminalAttemptSupersedesHistoricalFailure(bool quarantine)
+        {
+            var manager = new CloudTransferManager(1);
+            var gameId = Guid.NewGuid();
+            var failed = manager.Enqueue(gameId, "First", "source", "dest", "LocalFolder");
+            manager.Transition(failed.Id, CloudTransferState.Failed);
+            var next = manager.Retry(failed.Id);
+            manager.Transition(next.Id, CloudTransferState.Transferring);
+            manager.Transition(next.Id, quarantine ? CloudTransferState.Failed : CloudTransferState.Completed);
+            if (quarantine) manager.MarkRequiresManualRecovery(next.Id);
+
+            Assert.That(manager.GetLatestRetryableJobForGame(gameId), Is.Null);
+            Assert.That(manager.GetJob(failed.Id), Is.SameAs(failed));
+            Assert.That(manager.Jobs.Count, Is.EqualTo(2));
+        }
+
         [TestCase(0)]
         [TestCase(5)]
         public void Constructor_InvalidConcurrency_UsesOne(int invalidConcurrency)

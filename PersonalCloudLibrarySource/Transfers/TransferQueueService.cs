@@ -185,6 +185,9 @@ namespace PersonalCloudLibrarySource
                 }
 
                 RefuseBlockedDestination(previous.Job.GameId, previous.Job.Destination);
+                if (previous.Job.CanRetry &&
+                    !ReferenceEquals(manager.GetLatestRetryableJobForGame(previous.Job.GameId), previous.Job))
+                    throw new TransferRetryRefusedException("Select the latest retryable attempt.");
                 if (previous.Settings != null &&
                     !MatchesRetryConfiguration(previous.Settings, settingsSnapshot))
                     throw new TransferRetryRefusedException(
@@ -274,7 +277,9 @@ namespace PersonalCloudLibrarySource
                     QueueRequest previous;
                     if ((Stopwatch.GetTimestamp() - intent.CreatedTimestamp) / (double)Stopwatch.Frequency > 120 ||
                         !requests.TryGetValue(intent.PreviousJobId, out previous) ||
-                        !previous.Job.CanRetry || executionAuthorized == null ||
+                        !previous.Job.CanRetry ||
+                        !ReferenceEquals(manager.GetLatestRetryableJobForGame(gameId), previous.Job) ||
+                        executionAuthorized == null ||
                         previous.Settings == null || !MatchesRetryConfiguration(previous.Settings, settings) ||
                         previous.IsRclone != isRclone || previous.Job.IsDirectory != isDirectory ||
                         !Same(previous.Job.Source, source) || !Same(previous.Job.Destination, destination) ||

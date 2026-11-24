@@ -52,6 +52,27 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void SupersededFailedAttemptCannotBeRetriedByEitherRoute()
+        {
+            var manager = new CloudTransferManager(1);
+            var executor = new ImmediateSuccessExecutor(manager);
+            var settings = new PersonalCloudLibrarySourceSettingsV3 { Enabled = true, AllowDownloads = true };
+            using (var queue = new TransferQueueService(manager, executor))
+            {
+                var first = queue.EnqueueLocal(Guid.NewGuid(), "First", "source", "dest",
+                    "LocalFolder", false, settings, () => false);
+                Assert.That(queue.GetCompletion(first.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                var next = queue.EnqueueLocal(first.GameId, "Next", "source", "dest",
+                    "LocalFolder", false, settings, () => true);
+                Assert.That(queue.GetCompletion(next.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                Assert.That(next.State, Is.EqualTo(CloudTransferState.Completed));
+                Assert.Throws<TransferRetryRefusedException>(() => queue.Retry(first.Id, settings));
+                Assert.Throws<TransferRetryRefusedException>(() => queue.PrepareHostedRetry(first.Id, settings));
+                Assert.That(manager.Jobs.Count, Is.EqualTo(2));
+            }
+        }
+
+        [Test]
         public void HostedRetryFreshActionPreservesAttemptIdentityAndRequiresNewGuard()
         {
             var manager = new CloudTransferManager(1);
