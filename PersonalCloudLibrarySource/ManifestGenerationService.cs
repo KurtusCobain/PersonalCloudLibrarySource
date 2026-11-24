@@ -188,6 +188,7 @@ namespace PersonalCloudLibrarySource
 
             var items = new List<PersonalCloudLibraryItem>();
             var detectedDirectories = new List<string>();
+            var detectedDirectorySet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var directory in directories)
             {
@@ -227,6 +228,7 @@ namespace PersonalCloudLibrarySource
                         string.Empty,
                         role));
                     detectedDirectories.Add(directory.Path);
+                    detectedDirectorySet.Add(directory.Path);
                     continue;
                 }
 
@@ -237,15 +239,17 @@ namespace PersonalCloudLibrarySource
                 }
 
                 ScanEntry preferredLaunch = null;
-                foreach (var extension in DefaultDiscLaunchExtensions)
+                var preferredRank = int.MaxValue;
+                foreach (var child in childFiles)
                 {
-                    preferredLaunch = childFiles
-                        .Where(file => string.Equals(GetExtensionFromPath(file.Path), extension, StringComparison.OrdinalIgnoreCase))
-                        .OrderBy(file => file.Path, StringComparer.OrdinalIgnoreCase)
-                        .FirstOrDefault();
-                    if (preferredLaunch != null)
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var rank = Array.IndexOf(DefaultDiscLaunchExtensions, GetExtensionFromPath(child.Path));
+                    if (rank < 0 || rank > preferredRank) continue;
+                    if (rank < preferredRank || preferredLaunch == null ||
+                        StringComparer.OrdinalIgnoreCase.Compare(child.Path, preferredLaunch.Path) < 0)
                     {
-                        break;
+                        preferredLaunch = child;
+                        preferredRank = rank;
                     }
                 }
 
@@ -265,6 +269,7 @@ namespace PersonalCloudLibrarySource
                     GetFileNameFromPath(launchPath),
                     string.Empty));
                 detectedDirectories.Add(directory.Path);
+                detectedDirectorySet.Add(directory.Path);
             }
 
             foreach (var file in files)
@@ -276,7 +281,7 @@ namespace PersonalCloudLibrarySource
                     continue;
                 }
 
-                if (IsUnderDetectedDirectory(file.Path, detectedDirectories))
+                if (IsUnderDetectedDirectory(file.Path, detectedDirectorySet))
                 {
                     report.SkippedEntries.Add("Skipped file inside detected directory package: " + file.Path);
                     continue;
@@ -416,7 +421,7 @@ namespace PersonalCloudLibrarySource
                         continue;
                     if (!PathBoundary.IsContained(rootFullPath, directory))
                         continue;
-                    var entry = NewScanEntry(rootFullPath, directory, true);
+                    var entry = NewScanEntry(rootFullPath, directory);
                     if (!string.IsNullOrWhiteSpace(entry.Path))
                         directories.Add(entry);
                     if (directories.Count + files.Count > maxEntries)
@@ -429,7 +434,7 @@ namespace PersonalCloudLibrarySource
                     cancellationToken.ThrowIfCancellationRequested();
                     if (!PathBoundary.IsContained(rootFullPath, file))
                         continue;
-                    var entry = NewScanEntry(rootFullPath, file, false);
+                    var entry = NewScanEntry(rootFullPath, file);
                     if (!string.IsNullOrWhiteSpace(entry.Path))
                         files.Add(entry);
                     if (directories.Count + files.Count > maxEntries)
@@ -438,14 +443,13 @@ namespace PersonalCloudLibrarySource
             }
         }
 
-        private static ScanEntry NewScanEntry(string rootFullPath, string path, bool isDirectory)
+        private static ScanEntry NewScanEntry(string rootFullPath, string path)
         {
             return new ScanEntry
             {
                 Path = NormalizeSourcePath(path.Substring(rootFullPath.Length).TrimStart(
                     Path.DirectorySeparatorChar,
-                    Path.AltDirectorySeparatorChar)),
-                IsDirectory = isDirectory
+                    Path.AltDirectorySeparatorChar))
             };
         }
 
@@ -556,18 +560,16 @@ namespace PersonalCloudLibrarySource
             return false;
         }
 
-        private static bool IsUnderDetectedDirectory(string filePath, List<string> detectedDirectories)
+        private static bool IsUnderDetectedDirectory(string filePath, HashSet<string> detectedDirectories)
         {
-            var normalizedFile = NormalizeSourcePath(filePath);
-            foreach (var directory in detectedDirectories)
+            // Directory keys are normalized by NewScanEntry. Check actual
+            // ancestors rather than every unrelated detected package.
+            var normalized = NormalizeSourcePath(filePath);
+            for (var slash = normalized.LastIndexOf('/'); slash > 0;
+                slash = normalized.LastIndexOf('/', slash - 1))
             {
-                var normalizedDirectory = NormalizeSourcePath(directory).TrimEnd('/') + "/";
-                if (normalizedFile.StartsWith(normalizedDirectory, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
+                if (detectedDirectories.Contains(normalized.Substring(0, slash))) return true;
             }
-
             return false;
         }
 
@@ -674,7 +676,6 @@ namespace PersonalCloudLibrarySource
         private class ScanEntry
         {
             public string Path { get; set; }
-            public bool IsDirectory { get; set; }
         }
     }
 }

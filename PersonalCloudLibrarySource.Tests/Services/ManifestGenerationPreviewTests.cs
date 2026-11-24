@@ -2,6 +2,7 @@ using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 
@@ -53,6 +54,61 @@ namespace PersonalCloudLibrarySource.Tests.Services
             {
                 if (Directory.Exists(root)) Directory.Delete(root, true);
             }
+        }
+
+        [Test]
+        public void Preview_PackagePriorityAndAncestorBoundariesRemainStable()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "PCLS-ManifestFixture-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var package = Path.Combine(root, "PC", "Game");
+                var similarlyNamed = Path.Combine(root, "PC", "GameExtra");
+                Directory.CreateDirectory(package);
+                Directory.CreateDirectory(similarlyNamed);
+                Directory.CreateDirectory(Path.Combine(package, "Data"));
+                foreach (var name in new[] { "z.m3u", "a.m3u", "a.exe" })
+                    File.WriteAllText(Path.Combine(package, name), "fixture");
+                File.WriteAllText(Path.Combine(package, "Data", "asset.nes"), "fixture");
+                File.WriteAllText(Path.Combine(similarlyNamed, "standalone.nes"), "fixture");
+                var result = new ManifestGenerationService().Preview(new ManifestGenerationOptions
+                    { SourceRoot = root }, CancellationToken.None);
+                Assert.That(result.ItemCount, Is.EqualTo(2));
+                Assert.That(result.Manifest.Items.Single(item => item.SourceType == "directory").LaunchFile,
+                    Is.EqualTo("a.m3u"));
+                Assert.That(result.Manifest.Items.Single(item => item.SourceType == "file").Title,
+                    Is.EqualTo("standalone"));
+            }
+            finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+        }
+
+        [Test]
+        public void Preview_LargeSyntheticCatalogPreservesAllItems()
+        {
+            const int packages = 2500;
+            var timer = Stopwatch.StartNew();
+            var result = new ManifestGenerationService(new LargePackageFileSystem(packages)).Preview(
+                new ManifestGenerationOptions { SourceRoot = @"C:\Games" }, CancellationToken.None);
+            timer.Stop();
+            Assert.That(result.ItemCount, Is.EqualTo(packages));
+            Assert.That(result.DetectedDirectoryItemCount, Is.EqualTo(packages));
+            Assert.That(result.ScannedEntryCount, Is.EqualTo(packages * 3));
+            Assert.That(result.Manifest.Items.Select(item => item.Id).Distinct().Count(), Is.EqualTo(packages));
+            Console.WriteLine("PCLS_BENCHMARK manifest_preview packages={0} entries={1} elapsed_ms={2:F3}",
+                packages, result.ScannedEntryCount, timer.Elapsed.TotalMilliseconds);
+        }
+
+        private sealed class LargePackageFileSystem : IManifestGenerationFileSystem
+        {
+            private readonly int count;
+            public LargePackageFileSystem(int count) { this.count = count; }
+            public bool DirectoryExists(string path) => true;
+            public IEnumerable<string> EnumerateDirectories(string path) =>
+                path == @"C:\Games" ? Enumerable.Range(0, count).Select(index => Path.Combine(path, "Game-" + index))
+                    : Enumerable.Empty<string>();
+            public IEnumerable<string> EnumerateFiles(string path) =>
+                path == @"C:\Games" ? Enumerable.Empty<string>() : new[]
+                    { Path.Combine(path, "game.exe"), Path.Combine(path, "data.nes") };
         }
 
         [Test]
