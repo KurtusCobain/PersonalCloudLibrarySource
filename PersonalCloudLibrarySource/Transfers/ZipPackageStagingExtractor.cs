@@ -33,7 +33,7 @@ namespace PersonalCloudLibrarySource
         {
             var createdFiles = new List<CreatedFileRecord>();
             var createdDirectories = new List<string>();
-            var createdDirectoryIndex = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var createdDirectoryIndex = new Dictionary<string, TransferPartialPathPolicy.FileIdentity>(StringComparer.OrdinalIgnoreCase);
             string staging = null;
             try
             {
@@ -111,9 +111,17 @@ namespace PersonalCloudLibrarySource
                     // No filesystem mutation has occurred until ALL ZIP metadata
                     // passes bounded, Windows-aware path validation.
                     cancellationToken.ThrowIfCancellationRequested();
-                    TransferPartialPathPolicy.CreateExclusiveDirectory(staging);
-                    createdDirectories.Add(staging);
-                    createdDirectoryIndex.Add(staging);
+                    try
+                    {
+                        createdDirectoryIndex.Add(staging, TransferPartialPathPolicy.CreateOwnedDirectory(staging));
+                        createdDirectories.Add(staging);
+                    }
+                    catch (Exception)
+                    {
+                        return CloudTransferExecutionResult.Failure(
+                            "Private ZIP staging root ownership is uncertain; preserve staging for review.",
+                            requiresManualRecovery: true);
+                    }
                     long copiedTotal = 0;
                     var buffer = new byte[CopyBufferBytes];
 
@@ -222,7 +230,7 @@ namespace PersonalCloudLibrarySource
                     cancellationToken.ThrowIfCancellationRequested();
                     if (copiedTotal != inspected.TotalUncompressedBytes)
                         throw new InvalidDataException("Extracted byte totals failed verification.");
-                    if (!VerifyExactStagingTree(staging, records, cancellationToken))
+                    if (!VerifyExactStagingTree(staging, records, createdDirectoryIndex, cancellationToken))
                         throw new IOException("Private ZIP staging contains unrecognized or linked content.");
                     if (!VerifyOriginalStagedBytes(cacheRoot, createdFiles,
                         cancellationToken))
@@ -242,7 +250,7 @@ namespace PersonalCloudLibrarySource
             catch (OperationCanceledException)
             {
                 var cleaned = CleanupCreatedStaging(cacheRoot, staging,
-                    createdFiles, createdDirectories);
+                    createdFiles, createdDirectories, createdDirectoryIndex);
                 return cleaned
                     ? CloudTransferExecutionResult.CancelledResult()
                     : CloudTransferExecutionResult.Failure(
@@ -252,7 +260,7 @@ namespace PersonalCloudLibrarySource
             catch (Exception ex)
             {
                 var cleaned = CleanupCreatedStaging(cacheRoot, staging,
-                    createdFiles, createdDirectories);
+                    createdFiles, createdDirectories, createdDirectoryIndex);
                 return CloudTransferExecutionResult.Failure(
                     "ZIP extraction failed: " + ex.Message +
                     (cleaned ? "" : " Private staging needs manual inspection."), ex,
@@ -295,11 +303,13 @@ namespace PersonalCloudLibrarySource
         }
 
         private static bool VerifyExactStagingTree(string staging,
-            IList<ArchiveEntryObservation> records, CancellationToken token)
+            IList<ArchiveEntryObservation> records,
+            IDictionary<string, TransferPartialPathPolicy.FileIdentity> directories, CancellationToken token)
         {
             if (!Directory.Exists(staging) ||
                 (File.GetAttributes(staging) & FileAttributes.ReparsePoint) != 0)
                 return false;
+            TransferPartialPathPolicy.RequireDirectoryIdentity(staging, directories[staging]);
 
             var expectedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var expectedDirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -343,8 +353,9 @@ namespace PersonalCloudLibrarySource
                     if ((attrs & FileAttributes.Directory) != 0)
                     {
                         if (!expectedDirs.Contains(relative) ||
-                            !actualDirs.Add(relative))
+                            !actualDirs.Add(relative) || !directories.ContainsKey(entry))
                             return false;
+                        TransferPartialPathPolicy.RequireDirectoryIdentity(entry, directories[entry]);
                         pending.Push(entry);
                     }
                     else if (!expectedFiles.Contains(relative) ||
@@ -379,7 +390,8 @@ namespace PersonalCloudLibrarySource
         }
 
         private static void EnsurePrivateDirectory(string staging, string directory,
-            List<string> createdDirectories, HashSet<string> createdDirectoryIndex)
+            List<string> createdDirectories,
+            Dictionary<string, TransferPartialPathPolicy.FileIdentity> createdDirectoryIndex)
         {
             var full = Path.GetFullPath(directory);
             if (!string.Equals(staging, full, StringComparison.OrdinalIgnoreCase) &&
@@ -391,6 +403,7 @@ namespace PersonalCloudLibrarySource
             if (!Directory.Exists(staging) ||
                 (File.GetAttributes(staging) & FileAttributes.ReparsePoint) != 0)
                 throw new IOException("Private staging root is missing or linked.");
+            TransferPartialPathPolicy.RequireDirectoryIdentity(staging, createdDirectoryIndex[staging]);
             if (string.Equals(staging, full, StringComparison.OrdinalIgnoreCase))
                 return;
             var relative = full.Substring(staging.Length)
@@ -403,15 +416,16 @@ namespace PersonalCloudLibrarySource
                     throw new IOException("Archive directory conflicts with an existing file.");
                 if (Directory.Exists(current))
                 {
-                    if (!createdDirectoryIndex.Contains(current) ||
-                        (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
-                        throw new IOException("Archive staging contains an unexpected or linked directory.");
+                    if (!createdDirectoryIndex.ContainsKey(current))
+                        throw new IOException("Archive staging contains an unexpected directory.");
+                    TransferPartialPathPolicy.RequireDirectoryIdentity(current, createdDirectoryIndex[current]);
                 }
                 else
                 {
-                    TransferPartialPathPolicy.CreateExclusiveDirectory(current);
+                    if (createdDirectoryIndex.ContainsKey(current))
+                        throw new IOException("Previously created staging directory disappeared.");
+                    createdDirectoryIndex.Add(current, TransferPartialPathPolicy.CreateOwnedDirectory(current));
                     createdDirectories.Add(current);
-                    createdDirectoryIndex.Add(current);
                 }
             }
         }
@@ -419,7 +433,8 @@ namespace PersonalCloudLibrarySource
         // Only delete files actually created during THIS job and then remove
         // empty directories. Never recursively delete unknown/unowned content.
         private static bool CleanupCreatedStaging(string cacheRoot, string staging,
-            List<CreatedFileRecord> createdFiles, List<string> createdDirectories)
+            List<CreatedFileRecord> createdFiles, List<string> createdDirectories,
+            IDictionary<string, TransferPartialPathPolicy.FileIdentity> createdDirectoryIndex)
         {
             if (string.IsNullOrWhiteSpace(staging) || createdDirectories.Count == 0)
                 return true;
@@ -474,8 +489,7 @@ namespace PersonalCloudLibrarySource
                         clean = false;
                         continue;
                     }
-                    if (Directory.Exists(directory))
-                        Directory.Delete(directory, false); // empty only
+                    TransferPartialPathPolicy.DeleteOwnedEmptyDirectory(directory, createdDirectoryIndex[directory]);
                 }
                 catch (IOException) { clean = false; }
                 catch (UnauthorizedAccessException) { clean = false; }

@@ -374,6 +374,40 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(File.ReadAllText(external), Is.EqualTo(original));
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ReplacedEmptyDirectoryIsNotPublishedOrRemoved(bool cancel)
+        {
+            WriteArchive(zip =>
+            {
+                zip.CreateEntry("empty/");
+                AddFile(zip, "file.txt", "fixture");
+            });
+            var job = Guid.NewGuid();
+            var stage = TransferPartialPathPolicy.Create(destination, job);
+            var empty = Path.Combine(stage, "empty");
+            var moved = Path.Combine(cache, "original-empty");
+            var injected = false;
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var result = new ZipPackageStagingExtractor().ExtractApprovedZip(
+                    source, cache, destination, job, cancellation.Token, (copied, total) =>
+                    {
+                        if (injected) return;
+                        injected = true;
+                        Directory.Move(empty, moved);
+                        Directory.CreateDirectory(empty);
+                        if (cancel) cancellation.Cancel();
+                    });
+                Assert.That(injected, Is.True);
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(result.RequiresManualRecovery, Is.True);
+                Assert.That(Directory.Exists(empty), Is.True);
+                Assert.That(Directory.Exists(moved), Is.True);
+                Assert.That(Directory.Exists(destination), Is.False);
+            }
+        }
+
         [Test]
         public void SameByteReplacementIsNotPublishedOrDeletedAsOwned()
         {
