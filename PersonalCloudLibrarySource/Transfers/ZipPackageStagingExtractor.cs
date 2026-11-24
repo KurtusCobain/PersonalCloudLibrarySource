@@ -109,7 +109,7 @@ namespace PersonalCloudLibrarySource
                     // No filesystem mutation has occurred until ALL ZIP metadata
                     // passes bounded, Windows-aware path validation.
                     cancellationToken.ThrowIfCancellationRequested();
-                    Directory.CreateDirectory(staging);
+                    TransferPartialPathPolicy.CreateExclusiveDirectory(staging);
                     createdDirectories.Add(staging);
                     long copiedTotal = 0;
                     var buffer = new byte[CopyBufferBytes];
@@ -397,12 +397,13 @@ namespace PersonalCloudLibrarySource
                     throw new IOException("Archive directory conflicts with an existing file.");
                 if (Directory.Exists(current))
                 {
-                    if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
-                        throw new IOException("Archive staging contains an unexpected filesystem link.");
+                    if (!createdDirectories.Contains(current, StringComparer.OrdinalIgnoreCase) ||
+                        (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                        throw new IOException("Archive staging contains an unexpected or linked directory.");
                 }
                 else
                 {
-                    Directory.CreateDirectory(current);
+                    TransferPartialPathPolicy.CreateExclusiveDirectory(current);
                     createdDirectories.Add(current);
                 }
             }

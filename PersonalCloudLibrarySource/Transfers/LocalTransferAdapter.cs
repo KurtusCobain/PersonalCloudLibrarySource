@@ -73,6 +73,7 @@ namespace PersonalCloudLibrarySource
                     return CloudTransferExecutionResult.Failure("Destination already exists: " + destinationPath);
                 }
 
+                TransferPartialPathPolicy.RequireSafePath(sourcePath);
                 var totalBytes = new FileInfo(sourcePath).Length;
                 var spaceError = CheckDiskSpace(destinationPath, totalBytes);
                 if (!string.IsNullOrWhiteSpace(spaceError))
@@ -104,6 +105,13 @@ namespace PersonalCloudLibrarySource
                 cancellationToken.ThrowIfCancellationRequested();
                 phase?.Invoke(CloudTransferState.Finalizing);
                 cancellationToken.ThrowIfCancellationRequested();
+                try { TransferPartialPathPolicy.RequirePublicationPaths(partialPath, destinationPath, false); }
+                catch (Exception)
+                {
+                    return CloudTransferExecutionResult.Failure(
+                        "Transfer publication paths changed; staging was preserved for review.",
+                        requiresManualRecovery: true);
+                }
                 File.Move(partialPath, destinationPath);
                 return CloudTransferExecutionResult.Success(transferred, totalBytes);
             }
@@ -197,6 +205,7 @@ namespace PersonalCloudLibrarySource
                     Directory.CreateDirectory(destinationParent);
                 }
 
+                TransferPartialPathPolicy.RequireSafePath(sourceDirectory);
                 var sourceRoot = Path.GetFullPath(sourceDirectory)
                     .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
                 // Never recursively follow Windows junctions/symlinks into a source
@@ -210,13 +219,13 @@ namespace PersonalCloudLibrarySource
                     return CloudTransferExecutionResult.Failure(spaceError);
                 var transferred = 0L;
 
-                TransferPartialPathPolicy.RequireVacant(partialDirectory);
-                Directory.CreateDirectory(partialDirectory);
+                TransferPartialPathPolicy.CreateExclusiveDirectory(partialDirectory);
                 ownsPartial = true;
                 foreach (var directory in directories)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    Directory.CreateDirectory(Path.Combine(partialDirectory, GetRelativePath(sourceRoot, directory)));
+                    TransferPartialPathPolicy.CreateExclusiveDirectory(
+                        Path.Combine(partialDirectory, GetRelativePath(sourceRoot, directory)));
                 }
 
                 var copyBuffer = new byte[bufferSize];
@@ -228,7 +237,9 @@ namespace PersonalCloudLibrarySource
                     var targetDirectory = Path.GetDirectoryName(destinationFile);
                     if (!string.IsNullOrWhiteSpace(targetDirectory))
                     {
-                        Directory.CreateDirectory(targetDirectory);
+                        TransferPartialPathPolicy.RequireSafePath(targetDirectory);
+                        if (!Directory.Exists(targetDirectory))
+                            throw new IOException("Private staging directory disappeared during transfer.");
                     }
 
                     transferred = CopyFileContents(
@@ -252,6 +263,13 @@ namespace PersonalCloudLibrarySource
                 cancellationToken.ThrowIfCancellationRequested();
                 phase?.Invoke(CloudTransferState.Finalizing);
                 cancellationToken.ThrowIfCancellationRequested();
+                try { TransferPartialPathPolicy.RequirePublicationPaths(partialDirectory, normalizedDestination, true); }
+                catch (Exception)
+                {
+                    return CloudTransferExecutionResult.Failure(
+                        "Transfer publication paths changed; staging was preserved for review.",
+                        requiresManualRecovery: true);
+                }
                 Directory.Move(partialDirectory, normalizedDestination);
                 return CloudTransferExecutionResult.Success(transferred, totalBytes);
             }
@@ -338,6 +356,8 @@ namespace PersonalCloudLibrarySource
             Action<long, long?> progress, byte[] buffer, Action created = null)
         {
             var transferred = alreadyTransferred;
+            TransferPartialPathPolicy.RequireSafePath(sourcePath);
+            TransferPartialPathPolicy.RequireVacant(destinationPath);
             using (var source = new FileStream(
                 sourcePath,
                 FileMode.Open,

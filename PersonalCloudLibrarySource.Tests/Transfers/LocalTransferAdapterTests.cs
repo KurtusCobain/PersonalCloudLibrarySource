@@ -192,6 +192,41 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void ExclusiveStagingCreationNeverAdoptsExistingDirectory()
+        {
+            var path = Path.Combine(testRoot, "exclusive");
+            var create = typeof(TransferPartialPathPolicy).GetMethod("CreateExclusiveDirectory",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.That(create, Is.Not.Null);
+            create.Invoke(null, new object[] { path });
+            var sentinel = Path.Combine(path, "keep.txt");
+            File.WriteAllText(sentinel, "preserve");
+            var failure = Assert.Throws<System.Reflection.TargetInvocationException>(
+                () => create.Invoke(null, new object[] { path }));
+            Assert.That(failure.InnerException, Is.TypeOf<IOException>());
+            Assert.That(File.ReadAllText(sentinel), Is.EqualTo("preserve"));
+        }
+
+        [Test]
+        public void CopyFile_DestinationAppearsAtFinalizationPreservesBothPaths()
+        {
+            var source = Path.Combine(testRoot, "source.txt");
+            var destination = Path.Combine(testRoot, "destination.txt");
+            File.WriteAllText(source, "original");
+            var jobId = Guid.NewGuid();
+            var partial = TransferPartialPathPolicy.Create(destination, jobId);
+            var result = new LocalTransferAdapter().CopyFile(source, destination, jobId,
+                CancellationToken.None, null, state =>
+                {
+                    if (state == CloudTransferState.Finalizing) File.WriteAllText(destination, "foreign");
+                });
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.RequiresManualRecovery, Is.True);
+            Assert.That(File.ReadAllText(destination), Is.EqualTo("foreign"));
+            Assert.That(File.ReadAllText(partial), Is.EqualTo("original"));
+        }
+
+        [Test]
         public void CopyFile_ExistingDestination_FailsWithoutOverwriting()
         {
             var source = Path.Combine(testRoot, "source.txt");
