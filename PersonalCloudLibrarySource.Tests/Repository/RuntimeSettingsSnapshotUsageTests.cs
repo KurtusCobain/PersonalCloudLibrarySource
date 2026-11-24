@@ -12,9 +12,11 @@ namespace PersonalCloudLibrarySource.Tests.Repository
         {
             var source = ReadProductionSource("PersonalCloudLibrarySource.GameCommands.cs");
 
-            Assert.That(source, Does.Contain("var settingsSnapshot = settings.GetRuntimeSettingsSnapshot();"));
-            Assert.That(source, Does.Contain("GetTransferQueue().Retry(previous.Id, settingsSnapshot)"));
-            Assert.That(source, Does.Not.Contain("GetTransferQueue().Retry(previous.Id, settings.Settings)"));
+            var transfers = ReadProductionSource("PersonalCloudLibrarySource.Transfers.cs");
+            Assert.That(source, Does.Contain("RetryHostedTransfer(previous.Id)"));
+            Assert.That(transfers, Does.Contain("queue.PrepareHostedRetry(previousJobId, settings.GetRuntimeSettingsSnapshot())"));
+            Assert.That(transfers, Does.Contain("playniteApi.InstallGame(gameId)"));
+            Assert.That(source, Does.Not.Contain("GetTransferQueue().Retry("));
             Assert.That(source, Does.Not.Contain("Task.Run"));
         }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -32,6 +33,14 @@ namespace PersonalCloudLibrarySource
             public TaskCompletionSource<CloudTransferExecutionResult> Completion { get; set; }
         }
 
+        private sealed class HostedRetryIntent
+        {
+            public Guid PreviousJobId { get; set; }
+            public long CreatedTimestamp { get; set; }
+        }
+
+        private readonly Dictionary<Guid, HostedRetryIntent> hostedRetryIntents =
+            new Dictionary<Guid, HostedRetryIntent>();
         private readonly object syncRoot = new object();
         private readonly CloudTransferManager manager;
         private readonly ICloudTransferExecutor executor;
@@ -115,6 +124,43 @@ namespace PersonalCloudLibrarySource
                 if (stopping || disposed) return;
                 manager.SetMaxConcurrentTransfers(value);
                 WakeWorkersLocked();
+            }
+        }
+
+        // The Playnite host must create a fresh install controller so completion
+        // and ownership receipts flow through the normal installation observer.
+        public Guid PrepareHostedRetry(Guid failedJobId, PersonalCloudLibrarySourceSettings current)
+        {
+            lock (syncRoot)
+            {
+                ThrowIfStoppingLocked();
+                QueueRequest previous;
+                if (!requests.TryGetValue(failedJobId, out previous) || !previous.Job.CanRetry ||
+                    previous.ExecutionAuthorized == null || previous.Settings == null)
+                    throw new TransferRetryRefusedException("The selected attempt cannot be retried. Refresh the library.");
+                if (!ReferenceEquals(manager.GetLatestRetryableJobForGame(previous.Job.GameId), previous.Job))
+                    throw new TransferRetryRefusedException("Select the latest retryable attempt.");
+                if (manager.GetActiveJobForGame(previous.Job.GameId) != null)
+                    throw new TransferRetryRefusedException("A transfer attempt is already active for this game.");
+                RefuseBlockedDestination(previous.Job.GameId, previous.Job.Destination);
+                if (!MatchesRetryConfiguration(previous.Settings, current))
+                    throw new TransferRetryRefusedException("Transfer source or cache settings changed. Refresh the library and start a new download.");
+                hostedRetryIntents[previous.Job.GameId] = new HostedRetryIntent
+                {
+                    PreviousJobId = failedJobId,
+                    CreatedTimestamp = Stopwatch.GetTimestamp()
+                };
+                return previous.Job.GameId;
+            }
+        }
+
+        public void CancelHostedRetry(Guid gameId, Guid previousJobId)
+        {
+            lock (syncRoot)
+            {
+                HostedRetryIntent intent;
+                if (hostedRetryIntents.TryGetValue(gameId, out intent) && intent.PreviousJobId == previousJobId)
+                    hostedRetryIntents.Remove(gameId);
             }
         }
 
@@ -218,7 +264,27 @@ namespace PersonalCloudLibrarySource
                 }
 
                 RefuseBlockedDestination(gameId, destination);
-                var job = manager.Enqueue(gameId, displayName, source, destination, providerType, isDirectory);
+                CloudTransferJob job;
+                HostedRetryIntent intent;
+                if (hostedRetryIntents.TryGetValue(gameId, out intent))
+                {
+                    hostedRetryIntents.Remove(gameId);
+                    QueueRequest previous;
+                    if ((Stopwatch.GetTimestamp() - intent.CreatedTimestamp) / (double)Stopwatch.Frequency > 120 ||
+                        !requests.TryGetValue(intent.PreviousJobId, out previous) ||
+                        !previous.Job.CanRetry || executionAuthorized == null ||
+                        previous.Settings == null || !MatchesRetryConfiguration(previous.Settings, settings) ||
+                        previous.IsRclone != isRclone || previous.Job.IsDirectory != isDirectory ||
+                        !Same(previous.Job.Source, source) || !Same(previous.Job.Destination, destination) ||
+                        !Same(previous.Job.ProviderType, providerType))
+                        throw new TransferRetryRefusedException(
+                            "The retry route changed or expired. Refresh the library and start a new download.");
+                    job = manager.Retry(previous.Job.Id);
+                }
+                else
+                {
+                    job = manager.Enqueue(gameId, displayName, source, destination, providerType, isDirectory);
+                }
                 AddRequestLocked(job, isRclone, settings, executionAuthorized);
                 WakeWorkersLocked();
                 return job;

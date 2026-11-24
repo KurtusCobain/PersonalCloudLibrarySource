@@ -52,6 +52,45 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void HostedRetryFreshActionPreservesAttemptIdentityAndRequiresNewGuard()
+        {
+            var manager = new CloudTransferManager(1);
+            var executor = new BlockingExecutor(manager);
+            using (var queue = new TransferQueueService(manager, executor))
+            {
+                var settings = new PersonalCloudLibrarySourceSettingsV3 { Enabled = true, AllowDownloads = true };
+                var first = queue.EnqueueLocal(Guid.NewGuid(), "First", "source", "dest", "LocalFolder", false,
+                    settings, () => false);
+                Assert.That(queue.GetCompletion(first.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                Assert.That(queue.PrepareHostedRetry(first.Id, settings), Is.EqualTo(first.GameId));
+                var retry = queue.EnqueueLocal(first.GameId, "First", "source", "dest", "LocalFolder", false,
+                    settings, () => false);
+                Assert.That(retry.PreviousAttemptId, Is.EqualTo(first.Id));
+                Assert.That(queue.GetCompletion(retry.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                Assert.That(executor.ExecutedJobIds, Is.Empty);
+            }
+        }
+
+        [Test]
+        public void HostedRetryRefusesDifferentFreshRouteWithoutStartingTransfer()
+        {
+            var manager = new CloudTransferManager(1);
+            var executor = new BlockingExecutor(manager);
+            using (var queue = new TransferQueueService(manager, executor))
+            {
+                var settings = new PersonalCloudLibrarySourceSettingsV3 { Enabled = true, AllowDownloads = true };
+                var first = queue.EnqueueLocal(Guid.NewGuid(), "First", "source", "dest", "LocalFolder", false,
+                    settings, () => false);
+                Assert.That(queue.GetCompletion(first.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                queue.PrepareHostedRetry(first.Id, settings);
+                Assert.Throws<TransferRetryRefusedException>(() => queue.EnqueueLocal(
+                    first.GameId, "First", "different", "dest", "LocalFolder", false, settings, () => true));
+                Assert.That(manager.Jobs.Count, Is.EqualTo(1));
+                Assert.That(executor.ExecutedJobIds, Is.Empty);
+            }
+        }
+
+        [Test]
         public void Workers_EnforceConfiguredConcurrencyAndObserveAllJobs()
         {
             var manager = new CloudTransferManager(2);

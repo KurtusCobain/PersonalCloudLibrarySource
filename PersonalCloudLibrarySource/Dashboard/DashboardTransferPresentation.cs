@@ -20,16 +20,18 @@ namespace PersonalCloudLibrarySource
         private readonly TransferQueueService queue;
         private readonly Func<PersonalCloudLibrarySourceSettings> settingsSnapshotFactory;
         private readonly Action<string> showRefusal;
+        private readonly Action<Guid> hostedRetry;
 
         public DashboardTransferActions(
             TransferQueueService queue,
             Func<PersonalCloudLibrarySourceSettings> settingsSnapshotFactory,
-            Action<string> showRefusal = null)
+            Action<string> showRefusal = null, Action<Guid> hostedRetry = null)
         {
             this.queue = queue ?? throw new ArgumentNullException(nameof(queue));
             this.settingsSnapshotFactory = settingsSnapshotFactory ??
                 throw new ArgumentNullException(nameof(settingsSnapshotFactory));
             this.showRefusal = showRefusal;
+            this.hostedRetry = hostedRetry;
         }
 
         public void Cancel(Guid jobId)
@@ -41,7 +43,8 @@ namespace PersonalCloudLibrarySource
         {
             try
             {
-                queue.Retry(jobId, settingsSnapshotFactory());
+                if (hostedRetry != null) hostedRetry(jobId);
+                else queue.Retry(jobId, settingsSnapshotFactory());
             }
             catch (TransferRetryRefusedException ex)
             {

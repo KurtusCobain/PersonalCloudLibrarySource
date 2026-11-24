@@ -16,7 +16,10 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             var controller = File.ReadAllText(Path.Combine(root, "PersonalCloudLibrarySource", "RcloneInstallController.cs"));
 
             Assert.That(commands, Does.Not.Contain("Task.Run"));
-            Assert.That(commands, Does.Contain("GetTransferQueue().Retry"));
+            Assert.That(commands, Does.Contain("RetryHostedTransfer(previous.Id)"));
+            var transfers = File.ReadAllText(Path.Combine(root, "PersonalCloudLibrarySource", "PersonalCloudLibrarySource.Transfers.cs"));
+            Assert.That(transfers, Does.Contain("queue.PrepareHostedRetry"));
+            Assert.That(transfers, Does.Contain("playniteApi.InstallGame(gameId)"));
             Assert.That(plugin, Does.Contain("GetTransferQueue()"));
             Assert.That(controller, Does.Contain("transferQueue.Enqueue"));
             Assert.That(controller, Does.Contain("transferQueue.GetCompletion"));

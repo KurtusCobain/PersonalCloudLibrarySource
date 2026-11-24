@@ -98,6 +98,25 @@ namespace PersonalCloudLibrarySource
             }
         }
 
+        private void RetryHostedTransfer(Guid previousJobId)
+        {
+            var queue = GetTransferQueue();
+            var gameId = queue.PrepareHostedRetry(previousJobId, settings.GetRuntimeSettingsSnapshot());
+            try
+            {
+                var game = System.Linq.Enumerable.FirstOrDefault(playniteApi.Database.Games,
+                    candidate => candidate.Id == gameId && candidate.PluginId == Id);
+                if (game == null)
+                    throw new TransferRetryRefusedException("The game is no longer owned by this library.");
+                playniteApi.InstallGame(gameId);
+            }
+            catch (Exception)
+            {
+                queue.CancelHostedRetry(gameId, previousJobId);
+                throw new TransferRetryRefusedException("Playnite could not start a fresh installation action for this retry.");
+            }
+        }
+
         private int GetActiveTransferCount()
         {
             return GetTransferManager().ActiveCount;

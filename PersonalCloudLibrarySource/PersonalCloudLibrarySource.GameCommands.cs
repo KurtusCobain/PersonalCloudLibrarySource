@@ -458,10 +458,9 @@ namespace PersonalCloudLibrarySource
                 return;
             }
 
-            var settingsSnapshot = settings.GetRuntimeSettingsSnapshot();
             try
             {
-                GetTransferQueue().Retry(previous.Id, settingsSnapshot);
+                RetryHostedTransfer(previous.Id);
             }
             catch (TransferRetryRefusedException ex)
             {
