@@ -246,7 +246,8 @@ namespace PersonalCloudLibrarySource
                 return cleaned
                     ? CloudTransferExecutionResult.CancelledResult()
                     : CloudTransferExecutionResult.Failure(
-                        "Extraction cancelled, but private staging needs manual inspection.");
+                        "Extraction cancelled, but private staging needs manual inspection.",
+                        requiresManualRecovery: true);
             }
             catch (Exception ex)
             {
@@ -254,7 +255,8 @@ namespace PersonalCloudLibrarySource
                     createdFiles, createdDirectories);
                 return CloudTransferExecutionResult.Failure(
                     "ZIP extraction failed: " + ex.Message +
-                    (cleaned ? "" : " Private staging needs manual inspection."), ex);
+                    (cleaned ? "" : " Private staging needs manual inspection."), ex,
+                    requiresManualRecovery: !cleaned);
             }
         }
 

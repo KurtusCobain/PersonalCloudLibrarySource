@@ -340,6 +340,40 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             }
         }
 
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW",
+            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CreateHardLinkNative(string link, string existing, IntPtr reserved);
+
+        [Test]
+        public void StagedFileWithUnexpectedHardlinkIsPreservedAndNotPublished()
+        {
+            const string original = "linked fixture bytes";
+            WriteArchive(zip =>
+            {
+                AddFile(zip, "first.txt", original);
+                AddFile(zip, "second.bin", "second entry");
+            });
+            var job = Guid.NewGuid();
+            var stage = TransferPartialPathPolicy.Create(destination, job);
+            var staged = Path.Combine(stage, "first.txt");
+            var external = Path.Combine(cache, "external-hardlink.txt");
+            var injected = false;
+            var result = new ZipPackageStagingExtractor().ExtractApprovedZip(
+                source, cache, destination, job, CancellationToken.None,
+                (copied, total) =>
+                {
+                    if (injected || copied <= Encoding.UTF8.GetByteCount(original)) return;
+                    injected = CreateHardLinkNative(external, staged, IntPtr.Zero);
+                });
+            Assert.That(injected, Is.True, "Windows test volume must support hardlinks.");
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.RequiresManualRecovery, Is.True);
+            Assert.That(Directory.Exists(destination), Is.False);
+            Assert.That(File.ReadAllText(staged), Is.EqualTo(original));
+            Assert.That(File.ReadAllText(external), Is.EqualTo(original));
+        }
+
         [Test]
         public void SameByteReplacementIsNotPublishedOrDeletedAsOwned()
         {

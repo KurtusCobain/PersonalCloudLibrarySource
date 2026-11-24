@@ -128,6 +128,7 @@ namespace PersonalCloudLibrarySource
                     return new ZipManagedExtractionResult
                     {
                         Cancelled = extraction.Cancelled,
+                        NeedsManualAttention = extraction.RequiresManualRecovery,
                         Reason = extraction.Message
                     };
 

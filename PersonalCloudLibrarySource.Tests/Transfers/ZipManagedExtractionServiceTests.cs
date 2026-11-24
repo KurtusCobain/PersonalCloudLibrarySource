@@ -127,6 +127,28 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void UnexpectedStagingContentPropagatesManualAttentionWithoutReceipt()
+        {
+            var plan = Plan();
+            string foreign = null;
+            var result = new ZipManagedExtractionService().ExecuteApproved(
+                plan, true, receipts, CancellationToken.None, (copied, total) =>
+                {
+                    if (foreign != null) return;
+                    var stage = Directory.GetDirectories(cache, "*.pcls-partial-*")[0];
+                    foreign = Path.Combine(stage, "user.sav");
+                    File.WriteAllText(foreign, "preserve");
+                });
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.NeedsManualAttention, Is.True);
+            Assert.That(result.ReceiptRecorded, Is.False);
+            Assert.That(File.ReadAllText(foreign), Is.EqualTo("preserve"));
+            Assert.That(Directory.Exists(plan.Destination), Is.False);
+            CacheOwnershipReceipt ownership;
+            Assert.That(receipts.TryRead(cache, plan.ReceiptKey, out ownership), Is.False);
+        }
+
+        [Test]
         public void InventoryFailurePreservesSuccessfullyExtractedUserContent()
         {
             var review = new ZipPackageReviewService().Inspect(archive, "game");
