@@ -20,7 +20,8 @@ namespace PersonalCloudLibrarySource.Tests.Repository
                 "Setup", "SetupWizardWindowService.cs"));
 
             Assert.That(navigation, Does.Contain("PrepareSetupWizardCompletionAsync(CancellationToken token)"));
-            Assert.That(navigation, Does.Contain("OutputPath = GetDefaultGeneratedManifestPath()"));
+            Assert.That(navigation, Does.Contain("ManifestGenerationOptions.CreateIsolated("));
+            Assert.That(navigation, Does.Contain("settings.IsSettingsEditActive"));
             Assert.That(navigation, Does.Contain("Task.Run("));
             Assert.That(navigation, Does.Contain("manifestGenerationService.Generate(options, token)"));
             Assert.That(navigation, Does.Contain("token.ThrowIfCancellationRequested();"));

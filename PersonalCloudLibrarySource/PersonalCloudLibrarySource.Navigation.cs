@@ -333,16 +333,16 @@ namespace PersonalCloudLibrarySource
             {
                 // Resolve Playnite-owned paths on the host thread before starting
                 // filesystem enumeration and atomic writes on the worker.
-                var options = new ManifestGenerationOptions
-                {
-                    SourceRoot = root,
-                    OutputPath = GetDefaultGeneratedManifestPath(),
-                    ReportPath = GetDefaultGeneratedReportPath(),
-                    BackupDirectory = GetBackupsDirectory()
-                };
+                var options = ManifestGenerationOptions.CreateIsolated(
+                    root, GetGeneratedManifestDirectory(), GetBackupsDirectory());
                 var report = await Task.Run(
                     () => manifestGenerationService.Generate(options, token), token);
                 token.ThrowIfCancellationRequested();
+                if (!settings.IsSettingsEditActive ||
+                    !ReferenceEquals(pluginSettings, settings.Settings) ||
+                    !string.Equals(PathBoundary.Normalize(root), PathBoundary.Normalize(pluginSettings.LocalLibraryRoot),
+                        StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("The setup source changed during manifest generation.");
                 pluginSettings.LocalManifestPath = report.OutputPath;
                 pluginSettings.ManifestRelativePath = string.Empty;
                 pluginSettings.LastGeneratedManifestPath = report.OutputPath;
@@ -377,7 +377,7 @@ namespace PersonalCloudLibrarySource
             var report = GenerateManifestFromFolder(snapshot.LocalLibraryRoot, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             startupUiDispatcher.Post(
-                () => settings.PersistGeneratedManifestState(report),
+                () => settings.PersistGeneratedManifestState(report, snapshot),
                 cancellationToken);
         }
 

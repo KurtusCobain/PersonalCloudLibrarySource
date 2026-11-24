@@ -824,16 +824,9 @@ namespace PersonalCloudLibrarySource
             string sourceRoot,
             CancellationToken cancellationToken)
         {
-            var outputPath = GetDefaultGeneratedManifestPath();
-            var reportPath = GetDefaultGeneratedReportPath();
-
-            return manifestGenerationService.Generate(new ManifestGenerationOptions
-            {
-                SourceRoot = sourceRoot,
-                OutputPath = outputPath,
-                ReportPath = reportPath,
-                BackupDirectory = GetBackupsDirectory()
-            }, cancellationToken);
+            var options = ManifestGenerationOptions.CreateIsolated(
+                sourceRoot, GetGeneratedManifestDirectory(), GetBackupsDirectory());
+            return manifestGenerationService.Generate(options, cancellationToken);
         }
 
         public LibraryVerificationReport GenerateVerificationReport(

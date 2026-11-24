@@ -393,29 +393,16 @@ namespace PersonalCloudLibrarySource
 
         public void PersistSetupDismissed()
         {
-            new SetupStatePersistenceService().MarkDismissed(
-                Settings,
-                snapshot => plugin.SavePluginSettings(snapshot));
-            UpdateRuntimeSettingsSnapshot();
-            NotifySettingsCommitted();
+            var candidate = GetRuntimeSettingsSnapshot();
+            new SetupStatePersistenceService().MarkDismissed(candidate, PersistRuntimeSettings);
         }
 
-        public void PersistGeneratedManifestState(ManifestGenerationReport report)
+        public void PersistGeneratedManifestState(ManifestGenerationReport report,
+            PersonalCloudLibrarySourceSettingsV3 expected)
         {
-            if (report == null)
-            {
-                throw new ArgumentNullException(nameof(report));
-            }
-
-            Settings.LocalManifestPath = report.OutputPath;
-            Settings.ManifestRelativePath = string.Empty;
-            Settings.LastGeneratedManifestPath = report.OutputPath;
-            Settings.LastGeneratedReportPath = report.ReportPath;
-            Settings.LastManifestGeneratedAt = report.Manifest.GeneratedAt;
-            Settings.LastManifestItemCount = report.ItemCount;
-            plugin.SavePluginSettings(SettingsMigrationService.CloneForEditing(Settings));
-            UpdateRuntimeSettingsSnapshot();
-            NotifySettingsCommitted();
+            var candidate = GetRuntimeSettingsSnapshot();
+            new SetupStatePersistenceService().ApplyGeneratedManifest(candidate, report, expected);
+            PersistRuntimeSettings(candidate);
         }
 
         public override bool VerifySettings(out List<string> errors)

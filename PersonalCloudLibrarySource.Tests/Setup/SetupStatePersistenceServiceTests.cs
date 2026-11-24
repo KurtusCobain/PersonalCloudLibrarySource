@@ -1,5 +1,7 @@
 using NUnit.Framework;
 using System.Collections.Generic;
+using System;
+using System.IO;
 
 namespace PersonalCloudLibrarySource.Tests.Setup
 {
@@ -35,6 +37,55 @@ namespace PersonalCloudLibrarySource.Tests.Setup
             Assert.That(saved[0].LibraryDisplayName, Is.EqualTo("Saved library"));
             Assert.That(saved[0].LocalManifestPath, Is.EqualTo("saved.json"));
             Assert.That(saved[0].SetupDismissed, Is.True);
+        }
+
+        [Test]
+        public void MarkDismissed_FailedSaveDoesNotChangeWorkingState()
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3 { SetupDismissed = false };
+            Assert.Throws<IOException>(() => new SetupStatePersistenceService().MarkDismissed(
+                settings, ignored => { throw new IOException("fixture"); }));
+            Assert.That(settings.SetupDismissed, Is.False);
+        }
+
+        [Test]
+        public void ApplyGeneratedManifest_RejectsStaleSourceOrChangedManifestPointer()
+        {
+            var expected = new PersonalCloudLibrarySourceSettingsV3
+            {
+                Enabled = true, SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFolderProviderType,
+                LocalLibraryRoot = @"C:\Fixture", LocalManifestPath = "original.json"
+            };
+            var candidate = (PersonalCloudLibrarySourceSettingsV3)SettingsMigrationService.CloneForEditing(expected);
+            var report = new ManifestGenerationReport
+            {
+                SourceRoot = expected.LocalLibraryRoot, OutputPath = "new.json",
+                Manifest = new PersonalCloudLibraryManifest(), ItemCount = 7
+            };
+            candidate.LocalManifestPath = "newer.json";
+            Assert.Throws<InvalidOperationException>(() =>
+                new SetupStatePersistenceService().ApplyGeneratedManifest(candidate, report, expected));
+            Assert.That(candidate.LocalManifestPath, Is.EqualTo("newer.json"));
+            candidate.LocalManifestPath = expected.LocalManifestPath;
+            report.SourceRoot = @"C:\Different";
+            Assert.Throws<InvalidOperationException>(() =>
+                new SetupStatePersistenceService().ApplyGeneratedManifest(candidate, report, expected));
+            report.SourceRoot = expected.LocalLibraryRoot;
+            new SetupStatePersistenceService().ApplyGeneratedManifest(candidate, report, expected);
+            Assert.That(candidate.LocalManifestPath, Is.EqualTo("new.json"));
+            Assert.That(candidate.LastManifestItemCount, Is.EqualTo(7));
+        }
+
+        [Test]
+        public void GeneratedOutputNamesAreIsolatedAndDoNotCreateFiles()
+        {
+            var output = Path.Combine(Path.GetTempPath(), "PCLS-Output-" + Guid.NewGuid().ToString("N"));
+            var first = ManifestGenerationOptions.CreateIsolated(@"C:\Fixture", output, null);
+            var second = ManifestGenerationOptions.CreateIsolated(@"C:\Fixture", output, null);
+            Assert.That(first.OutputPath, Is.Not.EqualTo(second.OutputPath));
+            Assert.That(first.ReportPath, Is.Not.EqualTo(second.ReportPath));
+            Assert.That(Path.GetDirectoryName(first.OutputPath), Is.EqualTo(output));
+            Assert.That(Directory.Exists(output), Is.False);
         }
 
         [Test]

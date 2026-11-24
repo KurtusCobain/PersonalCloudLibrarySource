@@ -9,6 +9,7 @@ namespace PersonalCloudLibrarySource
         private PersonalCloudLibrarySourceSettings preEditSnapshot;
         private PersonalCloudLibrarySourceSettings committedSnapshot;
         private bool isActive;
+        public bool IsActive => isActive;
 
         public SettingsEditSession(
             Func<bool> validate,

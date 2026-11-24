@@ -204,7 +204,7 @@ namespace PersonalCloudLibrarySource
         private readonly SafeFileWriteService safeFileWriteService = new SafeFileWriteService();
         private readonly SettingsEditSession editSession;
         private PersonalCloudLibrarySourceSettings settings;
-        private PersonalCloudLibrarySourceSettings runtimeSettingsSnapshot;
+        private volatile PersonalCloudLibrarySourceSettings runtimeSettingsSnapshot;
         private string setupStatusHeadline;
         private string setupStatusDetails;
 
@@ -255,6 +255,7 @@ namespace PersonalCloudLibrarySource
         }
 
         public bool LastEditSavedSuccessfully { get; private set; }
+        public bool IsSettingsEditActive => editSession != null && editSession.IsActive;
 
         public event EventHandler SettingsCommitted;
 
@@ -306,6 +307,17 @@ namespace PersonalCloudLibrarySource
         protected void UpdateRuntimeSettingsSnapshot()
         {
             runtimeSettingsSnapshot = SettingsMigrationService.CloneForEditing(Settings);
+        }
+
+        protected void PersistRuntimeSettings(PersonalCloudLibrarySourceSettings candidate)
+        {
+            if (IsSettingsEditActive)
+                throw new InvalidOperationException("Finish or cancel the settings edit before updating runtime configuration.");
+            var snapshot = SettingsMigrationService.CloneForEditing(candidate);
+            plugin.SavePluginSettings(SettingsMigrationService.CloneForEditing(snapshot));
+            runtimeSettingsSnapshot = snapshot;
+            SettingsMigrationService.RestoreSnapshot(snapshot, Settings);
+            NotifySettingsCommitted();
         }
 
         protected void NotifySettingsCommitted()
