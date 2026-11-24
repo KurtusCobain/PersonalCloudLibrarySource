@@ -389,6 +389,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
                 Assert.That(job.RequiresManualRecovery, Is.True);
                 Assert.That(job.CanRetry, Is.False);
                 Assert.That(manager.GetLatestRetryableJobForGame(game), Is.Null);
+                Assert.That(manager.GetReservationSnapshot(), Does.Contain(job));
                 Assert.Throws<TransferRetryRefusedException>(() => queue.Retry(job.Id));
                 Assert.Throws<TransferRetryRefusedException>(() =>
                     queue.EnqueueLocal(game, "Game", "source", "dest", "LocalFolder", false));

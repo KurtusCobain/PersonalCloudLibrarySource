@@ -30,6 +30,7 @@ namespace PersonalCloudLibrarySource
             public bool IsRclone { get; set; }
             public PersonalCloudLibrarySourceSettings Settings { get; set; }
             public Func<bool> ExecutionAuthorized { get; set; }
+            public bool TerminalPublished { get; set; }
             public TaskCompletionSource<CloudTransferExecutionResult> Completion { get; set; }
         }
 
@@ -47,7 +48,8 @@ namespace PersonalCloudLibrarySource
         private readonly TransferRecoveryJournal recoveryJournal;
         private readonly List<QueueRequest> pending = new List<QueueRequest>();
         private readonly Dictionary<Guid, QueueRequest> requests = new Dictionary<Guid, QueueRequest>();
-        private readonly HashSet<Guid> publishedTerminalJobs = new HashSet<Guid>();
+        private readonly Dictionary<Guid, CloudTransferJob> awaitingCompletion =
+            new Dictionary<Guid, CloudTransferJob>();
         private const int WorkerCount = 5;
         private readonly SemaphoreSlim signal = new SemaphoreSlim(0, WorkerCount);
         private readonly Task[] workers;
@@ -202,7 +204,7 @@ namespace PersonalCloudLibrarySource
                 if (!stopping)
                 {
                     stopping = true;
-                    foreach (var job in manager.Jobs.Where(job => !job.IsTerminal))
+                    foreach (var job in manager.GetReservationSnapshot().Where(job => !job.IsTerminal))
                     {
                         manager.Cancel(job.Id);
                     }
@@ -306,6 +308,7 @@ namespace PersonalCloudLibrarySource
                     TaskCreationOptions.RunContinuationsAsynchronously)
             };
             requests.Add(job.Id, request);
+            awaitingCompletion.Add(job.Id, job);
             pending.Add(request);
         }
 
@@ -433,8 +436,12 @@ namespace PersonalCloudLibrarySource
                     request.ExecutionAuthorized = null;
                 }
             }
-            PublishTerminalOnce(request.Job);
-            request.Completion.TrySetResult(result);
+            PublishTerminalOnce(request);
+            lock (syncRoot)
+            {
+                request.Completion.TrySetResult(result);
+                awaitingCompletion.Remove(request.Job.Id);
+            }
         }
 
         private static bool IsExecutionAuthorized(QueueRequest request)
@@ -468,13 +475,15 @@ namespace PersonalCloudLibrarySource
             }
         }
 
-        private void PublishTerminalOnce(CloudTransferJob job)
+        private void PublishTerminalOnce(QueueRequest request)
         {
+            var job = request.Job;
             EventHandler<CloudTransferJobEventArgs> handler = null;
             lock (syncRoot)
             {
-                if (job.IsTerminal && publishedTerminalJobs.Add(job.Id))
+                if (job.IsTerminal && !request.TerminalPublished)
                 {
+                    request.TerminalPublished = true;
                     handler = JobTerminated;
                 }
             }
@@ -500,12 +509,11 @@ namespace PersonalCloudLibrarySource
 
         private void RefuseBlockedDestination(Guid gameId, string destination)
         {
-            foreach (var job in manager.Jobs)
+            // Do not scan completed history for each enqueue. Keep publication
+            // reservations until the completion task resolves, even if the
+            // manager already committed a terminal state.
+            foreach (var job in manager.GetReservationSnapshot().Concat(awaitingCompletion.Values).Distinct())
             {
-                QueueRequest existingRequest;
-                var stillObserved = requests.TryGetValue(job.Id, out existingRequest) &&
-                    !existingRequest.Completion.Task.IsCompleted;
-                if (job.IsTerminal && !job.RequiresManualRecovery && !stillObserved) continue;
                 var overlaps = job.GameId == gameId ||
                     PathBoundary.IsContained(job.Destination, destination) ||
                     PathBoundary.IsContained(destination, job.Destination);

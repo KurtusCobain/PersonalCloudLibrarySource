@@ -12,6 +12,7 @@ namespace PersonalCloudLibrarySource
         private readonly Dictionary<Guid, List<CloudTransferJob>> jobsByGame = new Dictionary<Guid, List<CloudTransferJob>>();
         private readonly List<CloudTransferJob> activeJobs = new List<CloudTransferJob>();
         private readonly List<CloudTransferJob> queuedJobs = new List<CloudTransferJob>();
+        private readonly Dictionary<Guid, CloudTransferJob> reservedJobs = new Dictionary<Guid, CloudTransferJob>();
         private int failedCount;
         private int maxConcurrentTransfers;
         private long lifecycleRevision;
@@ -48,6 +49,13 @@ namespace PersonalCloudLibrarySource
                     return jobs.ToList().AsReadOnly();
                 }
             }
+        }
+
+        // Includes active, queued, and terminal attempts requiring recovery.
+        // The queue separately retains terminal publication in flight.
+        public IReadOnlyList<CloudTransferJob> GetReservationSnapshot()
+        {
+            lock (syncRoot) return reservedJobs.Values.ToArray();
         }
 
         public int ActiveCount
@@ -159,6 +167,7 @@ namespace PersonalCloudLibrarySource
                 var job = FindJobLocked(jobId);
                 if (job.RequiresManualRecovery) return;
                 job.RequiresManualRecovery = true;
+                reservedJobs[job.Id] = job;
                 lifecycleRevision++;
             }
             OnChanged();
@@ -336,6 +345,7 @@ namespace PersonalCloudLibrarySource
             }
             attempts.Add(job);
             jobs.Add(job);
+            reservedJobs.Add(job.Id, job);
             queuedJobs.Add(job);
         }
 
@@ -350,6 +360,7 @@ namespace PersonalCloudLibrarySource
             if (wasActive && !job.IsActive) activeJobs.Remove(job);
             else if (!wasActive && job.IsActive) activeJobs.Add(job);
             if (state == CloudTransferState.Failed) failedCount++;
+            if (job.IsTerminal && !job.RequiresManualRecovery) reservedJobs.Remove(job.Id);
         }
 
         private CloudTransferJob FindJobLocked(Guid jobId)

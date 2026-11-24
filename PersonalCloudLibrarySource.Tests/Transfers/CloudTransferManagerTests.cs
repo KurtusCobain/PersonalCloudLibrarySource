@@ -172,6 +172,36 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void ReservationIndexBenchmark_5000HistoricalJobs()
+        {
+            const int historySize = 5000;
+            const int iterations = 2000;
+            var manager = new CloudTransferManager(4);
+            for (var i = 0; i < historySize; i++)
+            {
+                var old = manager.Enqueue(Guid.NewGuid(), "History", "s", "d", "LocalFolder");
+                manager.Transition(old.Id, CloudTransferState.Cancelled);
+            }
+            for (var i = 0; i < 6; i++)
+                manager.Enqueue(Guid.NewGuid(), "Live", "s", "d", "LocalFolder");
+            var history = manager.Jobs;
+            Func<int> scan = () => history.Count(job => !job.IsTerminal || job.RequiresManualRecovery);
+            Assert.That(manager.GetReservationSnapshot().Count, Is.EqualTo(6));
+            var referenceTimer = Stopwatch.StartNew();
+            long reference = 0;
+            for (var i = 0; i < iterations; i++) reference += scan();
+            referenceTimer.Stop();
+            var indexedTimer = Stopwatch.StartNew();
+            long indexed = 0;
+            for (var i = 0; i < iterations; i++) indexed += manager.GetReservationSnapshot().Count;
+            indexedTimer.Stop();
+            Assert.That(indexed, Is.EqualTo(reference));
+            Assert.That(manager.Jobs.Count, Is.EqualTo(historySize + 6));
+            Console.WriteLine("PCLS_BENCHMARK reservations history={0} iterations={1} scan_ms={2:F3} indexed_ms={3:F3}",
+                historySize, iterations, referenceTimer.Elapsed.TotalMilliseconds, indexedTimer.Elapsed.TotalMilliseconds);
+        }
+
+        [Test]
         public void LiveProgressBenchmark_5000HistoricalJobs()
         {
             const int historySize = 5000;
