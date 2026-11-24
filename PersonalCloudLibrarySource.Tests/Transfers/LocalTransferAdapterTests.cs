@@ -192,6 +192,28 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void NativeHandlePublicationRefusesUnrelatedSourceHandle()
+        {
+            var actual = Path.Combine(testRoot, "actual.bin");
+            var staging = Path.Combine(testRoot, "staging.bin");
+            var destination = Path.Combine(testRoot, "destination.bin");
+            File.WriteAllText(actual, "unrelated");
+            File.WriteAllText(staging, "staging");
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+            var open = typeof(TransferPartialPathPolicy).GetMethod("OpenPrivateFileForReview", flags);
+            var publish = typeof(TransferPartialPathPolicy).GetMethod("PublishVerifiedHandle", flags);
+            using (var stream = (FileStream)open.Invoke(null, new object[] { actual, true }))
+            {
+                var exception = Assert.Throws<System.Reflection.TargetInvocationException>(() =>
+                    publish.Invoke(null, new object[] { stream.SafeFileHandle, staging, destination }));
+                Assert.That(exception.InnerException, Is.TypeOf<IOException>());
+            }
+            Assert.That(File.ReadAllText(actual), Is.EqualTo("unrelated"));
+            Assert.That(File.ReadAllText(staging), Is.EqualTo("staging"));
+            Assert.That(File.Exists(destination), Is.False);
+        }
+
+        [Test]
         public void NativeHandlePublicationRefusesExistingTargetWithoutReplacingEitherFile()
         {
             var staging = Path.Combine(testRoot, "staging.bin");
