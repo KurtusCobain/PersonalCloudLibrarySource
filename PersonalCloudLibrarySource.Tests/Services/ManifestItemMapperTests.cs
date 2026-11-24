@@ -141,6 +141,59 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Map_SharedCacheRoot_CachedFileSizesAreOwnBytesOnly()
+        {
+            var cache = Path.Combine(testRoot, "cache");
+            Directory.CreateDirectory(cache);
+            File.WriteAllText(Path.Combine(cache, "one.exe"), "one");
+            File.WriteAllText(Path.Combine(cache, "two.exe"), "twotwo");
+            File.WriteAllBytes(Path.Combine(cache, "unrelated.bin"), new byte[512 * 1024]);
+
+            var items = new[]
+            {
+                new PersonalCloudLibraryItem { Id = "one", Title = "One", SourceType = "file", CachePath = "one.exe" },
+                new PersonalCloudLibraryItem { Id = "two", Title = "Two", SourceType = "file", CachePath = "two.exe" }
+            };
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                LocalCacheFolder = cache,
+                TreatMissingFilesAsUninstalled = true
+            };
+            var mapped = new ManifestItemMapper().Map(items, settings, new List<string>());
+
+            Assert.That(mapped, Has.Count.EqualTo(2));
+            Assert.That(mapped[0].IsInstalled, Is.True);
+            Assert.That(mapped[1].IsInstalled, Is.True);
+            Assert.That(mapped[0].InstallDirectory, Is.Empty);
+            Assert.That(mapped[1].InstallDirectory, Is.Empty);
+            Assert.That(mapped[0].InstallSize, Is.EqualTo((ulong)3));
+            Assert.That(mapped[1].InstallSize, Is.EqualTo((ulong)6));
+            Assert.That(mapped[0].GameActions[0].WorkingDir, Is.EqualTo(cache));
+            Assert.That(mapped[1].GameActions[0].WorkingDir, Is.EqualTo(cache));
+        }
+
+        [Test]
+        public void Map_ExplicitFileInstallDirectory_PreservesPath()
+        {
+            var cache = Path.Combine(testRoot, "cache");
+            var install = Path.Combine(cache, "explicit");
+            Directory.CreateDirectory(install);
+            File.WriteAllText(Path.Combine(install, "one.exe"), "one");
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = "one", Title = "One", SourceType = "file",
+                InstallDirectory = "explicit", CachePath = "explicit/one.exe"
+            };
+            var mapped = new ManifestItemMapper().Map(new[] { item },
+                new PersonalCloudLibrarySourceSettingsV3 { LocalCacheFolder = cache },
+                new List<string>())[0];
+
+            Assert.That(mapped.InstallDirectory, Is.EqualTo(install));
+            Assert.That(mapped.InstallSize, Is.Null);
+            Assert.That(mapped.GameActions[0].WorkingDir, Is.EqualTo(install));
+        }
+
+        [Test]
         public void Map_CachedFile_ExposesStandardPlayPathAndWorkingDirectory()
         {
             var cache = Path.Combine(testRoot, "cache");

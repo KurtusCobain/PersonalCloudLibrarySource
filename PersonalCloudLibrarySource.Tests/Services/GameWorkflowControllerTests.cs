@@ -1,3 +1,4 @@
+using System.Linq;
 using NUnit.Framework;
 using Playnite.SDK.Models;
 using Playnite.SDK.Plugins;
@@ -317,6 +318,14 @@ namespace PersonalCloudLibrarySource.Tests.Services
                 CacheOwnershipReceipt receipt = null;
                 Assert.That(SpinWait.SpinUntil(() => receipts.TryRead(cache, item.Id, out receipt), 5000), Is.True);
                 Assert.That(receipt.Destination, Is.EqualTo(Path.Combine(cache, "receipt-game", "play.exe")));
+                Assert.That(SpinWait.SpinUntil(() => game.InstallSize.HasValue &&
+                    game.GameActions != null && game.GameActions.Any(action => action.IsPlayAction), 5000), Is.True);
+                Assert.That(game.InstallSize, Is.EqualTo((ulong)new FileInfo(source).Length));
+                Assert.That(game.InstallDirectory, Is.Empty);
+                Assert.That(game.GameActions, Has.Exactly(1).Matches<GameAction>(action =>
+                    action.IsPlayAction &&
+                    action.Path == Path.Combine(cache, "receipt-game", "play.exe") &&
+                    action.WorkingDir == Path.Combine(cache, "receipt-game")));
                 controller.Dispose();
             }
         }

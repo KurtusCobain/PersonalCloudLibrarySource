@@ -265,7 +265,8 @@ namespace PersonalCloudLibrarySource
             {
                 InvokeOnInstalled(new GameInstalledEventArgs(new GameInstallationData
                 {
-                    InstallDirectory = installDirectory
+                    // Do not ask Playnite to scan a shared parent for a single file.
+                    InstallDirectory = itemState.PlayniteInstallDirectory
                 }));
             }
 
