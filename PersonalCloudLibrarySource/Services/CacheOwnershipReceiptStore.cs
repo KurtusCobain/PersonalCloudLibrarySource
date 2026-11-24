@@ -52,14 +52,32 @@ namespace PersonalCloudLibrarySource
             {
                 if (PathBoundary.IsContained(cacheRoot, storeRoot) ||
                     PathBoundary.IsContained(storeRoot, cacheRoot))
-                    return false;
+                    return true;
                 var path = ReceiptFile(cacheRoot, itemId);
-                return File.Exists(path) || Directory.Exists(path);
+                TransferPartialPathPolicy.RequireSafePath(path);
+                try
+                {
+                    var attributes = File.GetAttributes(storeRoot);
+                    if ((attributes & FileAttributes.Directory) == 0) return true;
+                }
+                catch (FileNotFoundException) { return false; }
+                catch (DirectoryNotFoundException) { return false; }
+
+                return ExistsOrCannotVerifyAbsence(path);
             }
             catch (Exception)
             {
-                return false;
+                // An unavailable store cannot establish absence of ownership.
+                return true;
             }
+        }
+
+        internal static bool ExistsOrCannotVerifyAbsence(string path)
+        {
+            try { File.GetAttributes(path); return true; }
+            catch (FileNotFoundException) { return false; }
+            catch (DirectoryNotFoundException) { return false; }
+            catch (Exception) { return true; }
         }
 
         public bool TryRead(string cacheRoot, string itemId, out CacheOwnershipReceipt receipt)
@@ -71,14 +89,18 @@ namespace PersonalCloudLibrarySource
                     PathBoundary.IsContained(storeRoot, cacheRoot))
                     return false;
                 var path = ReceiptFile(cacheRoot, itemId);
+                TransferPartialPathPolicy.RequireSafePath(path);
                 if (!File.Exists(path)) return false;
                 using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
                 {
                     if (stream.Length > 4096) return false;
                     using (var reader = new StreamReader(stream, Encoding.UTF8))
                     {
+                        var buffer = new char[4097];
+                        var count = reader.ReadBlock(buffer, 0, buffer.Length);
+                        if (count > 4096 || stream.Length > 4096) return false;
                         var parsed = new JavaScriptSerializer { MaxJsonLength = 4096 }
-                            .Deserialize<CacheOwnershipReceipt>(reader.ReadToEnd());
+                            .Deserialize<CacheOwnershipReceipt>(new string(buffer, 0, count));
                         if (parsed == null || (parsed.Version != 1 && parsed.Version != 2) ||
                             !string.Equals(parsed.ItemId, itemId, StringComparison.Ordinal) ||
                             !string.Equals(PathBoundary.Normalize(parsed.CacheRoot),

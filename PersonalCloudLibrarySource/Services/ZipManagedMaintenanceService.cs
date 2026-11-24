@@ -39,18 +39,23 @@ namespace PersonalCloudLibrarySource
         {
             try
             {
-                string destination, receiptId;
-                if (!TryLocation(cacheRoot, gameId, out destination, out receiptId))
-                    return false;
-                return Directory.Exists(destination) || File.Exists(destination) ||
-                    (receipts != null &&
-                        receipts.HasReceiptFootprint(cacheRoot, receiptId));
+                // Check receipts even when the cache volume is missing. A
+                // missing directory is not proof that the identity is unmanaged.
+                var receiptId = ZipManagedExtractionService.ReceiptKeyForGame(gameId);
+                if (string.IsNullOrWhiteSpace(receiptId) || string.IsNullOrWhiteSpace(cacheRoot))
+                    return true;
+                if (receipts != null && receipts.HasReceiptFootprint(cacheRoot, receiptId))
+                    return true;
+                var root = PathBoundary.Normalize(cacheRoot);
+                var destination = Path.GetFullPath(Path.Combine(root, receiptId));
+                if (!new SafeCacheDeletionPolicy().Authorize(root, destination, false).Allowed)
+                    return true;
+                return CacheOwnershipReceiptStore.ExistsOrCannotVerifyAbsence(destination);
             }
             catch (Exception)
             {
-                // A malformed cache location alone is not evidence of a ZIP
-                // extraction. Explicitly fail closed in Assess instead.
-                return false;
+                // Legacy deletion requires proven absence, not an inconclusive probe.
+                return true;
             }
         }
 

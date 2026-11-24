@@ -147,7 +147,10 @@ namespace PersonalCloudLibrarySource
                 stillValid = false;
             }
             if (stillValid)
-                return plan;
+            {
+                lock (multiSourcePlanSync)
+                    return ReferenceEquals(experimentalMultiSourcePlan, plan) ? plan : null;
+            }
 
             lock (multiSourcePlanSync)
             {

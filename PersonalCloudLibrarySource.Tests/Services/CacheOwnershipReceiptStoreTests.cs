@@ -250,6 +250,34 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void ReceiptStoreThatIsAFileCannotProveAbsence()
+        {
+            File.WriteAllText(receipts, "unexpected store type");
+            var store = new CacheOwnershipReceiptStore(receipts);
+            Assert.That(store.HasReceiptFootprint(cache, "game-id"), Is.True);
+            Assert.That(File.ReadAllText(receipts), Is.EqualTo("unexpected store type"));
+        }
+
+        [Test]
+        public void MissingCacheStillPreservesManagedZipReceiptFootprint()
+        {
+            var key = ZipManagedExtractionService.ReceiptKeyForGame("game-id");
+            var destination = Path.Combine(cache, key);
+            Directory.CreateDirectory(destination);
+            var store = new CacheOwnershipReceiptStore(receipts);
+            store.RecordCompleted(cache, key, destination);
+            Directory.Move(cache, cache + "-offline");
+            Assert.That(new ZipManagedMaintenanceService().HasManagedFootprint(cache, "game-id", store), Is.True);
+        }
+
+        [Test]
+        public void UnconfiguredReceiptStoreCannotProveAbsence()
+        {
+            Assert.That(new CacheOwnershipReceiptStore(Path.Combine(cache, "receipts"))
+                .HasReceiptFootprint(cache, "game-id"), Is.True);
+        }
+
+        [Test]
         public void CorruptReceiptFailsClosed()
         {
             var store = new CacheOwnershipReceiptStore(receipts);
