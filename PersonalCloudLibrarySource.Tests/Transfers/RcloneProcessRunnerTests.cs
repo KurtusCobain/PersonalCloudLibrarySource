@@ -137,6 +137,35 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void Run_CancellationDuringFactorySetupDoesNotStartChild()
+        {
+            var process = new FakeProcessHandle();
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var runner = new RcloneProcessRunner(new FakeProcessFactory(process, cancellation.Cancel));
+                var result = runner.Run(CreateRequest(), cancellation.Token, null);
+                Assert.That(result.WasCancelled, Is.True);
+                Assert.That(process.StartCount, Is.Zero);
+                Assert.That(process.Disposed, Is.True);
+            }
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Run_LaunchExceptionAttemptsStopAndNeverAssumesChildAbsent(bool killFails)
+        {
+            var process = new FakeProcessHandle { ThrowOnStart = true, ThrowOnKill = killFails };
+            var result = new RcloneProcessRunner(new FakeProcessFactory(process)).Run(
+                CreateRequest(), CancellationToken.None, null);
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(process.StartCount, Is.EqualTo(1));
+            Assert.That(process.KillCount, Is.EqualTo(1));
+            Assert.That(process.TimedWaitCount, Is.EqualTo(1));
+            Assert.That(result.ProcessExitConfirmed, Is.EqualTo(!killFails));
+            Assert.That(process.Disposed, Is.True);
+        }
+
+        [Test]
         public void Run_ReadSetupFailureStopsStartedChild()
         {
             var process = new FakeProcessHandle { ThrowOnBeginRead = true };
@@ -164,14 +193,17 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         private sealed class FakeProcessFactory : IRcloneProcessFactory
         {
             private readonly IRcloneProcessHandle process;
+            private readonly Action onCreate;
 
-            public FakeProcessFactory(IRcloneProcessHandle process)
+            public FakeProcessFactory(IRcloneProcessHandle process, Action onCreate = null)
             {
                 this.process = process;
+                this.onCreate = onCreate;
             }
 
             public IRcloneProcessHandle Create()
             {
+                onCreate?.Invoke();
                 return process;
             }
         }
@@ -191,8 +223,14 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             public Action OnTimedWait { get; set; }
             public int StartCount { get; private set; }
             public bool ThrowOnBeginRead { get; set; }
+            public bool ThrowOnStart { get; set; }
 
-            public bool Start() { StartCount++; return true; }
+            public bool Start()
+            {
+                StartCount++;
+                if (ThrowOnStart) throw new IOException("fixture: native launch may have occurred");
+                return true;
+            }
             public void BeginOutputReadLine() { if (ThrowOnBeginRead) throw new IOException("fixture"); }
             public void BeginErrorReadLine() { }
             public bool WaitForExit(int milliseconds)

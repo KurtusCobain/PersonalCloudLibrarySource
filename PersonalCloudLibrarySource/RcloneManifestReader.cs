@@ -52,10 +52,13 @@ namespace PersonalCloudLibrarySource
 
                 try
                 {
-                    process.Start();
+                    if (!process.Start())
+                        throw new InvalidOperationException("rclone did not start.");
                 }
                 catch (Exception ex)
                 {
+                    // Launch failure is not proof that no native child exists.
+                    StopProcess(process);
                     throw new InvalidOperationException("Unable to start rclone. Check the rclone executable path.", ex);
                 }
 

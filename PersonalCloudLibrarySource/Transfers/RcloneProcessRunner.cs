@@ -61,7 +61,7 @@ namespace PersonalCloudLibrarySource
                     var callbackFailed = 0;
                     var outputEnded = 0;
                     var errorEnded = 0;
-                    var started = false;
+                    var launchAttempted = false;
 
                     DataReceivedEventHandler outputHandler = (sender, args) =>
                     {
@@ -88,9 +88,14 @@ namespace PersonalCloudLibrarySource
 
                     try
                     {
+                        if (cancellationToken.IsCancellationRequested)
+                            return RcloneProcessResult.Cancelled("rclone transfer cancelled before launch.");
+                        // Process.Start can fail after native creation (for example
+                        // during redirected-stream initialization). An exception
+                        // is not proof that no child exists.
+                        launchAttempted = true;
                         if (!process.Start())
                             return RcloneProcessResult.Failure("rclone did not start.");
-                        started = true;
                         process.BeginOutputReadLine();
                         process.BeginErrorReadLine();
 
@@ -164,7 +169,7 @@ namespace PersonalCloudLibrarySource
                     catch (Exception)
                     {
                         return RcloneProcessResult.Failure("Unable to run rclone; review the executable and transfer settings.",
-                            processExitConfirmed: !started || TryStop(process));
+                            processExitConfirmed: !launchAttempted || TryStop(process));
                     }
                     finally
                     {
