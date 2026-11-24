@@ -96,6 +96,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        [NonParallelizable]
         public void OptInRealRclone_LocalBackendCreatesInventoriedDirectoryWithoutCloudAccess()
         {
             // Never invoke a real process in ordinary CI or without explicit
@@ -128,9 +129,16 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
                 settings.RcloneManifestPath = manifest.Replace('\\', '/');
                 Assert.That(new RcloneManifestReader().ReadManifestJson(settings),
                     Is.EqualTo(manifestJson), "Real rclone manifest reads also use the contained launcher.");
-                // Do not inspect or expose the machine's actual configured remotes.
-                // The disposable local-only fixture exercises the read command via
-                // manifest retrieval; listremotes remains a host acceptance case.
+                // Only inspect remotes when the CI step explicitly created an
+                // isolated configuration with one local-only fixture remote.
+                if (Environment.GetEnvironmentVariable("PCLS_TEST_RCLONE_ISOLATED_CONFIG") == "1")
+                {
+                    var list = typeof(RcloneManifestReader).GetMethod("ListRemotes",
+                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                    Assert.That(list, Is.Not.Null);
+                    Assert.That(((string)list.Invoke(null, new object[] { settings })).Trim(),
+                        Is.EqualTo("pcls-fixture:"));
+                }
                 var adapter = new RcloneTransferAdapter(new RcloneProcessRunner());
                 var result = adapter.Copy(settings, source.Replace('\\', '/'),
                     destination, true, CancellationToken.None, null);

@@ -69,12 +69,46 @@ jobs:
             exit $LASTEXITCODE
           }
 
+      # Only the authorized isolated stabilization branch exercises a pinned
+      # real provider binary. No credentials, real remotes, or release actions.
+      - name: Qualify pinned rclone with disposable local-only fixtures
+        if: github.event_name == 'push' && github.ref == 'refs/heads/audit/pcls-stabilization-20261124'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = 'v1.76.0'
+          $sha256 = '8b4fd2737ade4e70c057ef4a49deb7cffe94b0fb9d7587c189d149823f21a1dc'
+          $root = Join-Path $env:RUNNER_TEMP ('pcls-rclone-' + [Guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $root | Out-Null
+          $zip = Join-Path $root 'rclone.zip'
+          $url = "https://github.com/rclone/rclone/releases/download/$version/rclone-$version-windows-amd64.zip"
+          Invoke-WebRequest -Uri $url -OutFile $zip -TimeoutSec 120
+          if ((Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash -ne $sha256) {
+            throw 'Pinned rclone archive digest mismatch.'
+          }
+          Expand-Archive -LiteralPath $zip -DestinationPath $root
+          $env:PCLS_TEST_RCLONE_EXE = Join-Path $root "rclone-$version-windows-amd64\rclone.exe"
+          $env:RCLONE_CONFIG = Join-Path $root 'isolated.conf'
+          "[pcls-fixture]`ntype = local`n" | Set-Content -LiteralPath $env:RCLONE_CONFIG -Encoding ascii
+          $env:PCLS_TEST_RCLONE_ISOLATED_CONFIG = '1'
+          & $env:PCLS_TEST_RCLONE_EXE version
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned rclone executable failed.' }
+          & .\PersonalCloudLibrarySource.Tests\bin\Debug\PersonalCloudLibrarySource.Tests.exe --noheader '--test=PersonalCloudLibrarySource.Tests.Transfers.RcloneLocalBinaryIntegrationTests' '--result=RcloneLocalResult.xml;format=nunit2'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (-not (Test-Path -LiteralPath 'RcloneLocalResult.xml')) { throw 'Missing real-rclone test evidence.' }
+          [xml]$report = Get-Content -LiteralPath 'RcloneLocalResult.xml' -Raw
+          if ([int]$report.'test-results'.total -ne 2 -or [int]$report.'test-results'.failures -ne 0 -or [int]$report.'test-results'.'not-run' -ne 0) {
+            throw 'Both disposable real-rclone cases must execute and pass.'
+          }
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pcls-test-results-${{ github.run_number }}
-          path: TestResult.xml
+          path: |
+            TestResult.xml
+            RcloneLocalResult.xml
           if-no-files-found: warn
 
       - name: Build Release package
