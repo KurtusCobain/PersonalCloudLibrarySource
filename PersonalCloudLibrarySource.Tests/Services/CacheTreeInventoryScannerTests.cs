@@ -154,6 +154,30 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void MixedFileSizesPreserveLegacyFingerprintWithReusedBuffer()
+        {
+            var files = new[] { new byte[1048593], new byte[] { 1, 2, 3 }, new byte[0] };
+            var names = new[] { "a-large.bin", "b-small.bin", "c-empty.bin" };
+            var records = new string[files.Length];
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                for (var i = 0; i < files.Length; i++)
+                {
+                    File.WriteAllBytes(Path.Combine(game, names[i]), files[i]);
+                    records[i] = "F:" + names[i] + ":" + files[i].Length + ":" +
+                        BitConverter.ToString(sha.ComputeHash(files[i])).Replace("-", "");
+                }
+                var expected = BitConverter.ToString(sha.ComputeHash(
+                    System.Text.Encoding.UTF8.GetBytes(string.Join("\n", records)))).Replace("-", "");
+                var scanner = new CacheTreeInventoryScanner();
+                Assert.That(scanner.Scan(cache, game).Fingerprint, Is.EqualTo(expected));
+                var detailed = scanner.ScanDetailed(cache, game, CancellationToken.None);
+                Assert.That(detailed.Fingerprint, Is.EqualTo(expected));
+                Assert.That(detailed.DetailedEntries[2].FileBytes, Is.Zero);
+            }
+        }
+
+        [Test]
         public void EmptyFolderHasDeterministicFingerprint()
         {
             var scanner = new CacheTreeInventoryScanner();

@@ -88,6 +88,8 @@ namespace PersonalCloudLibrarySource
             var details = includeDetails ? new List<CacheTreeInventoryEntry>() : null;
             var pending = new Stack<string>();
             var visitedEntries = 0;
+            // Allocate at most once per scan, not once per file.
+            byte[] buffer = null;
             pending.Push(root);
             while (pending.Count > 0)
             {
@@ -149,19 +151,29 @@ namespace PersonalCloudLibrarySource
                         using (var sha = SHA256.Create())
                         using (var stream = new FileStream(entry, FileMode.Open, FileAccess.Read, FileShare.Read))
                         {
-                            var buffer = new byte[1024 * 1024];
-                            int count;
-                            while ((count = stream.Read(buffer, 0, buffer.Length)) > 0)
+                            // Bind the length to the opened stream and cap the
+                            // actual bytes read, even if the file changes after stat.
+                            var expectedLength = stream.Length;
+                            if (expectedLength != info.Length || expectedLength > MaximumFileBytes)
+                                throw new IOException("Inventory file size changed or exceeds limit.");
+                            if (buffer == null) buffer = new byte[1024 * 1024];
+                            long remaining = expectedLength;
+                            while (remaining > 0)
                             {
                                 cancellationToken.ThrowIfCancellationRequested();
+                                var count = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                                if (count <= 0) throw new IOException("Inventory file was truncated.");
                                 sha.TransformBlock(buffer, 0, count, buffer, 0);
+                                remaining -= count;
                             }
                             cancellationToken.ThrowIfCancellationRequested();
+                            if (stream.ReadByte() != -1 || stream.Length != expectedLength)
+                                throw new IOException("Inventory file grew during inspection.");
                             sha.TransformFinalBlock(new byte[0], 0, 0);
                             var digest = BitConverter.ToString(sha.Hash).Replace("-", "");
-                            entries.Add("F:" + relative + ":" + info.Length + ":" + digest);
+                            entries.Add("F:" + relative + ":" + expectedLength + ":" + digest);
                             if (includeDetails)
-                                details.Add(new CacheTreeInventoryEntry { RelativePath = relative, FileBytes = info.Length, Sha256 = digest });
+                                details.Add(new CacheTreeInventoryEntry { RelativePath = relative, FileBytes = expectedLength, Sha256 = digest });
                         }
                     }
                 }

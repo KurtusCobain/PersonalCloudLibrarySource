@@ -42,3 +42,7 @@ This is an engineering ledger, not a claim of release readiness.
 ## Subsequent stabilization checkpoint
 
 Windows build, package inspection and archive compatibility passed at 04c0d7ab (781 passed, 0 failed, 2 opt-in real-rclone tests skipped). PR #11, #15 and #16 changes have been reconciled into the isolated candidate; verify exact latest HEAD before promotion. The multi-source uninstall factory now requires receipt storage and execution checks both original and scoped game identities. Permanent ZIP cleanup is withheld from the Playnite host pending handle-bound filesystem identity and race qualification; reversible quarantine, restoration and isolated cleanup fixtures remain intact. No new deletion authority is granted. The ZIP32 compiler warning was removed without relaxing its existing format bounds or central directory byte cap.
+
+## Inventory scan hardening
+
+The read-only scanner now reuses a single 1 MiB buffer per scan, rather than allocating one per file. The stream's actual length must match the initial stat, reads are bounded to that length and growth/truncation is refused. The existing fingerprint format remains unchanged; mixed-size and empty-file regression fixtures independently compute the legacy fingerprint. This reduces allocation pressure by construction but is not a measured performance benchmark or proof against all filesystem races.
