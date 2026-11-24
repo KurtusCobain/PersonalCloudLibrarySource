@@ -429,9 +429,10 @@ namespace PersonalCloudLibrarySource
             }
             catch (Exception ex)
             {
-                if (reservationWritten) manager.MarkRequiresManualRecovery(request.Job.Id);
+                var recoveryUncertain = reservationWritten || ex is TransferReservationWriteUncertainException;
+                if (recoveryUncertain) manager.MarkRequiresManualRecovery(request.Job.Id);
                 result = CloudTransferExecutionResult.Failure(ex.Message, ex,
-                    requiresManualRecovery: reservationWritten);
+                    requiresManualRecovery: recoveryUncertain);
                 if (!request.Job.IsTerminal)
                 {
                     manager.Transition(request.Job.Id, CloudTransferState.Failed, ex.Message);

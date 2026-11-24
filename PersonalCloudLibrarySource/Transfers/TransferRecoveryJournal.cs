@@ -50,6 +50,12 @@ namespace PersonalCloudLibrarySource
         public bool IsComplete { get; }
     }
 
+    internal sealed class TransferReservationWriteUncertainException : IOException
+    {
+        internal TransferReservationWriteUncertainException(Exception inner)
+            : base("Recovery reservation creation could not be confirmed. Preserve journal evidence for review.", inner) { }
+    }
+
     // A write-ahead reservation, not a deletion receipt or resume instruction.
     // An interrupted/corrupt journal fails closed. Only the originating job
     // may release its record after confirmed cleanup/publication.
@@ -60,16 +66,24 @@ namespace PersonalCloudLibrarySource
         private static readonly Encoding Encoding = new UTF8Encoding(false, true);
         private readonly string directory;
         private readonly object syncRoot = new object();
+        private readonly Action<FileStream, byte[]> writePayload;
         // Only this journal instance can complete markers it created. A
         // restarted instance may inspect and enforce them, not release them.
         private readonly Dictionary<Guid, TransferPartialPathPolicy.FileIdentity> ownedMarkers =
             new Dictionary<Guid, TransferPartialPathPolicy.FileIdentity>();
 
         public TransferRecoveryJournal(string directory)
+            : this(directory, (stream, payload) => stream.Write(payload, 0, payload.Length))
+        {
+        }
+
+        // Internal seam for deterministic partial-write qualification.
+        internal TransferRecoveryJournal(string directory, Action<FileStream, byte[]> writePayload)
         {
             if (string.IsNullOrWhiteSpace(directory))
                 throw new ArgumentException("Recovery journal directory is required.", nameof(directory));
             this.directory = Path.GetFullPath(directory);
+            this.writePayload = writePayload ?? throw new ArgumentNullException(nameof(writePayload));
         }
 
         // Advisory snapshot only. Never creates a directory or lock file,
@@ -164,12 +178,25 @@ namespace PersonalCloudLibrarySource
                 TransferPartialPathPolicy.RequireVacant(partial);
                 var path = Marker(job.Id);
                 TransferPartialPathPolicy.RequireVacant(path);
-                using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+                try
                 {
-                    var identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
-                    stream.Write(payload, 0, payload.Length);
-                    stream.Flush(true);
+                    TransferPartialPathPolicy.FileIdentity identity;
+                    using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+                    {
+                        identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
+                        writePayload(stream, payload);
+                        stream.Flush(true);
+                        if (stream.Length != payload.Length)
+                            throw new IOException("Reservation payload length differs from expected length.");
+                    }
                     ownedMarkers.Add(job.Id, identity);
+                }
+                catch (Exception ex)
+                {
+                    // Creation, write, flush or close may have left a partial
+                    // marker. Do not execute or silently retry the operation.
+                    // Preserve the evidence even if Begin did not return.
+                    throw new TransferReservationWriteUncertainException(ex);
                 }
             }
         }

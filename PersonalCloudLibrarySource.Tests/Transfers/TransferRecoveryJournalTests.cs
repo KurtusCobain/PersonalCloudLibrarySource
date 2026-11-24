@@ -241,6 +241,36 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void PartialReservationWriteQuarantinesJobWithoutExecutingOrRemovingEvidence()
+        {
+            var constructor = typeof(TransferRecoveryJournal).GetConstructor(
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+                null, new[] { typeof(string), typeof(Action<FileStream, byte[]>) }, null);
+            Assert.That(constructor, Is.Not.Null);
+            Action<FileStream, byte[]> partialWrite = (stream, payload) =>
+            {
+                stream.Write(payload, 0, 4);
+                stream.Flush(true);
+                throw new IOException("fixture interruption");
+            };
+            var journal = (TransferRecoveryJournal)constructor.Invoke(new object[] { records, partialWrite });
+            var executor = new CountingExecutor();
+            using (var queue = new TransferQueueService(manager, executor, journal))
+            {
+                var job = queue.EnqueueLocal(Guid.NewGuid(), "Fixture", "source",
+                    Path.Combine(root, "file.zip"), "LocalFolder", false);
+                var completion = queue.GetCompletion(job.Id);
+                Assert.That(completion.Wait(TimeSpan.FromSeconds(5)), Is.True);
+                Assert.That(job.State, Is.EqualTo(CloudTransferState.Failed));
+                Assert.That(job.RequiresManualRecovery, Is.True);
+                Assert.That(completion.Result.RequiresManualRecovery, Is.True);
+                Assert.That(executor.Calls, Is.Zero);
+                Assert.That(new FileInfo(Path.Combine(records, job.Id.ToString("N") + ".pending")).Length, Is.EqualTo(4));
+                Assert.That(journal.Inspect().IsComplete, Is.False);
+            }
+        }
+
+        [Test]
         public void QueueRefusesExecutionWithPendingReservationFromPreviousSession()
         {
             var original = Job("file.zip");
