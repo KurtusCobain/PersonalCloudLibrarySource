@@ -132,11 +132,9 @@ namespace PersonalCloudLibrarySource
             {
                 List<CloudTransferJob> attempts;
                 if (!jobsByGame.TryGetValue(gameId, out attempts)) return null;
-                CloudTransferJob newest = null;
-                foreach (var job in attempts)
-                    if (!job.IsTerminal && (newest == null || job.CreatedAt >= newest.CreatedAt))
-                        newest = job;
-                return newest;
+                for (var index = attempts.Count - 1; index >= 0; index--)
+                    if (!attempts[index].IsTerminal) return attempts[index];
+                return null;
             }
         }
 
@@ -146,19 +144,15 @@ namespace PersonalCloudLibrarySource
             {
                 List<CloudTransferJob> attempts;
                 if (!jobsByGame.TryGetValue(gameId, out attempts)) return null;
-                CloudTransferJob newest = null;
-                foreach (var job in attempts)
+                // Registration order is stable across wall-clock adjustments
+                // and out-of-order completion. A later terminal success or
+                // quarantine must never resurrect a superseded failed attempt.
+                for (var index = attempts.Count - 1; index >= 0; index--)
                 {
-                    if (!job.IsTerminal) continue;
-                    if (newest == null ||
-                        (job.CompletedAt ?? job.CreatedAt) > (newest.CompletedAt ?? newest.CreatedAt) ||
-                        ((job.CompletedAt ?? job.CreatedAt) == (newest.CompletedAt ?? newest.CreatedAt) &&
-                            job.CreatedAt >= newest.CreatedAt))
-                        newest = job;
+                    var job = attempts[index];
+                    if (job.IsTerminal) return job.CanRetry ? job : null;
                 }
-                // A newer successful or quarantined terminal attempt supersedes
-                // earlier failures. Historical failures remain visible, not actionable.
-                return newest != null && newest.CanRetry ? newest : null;
+                return null;
             }
         }
 
@@ -269,6 +263,9 @@ namespace PersonalCloudLibrarySource
                 {
                     throw new InvalidOperationException("Only failed or cancelled transfer jobs can be retried.");
                 }
+                if (GetActiveJobForGame(failedJob.GameId) != null ||
+                    !ReferenceEquals(GetLatestRetryableJobForGame(failedJob.GameId), failedJob))
+                    throw new InvalidOperationException("Only the latest inactive retryable attempt can be retried.");
 
                 retry = new CloudTransferJob(
                     failedJob.GameId,

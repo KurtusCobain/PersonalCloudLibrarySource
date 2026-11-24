@@ -312,6 +312,21 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(retryable.Id, Is.EqualTo(cancelled.Id));
         }
 
+        [Test]
+        public void RetryLookupUsesRegistrationOrderInsteadOfCompletionTime()
+        {
+            var manager = new CloudTransferManager(2);
+            var gameId = Guid.NewGuid();
+            var older = manager.Enqueue(gameId, "Older", "source", "dest", "LocalFolder");
+            var newer = manager.Enqueue(gameId, "Newer", "source", "dest", "LocalFolder");
+            manager.Transition(newer.Id, CloudTransferState.Failed);
+            Assert.Throws<InvalidOperationException>(() => manager.Retry(newer.Id));
+            manager.Transition(older.Id, CloudTransferState.Transferring);
+            manager.Transition(older.Id, CloudTransferState.Completed);
+            Assert.That(manager.GetLatestRetryableJobForGame(gameId), Is.SameAs(newer));
+            Assert.That(manager.Retry(newer.Id).PreviousAttemptId, Is.EqualTo(newer.Id));
+        }
+
         [TestCase(false)]
         [TestCase(true)]
         public void LatestTerminalAttemptSupersedesHistoricalFailure(bool quarantine)
@@ -332,6 +347,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             }
 
             Assert.That(manager.GetLatestRetryableJobForGame(gameId), Is.Null);
+            Assert.Throws<InvalidOperationException>(() => manager.Retry(failed.Id));
             Assert.That(manager.GetJob(failed.Id), Is.SameAs(failed));
             Assert.That(manager.Jobs.Count, Is.EqualTo(2));
         }
