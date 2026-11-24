@@ -171,6 +171,7 @@
     <Compile Include="Transfers\TransferActivityTracker.cs" />
     <Compile Include="Transfers\TransferQueueService.cs" />
     <Compile Include="Transfers\TransferPartialPathPolicy.cs" />
+    <Compile Include="Transfers\TransferRecoveryJournal.cs" />
     <Compile Include="Views\CloudGameDetailsView.xaml.cs">
       <DependentUpon>CloudGameDetailsView.xaml</DependentUpon>
     </Compile>

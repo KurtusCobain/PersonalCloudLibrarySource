@@ -34,6 +34,7 @@ namespace PersonalCloudLibrarySource
         private readonly object syncRoot = new object();
         private readonly CloudTransferManager manager;
         private readonly ICloudTransferExecutor executor;
+        private readonly TransferRecoveryJournal recoveryJournal;
         private readonly List<QueueRequest> pending = new List<QueueRequest>();
         private readonly Dictionary<Guid, QueueRequest> requests = new Dictionary<Guid, QueueRequest>();
         private readonly HashSet<Guid> publishedTerminalJobs = new HashSet<Guid>();
@@ -42,10 +43,12 @@ namespace PersonalCloudLibrarySource
         private bool stopping;
         private bool disposed;
 
-        public TransferQueueService(CloudTransferManager manager, ICloudTransferExecutor executor)
+        public TransferQueueService(CloudTransferManager manager, ICloudTransferExecutor executor,
+            TransferRecoveryJournal recoveryJournal = null)
         {
             this.manager = manager ?? throw new ArgumentNullException(nameof(manager));
             this.executor = executor ?? throw new ArgumentNullException(nameof(executor));
+            this.recoveryJournal = recoveryJournal;
             workers = Enumerable.Range(0, 5)
                 .Select(_ => Task.Run(WorkerLoopAsync))
                 .ToArray();
@@ -262,6 +265,7 @@ namespace PersonalCloudLibrarySource
         private void ExecuteObserved(QueueRequest request)
         {
             CloudTransferExecutionResult result;
+            var reservationWritten = false;
             try
             {
                 if (request.Job.CancellationToken.IsCancellationRequested)
@@ -270,9 +274,26 @@ namespace PersonalCloudLibrarySource
                 }
                 else
                 {
+                    if (recoveryJournal != null)
+                    {
+                        recoveryJournal.Begin(request.Job);
+                        reservationWritten = true;
+                    }
                     result = request.IsRclone
                         ? executor.ExecuteRclone(request.Job.Id, request.Settings)
                         : executor.ExecuteLocal(request.Job.Id, request.Job.IsDirectory);
+                    if (reservationWritten && !result.RequiresManualRecovery)
+                    {
+                        try { recoveryJournal.Complete(request.Job); }
+                        catch (Exception)
+                        {
+                            // The adapter may already have published a successful
+                            // install. Preserve that outcome, but quarantine future
+                            // attempts until the retained reservation is reviewed.
+                            result.RequiresManualRecovery = true;
+                            request.Job.RequiresManualRecovery = true;
+                        }
+                    }
                 }
 
                 if (result.RequiresManualRecovery) request.Job.RequiresManualRecovery = true;
@@ -280,7 +301,9 @@ namespace PersonalCloudLibrarySource
             }
             catch (Exception ex)
             {
-                result = CloudTransferExecutionResult.Failure(ex.Message, ex);
+                if (reservationWritten) request.Job.RequiresManualRecovery = true;
+                result = CloudTransferExecutionResult.Failure(ex.Message, ex,
+                    requiresManualRecovery: reservationWritten);
                 if (!request.Job.IsTerminal)
                 {
                     manager.Transition(request.Job.Id, CloudTransferState.Failed, ex.Message);

@@ -42,7 +42,8 @@ namespace PersonalCloudLibrarySource
         {
             if (transferQueue == null)
             {
-                transferQueue = new TransferQueueService(GetTransferManager(), GetTransferExecutor());
+                transferQueue = new TransferQueueService(GetTransferManager(), GetTransferExecutor(),
+                    new TransferRecoveryJournal(System.IO.Path.Combine(GetPluginDataDirectory(), "transfer-recovery")));
                 transferActivityBridge = new DashboardTransferActivityBridge(
                     transferQueue,
                     dashboardActivityService);
