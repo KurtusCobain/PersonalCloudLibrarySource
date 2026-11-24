@@ -56,6 +56,7 @@ namespace PersonalCloudLibrarySource
             Action<CloudTransferState> phase)
         {
             var ownsPartial = false;
+            TransferPartialPathPolicy.FileIdentity? identity = null;
             try
             {
                 if (string.IsNullOrWhiteSpace(sourcePath) || !File.Exists(sourcePath))
@@ -92,7 +93,8 @@ namespace PersonalCloudLibrarySource
                     0,
                     progress,
                     new byte[bufferSize],
-                    () => ownsPartial = true);
+                    () => ownsPartial = true,
+                    handle => identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(handle));
 
                 phase?.Invoke(CloudTransferState.Verifying);
                 long copiedBytes;
@@ -105,7 +107,17 @@ namespace PersonalCloudLibrarySource
                 cancellationToken.ThrowIfCancellationRequested();
                 phase?.Invoke(CloudTransferState.Finalizing);
                 cancellationToken.ThrowIfCancellationRequested();
-                try { TransferPartialPathPolicy.RequirePublicationPaths(partialPath, destinationPath, false); }
+                try
+                {
+                    TransferPartialPathPolicy.RequirePublicationPaths(partialPath, destinationPath, false);
+                    using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(partialPath, false))
+                    {
+                        if (!identity.HasValue ||
+                            !TransferPartialPathPolicy.MatchesPrivateFileIdentity(input.SafeFileHandle, identity.Value) ||
+                            input.Length != totalBytes)
+                            throw new IOException("Private staging file identity or length changed.");
+                    }
+                }
                 catch (Exception)
                 {
                     return CloudTransferExecutionResult.Failure(
@@ -117,12 +129,12 @@ namespace PersonalCloudLibrarySource
             }
             catch (OperationCanceledException)
             {
-                return CleanupOwnedPartial(ownsPartial, partialPath, false,
+                return CleanupOwnedFile(ownsPartial, partialPath, identity,
                     CloudTransferExecutionResult.CancelledResult());
             }
             catch (Exception ex)
             {
-                return CleanupOwnedPartial(ownsPartial, partialPath, false,
+                return CleanupOwnedFile(ownsPartial, partialPath, identity,
                     CloudTransferExecutionResult.Failure(ex.Message, ex));
             }
         }
@@ -377,7 +389,8 @@ namespace PersonalCloudLibrarySource
             CancellationToken cancellationToken,
             long totalBytes,
             long alreadyTransferred,
-            Action<long, long?> progress, byte[] buffer, Action created = null)
+            Action<long, long?> progress, byte[] buffer, Action created = null,
+            Action<Microsoft.Win32.SafeHandles.SafeFileHandle> captureIdentity = null)
         {
             var transferred = alreadyTransferred;
             TransferPartialPathPolicy.RequireSafePath(sourcePath);
@@ -392,12 +405,13 @@ namespace PersonalCloudLibrarySource
             using (var destination = new FileStream(
                 destinationPath,
                 FileMode.CreateNew,
-                FileAccess.Write,
+                captureIdentity == null ? FileAccess.Write : FileAccess.ReadWrite,
                 FileShare.None,
                 bufferSize,
                 FileOptions.SequentialScan))
             {
                 created?.Invoke();
+                captureIdentity?.Invoke(destination.SafeFileHandle);
                 while (true)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -429,6 +443,31 @@ namespace PersonalCloudLibrarySource
             }
 
             return normalizedFullPath.Substring(normalizedRoot.Length);
+        }
+
+        private static CloudTransferExecutionResult CleanupOwnedFile(bool owned, string path,
+            TransferPartialPathPolicy.FileIdentity? identity, CloudTransferExecutionResult result)
+        {
+            if (!owned) return result;
+            try
+            {
+                if (!identity.HasValue)
+                    throw new IOException("Private staging identity was not recorded.");
+                using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, true))
+                {
+                    if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(input.SafeFileHandle, identity.Value))
+                        throw new IOException("Private staging identity changed.");
+                    TransferPartialPathPolicy.DeleteVerifiedFileHandle(input.SafeFileHandle);
+                }
+                TransferPartialPathPolicy.RequireVacant(path);
+                return result;
+            }
+            catch (Exception)
+            {
+                return CloudTransferExecutionResult.Failure(
+                    "Transfer cleanup could not be verified. Preserve staging for manual recovery.",
+                    requiresManualRecovery: true);
+            }
         }
 
         private static CloudTransferExecutionResult CleanupOwnedPartial(bool owned,

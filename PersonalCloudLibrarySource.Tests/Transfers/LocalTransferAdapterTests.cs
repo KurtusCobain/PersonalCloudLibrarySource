@@ -251,6 +251,34 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(Directory.Exists(destination), Is.False);
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void CopyFile_SameByteReplacementIsPreserved(bool cancel)
+        {
+            var source = Path.Combine(testRoot, "source.txt");
+            var destination = Path.Combine(testRoot, "destination.txt");
+            File.WriteAllText(source, "original");
+            var jobId = Guid.NewGuid();
+            var partial = TransferPartialPathPolicy.Create(destination, jobId);
+            var moved = Path.Combine(testRoot, "original-staging.txt");
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var result = new LocalTransferAdapter().CopyFile(source, destination, jobId,
+                    cancellation.Token, null, state =>
+                    {
+                        if (state != CloudTransferState.Finalizing) return;
+                        File.Move(partial, moved);
+                        File.Copy(moved, partial);
+                        if (cancel) cancellation.Cancel();
+                    });
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(result.RequiresManualRecovery, Is.True);
+                Assert.That(File.ReadAllText(moved), Is.EqualTo("original"));
+                Assert.That(File.ReadAllText(partial), Is.EqualTo("original"));
+                Assert.That(File.Exists(destination), Is.False);
+            }
+        }
+
         [Test]
         public void CopyFile_ExistingDestination_FailsWithoutOverwriting()
         {
