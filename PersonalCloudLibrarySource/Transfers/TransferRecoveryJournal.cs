@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Diagnostics;
+using System.Threading;
 using System.Text;
 
 namespace PersonalCloudLibrarySource
@@ -25,22 +27,25 @@ namespace PersonalCloudLibrarySource
         public void Begin(CloudTransferJob job)
         {
             if (job == null) throw new ArgumentNullException(nameof(job));
+            TransferPartialPathPolicy.RequireSafePath(job.Destination);
             var destination = PathBoundary.Normalize(job.Destination);
-            TransferPartialPathPolicy.RequireSafePath(destination);
             var partial = TransferPartialPathPolicy.Create(destination, job.Id);
+            if (Overlaps(directory, destination) || Overlaps(directory, partial))
+                throw new IOException("Transfer destination overlaps the recovery journal.");
             var payload = Encode(job, destination);
             lock (syncRoot)
             using (Acquire())
             {
                 var count = 0;
-                foreach (var marker in Directory.EnumerateFiles(directory, "*.pending", SearchOption.TopDirectoryOnly))
+                foreach (var marker in Directory.EnumerateFileSystemEntries(directory, "*.pending", SearchOption.TopDirectoryOnly))
                 {
                     if (++count >= MaxRecords)
                         throw new IOException("Transfer recovery journal is full; review pending records.");
                     var existing = Read(marker);
+                    var existingPartial = TransferPartialPathPolicy.Create(existing.Item2, existing.Item3);
                     if (existing.Item1 == job.GameId ||
-                        PathBoundary.IsContained(existing.Item2, destination) ||
-                        PathBoundary.IsContained(destination, existing.Item2))
+                        Overlaps(existing.Item2, destination) || Overlaps(existingPartial, destination) ||
+                        Overlaps(existing.Item2, partial) || Overlaps(existingPartial, partial))
                         throw new TransferRetryRefusedException(
                             "A pending recovery record overlaps this transfer. Review the recovery journal before retrying.");
                 }
@@ -81,8 +86,21 @@ namespace PersonalCloudLibrarySource
             Directory.CreateDirectory(directory);
             var path = Path.Combine(directory, "journal.lock");
             TransferPartialPathPolicy.RequireSafePath(path);
-            return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+            var timer = Stopwatch.StartNew();
+            while (true)
+            {
+                try { return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
+                catch (IOException ex) when ((ex.HResult & 0xffff) == 32 && timer.ElapsedMilliseconds < 2000)
+                {
+                    // Another instance owns the short journal transaction.
+                    // Bound contention without weakening the exclusive lock.
+                    Thread.Sleep(25);
+                }
+            }
         }
+
+        private static bool Overlaps(string first, string second) =>
+            PathBoundary.IsContained(first, second) || PathBoundary.IsContained(second, first);
 
         private string Marker(Guid id) => Path.Combine(directory, id.ToString("N") + ".pending");
 
@@ -95,7 +113,7 @@ namespace PersonalCloudLibrarySource
             return payload;
         }
 
-        private static Tuple<Guid, string> Read(string path)
+        private static Tuple<Guid, string, Guid> Read(string path)
         {
             TransferPartialPathPolicy.RequireSafePath(path);
             byte[] payload;
@@ -125,7 +143,7 @@ namespace PersonalCloudLibrarySource
             if (!string.Equals(destination, fields[3], StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Transfer recovery destination is not canonical.");
             TransferPartialPathPolicy.RequireSafePath(destination);
-            return Tuple.Create(gameId, destination);
+            return Tuple.Create(gameId, destination, jobId);
         }
     }
 }

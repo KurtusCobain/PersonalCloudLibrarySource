@@ -45,6 +45,28 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void AnotherDestinationCannotOverlapReservedStaging()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var first = Job("cache");
+            journal.Begin(first);
+            var partial = TransferPartialPathPolicy.Create(first.Destination, first.Id);
+            var conflicting = manager.Enqueue(Guid.NewGuid(), "Conflict", "source",
+                Path.Combine(partial, "child"), "LocalFolder");
+            Assert.Throws<TransferRetryRefusedException>(() => journal.Begin(conflicting));
+            Assert.That(Directory.GetFiles(records, "*.pending").Length, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void DestinationCannotOverlapJournalStorage()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            Assert.Throws<IOException>(() => journal.Begin(Job("journal")));
+            Assert.Throws<IOException>(() => journal.Begin(Job("journal/child")));
+            Assert.That(Directory.Exists(records), Is.False);
+        }
+
+        [Test]
         public void CleanCompletionReleasesOnlyItsOwnReservation()
         {
             var journal = new TransferRecoveryJournal(records);
