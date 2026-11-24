@@ -35,6 +35,17 @@ namespace PersonalCloudLibrarySource.Tests.Repository
         }
 
         [Test]
+        public void DashboardUsesCommittedConfigurationAndDoesNotSubscribeToDraftEdits()
+        {
+            var source = ReadProductionSource("PersonalCloudLibrarySource.Navigation.cs");
+            Assert.That(source, Does.Contain("settings?.GetRuntimeSettingsSnapshot()"));
+            Assert.That(source, Does.Contain("settings.OpenCommittedCacheFolder"));
+            Assert.That(source, Does.Contain("settings.VerifyCommittedSetup()"));
+            Assert.That(source, Does.Contain("settings.PersistGeneratedManifestState(report, snapshot)"));
+            Assert.That(source, Does.Not.Contain("settings.Settings.PropertyChanged"));
+        }
+
+        [Test]
         public void TransferConcurrency_ReadsCommittedRuntimeSnapshot()
         {
             var source = ReadProductionSource("PersonalCloudLibrarySource.Transfers.cs");

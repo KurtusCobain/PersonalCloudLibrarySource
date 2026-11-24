@@ -45,7 +45,7 @@ namespace PersonalCloudLibrarySource
                 dashboardWindowService.OpenDashboard,
                 () => playniteApi.MainView.OpenPluginSettings(Id),
                 VerifyLibraryFromDashboard,
-                settings.OpenCacheFolder,
+                settings.OpenCommittedCacheFolder,
                 settings.OpenLatestVerificationReport,
                 GenerateManifestFromDashboard,
                 settings.ShowUpdateLibraryInstructions,
@@ -73,7 +73,6 @@ namespace PersonalCloudLibrarySource
                     startupUiDispatcher),
                 ObserveStartupBackgroundException);
 
-            settings.Settings.PropertyChanged += DashboardSettings_PropertyChanged;
             settings.SettingsCommitted += Settings_SettingsCommitted;
             RefreshDashboardState();
         }
@@ -106,7 +105,7 @@ namespace PersonalCloudLibrarySource
                 return;
             }
 
-            var pluginSettings = settings?.Settings;
+            var pluginSettings = settings?.GetRuntimeSettingsSnapshot();
             var pluginGames = playniteApi?.Database?.Games?.
                 Where(game => game.PluginId == Id)
                 .ToList() ?? new List<Playnite.SDK.Models.Game>();
@@ -154,7 +153,7 @@ namespace PersonalCloudLibrarySource
                 {
                     Icon = CreateToolbarIcon(),
                     Title = BuildToolbarTitle(),
-                    Visible = settings?.Settings?.ShowTopPanelButton ?? true,
+                    Visible = settings?.GetRuntimeSettingsSnapshot()?.ShowTopPanelButton ?? true,
                     Activated = navigationService.OpenDashboard
                 };
             }
@@ -173,7 +172,7 @@ namespace PersonalCloudLibrarySource
             {
                 dashboardSidebarItem = new CloudLibrarySidebarItem(CreateDashboardView, GetNavigationIconPath())
                 {
-                    Visible = settings?.Settings?.ShowSidebarDashboard ?? true
+                    Visible = settings?.GetRuntimeSettingsSnapshot()?.ShowSidebarDashboard ?? true
                 };
             }
 
@@ -190,7 +189,7 @@ namespace PersonalCloudLibrarySource
             yield return CreateMainMenuItem(menuSection, "LOCPLSUpdateLibraryHelp", "How to Update Library", navigationService.ShowUpdateLibraryInstructions, iconPath);
 
             if (string.Equals(
-                GetProviderType(settings.Settings),
+                GetProviderType(settings.GetRuntimeSettingsSnapshot()),
                 PersonalCloudLibrarySourceSettings.LocalFolderProviderType,
                 StringComparison.OrdinalIgnoreCase))
             {
@@ -199,7 +198,7 @@ namespace PersonalCloudLibrarySource
 
             yield return CreateMainMenuItem(menuSection, "LOCPLSVerifyLibrary", "Verify Library", navigationService.VerifyLibrary, iconPath);
 
-            if (CanOpenSourceLocation(settings.Settings))
+            if (CanOpenSourceLocation(settings.GetRuntimeSettingsSnapshot()))
             {
                 yield return CreateMainMenuItem(menuSection, "LOCPLSOpenSourceLocation", "Open Source Location", navigationService.OpenSourceLocation, iconPath);
             }
@@ -252,24 +251,14 @@ namespace PersonalCloudLibrarySource
                 logger.Warn("Personal Cloud Library Source startup work did not stop within the shutdown timeout.");
             }
             startupActionService.Dispose();
-            if (settings?.Settings != null)
-            {
-                settings.Settings.PropertyChanged -= DashboardSettings_PropertyChanged;
+            if (settings != null)
                 settings.SettingsCommitted -= Settings_SettingsCommitted;
-            }
 
             DisposeTransferManager();
         }
 
         public override void OnLibraryUpdated(OnLibraryUpdatedEventArgs args)
         {
-            RefreshDashboardState();
-            UpdateNavigationItemState();
-        }
-
-        private void DashboardSettings_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
-        {
-            SynchronizeTransferManagerSettings();
             RefreshDashboardState();
             UpdateNavigationItemState();
         }
@@ -283,15 +272,16 @@ namespace PersonalCloudLibrarySource
 
         private void UpdateNavigationItemState()
         {
+            var committed = settings.GetRuntimeSettingsSnapshot();
             if (dashboardTopPanelItem != null)
             {
-                dashboardTopPanelItem.Visible = settings.Settings.ShowTopPanelButton;
+                dashboardTopPanelItem.Visible = committed.ShowTopPanelButton;
                 dashboardTopPanelItem.Title = BuildToolbarTitle();
             }
 
             if (dashboardSidebarItem != null)
             {
-                dashboardSidebarItem.Visible = settings.Settings.ShowSidebarDashboard;
+                dashboardSidebarItem.Visible = committed.ShowSidebarDashboard;
             }
 
             UpdateSidebarTransferProgress();
@@ -305,14 +295,33 @@ namespace PersonalCloudLibrarySource
 
         private void VerifyLibraryFromDashboard()
         {
-            settings.VerifySetup();
+            settings.VerifyCommittedSetup();
             RefreshDashboardState();
             UpdateNavigationItemState();
         }
 
         private void GenerateManifestFromDashboard()
         {
-            settings.GenerateManifestFromFolder();
+            var snapshot = settings.GetRuntimeSettingsSnapshot();
+            if (settings.IsSettingsEditActive || !IsStartupManifestGenerationEligible(snapshot) ||
+                !snapshot.Enabled || snapshot.EnableMultiSourceProfiles)
+            {
+                playniteApi.Dialogs.ShowMessage(PclsResources.Get("LOCPLSCommittedGenerationRequired",
+                    "Save a valid local-folder configuration and close the settings editor before generating a catalog."));
+                return;
+            }
+            try
+            {
+                var report = GenerateManifestFromFolder(snapshot.LocalLibraryRoot);
+                settings.PersistGeneratedManifestState(report, snapshot);
+                playniteApi.Dialogs.ShowMessage(PclsResources.Format("LOCPLSCommittedGenerationCompleted",
+                    "Generated and saved {0} catalog entries. Run Update Game Library to import them.", report.ItemCount));
+            }
+            catch (Exception ex)
+            {
+                playniteApi.Dialogs.ShowMessage(PclsResources.Format("LOCPLSManifestGenerationFailed",
+                    "Manifest generation failed: {0}", ex.Message));
+            }
             RefreshDashboardState();
             UpdateNavigationItemState();
         }
@@ -423,7 +432,7 @@ namespace PersonalCloudLibrarySource
 
         private void OpenSourceLocationFromDashboard()
         {
-            var pluginSettings = settings.Settings;
+            var pluginSettings = settings.GetRuntimeSettingsSnapshot();
             var providerType = GetProviderType(pluginSettings);
 
             if (string.Equals(providerType, PersonalCloudLibrarySourceSettings.LocalFolderProviderType, StringComparison.OrdinalIgnoreCase))

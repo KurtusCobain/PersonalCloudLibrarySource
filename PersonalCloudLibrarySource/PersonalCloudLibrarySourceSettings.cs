@@ -327,47 +327,52 @@ namespace PersonalCloudLibrarySource
 
         public virtual bool VerifySettings(out List<string> errors)
         {
+            return VerifySettingsSnapshot(Settings, out errors);
+        }
+
+        protected bool VerifySettingsSnapshot(PersonalCloudLibrarySourceSettings candidate, out List<string> errors)
+        {
             errors = new List<string>();
-            var sourceProviderType = string.IsNullOrWhiteSpace(Settings.SourceProviderType)
+            var sourceProviderType = string.IsNullOrWhiteSpace(candidate.SourceProviderType)
                 ? PersonalCloudLibrarySourceSettings.LocalFileProviderType
-                : Settings.SourceProviderType;
+                : candidate.SourceProviderType;
 
             if (string.Equals(sourceProviderType, PersonalCloudLibrarySourceSettings.LocalFileProviderType, StringComparison.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrWhiteSpace(Settings.LocalManifestPath))
+                if (string.IsNullOrWhiteSpace(candidate.LocalManifestPath))
                 {
                     errors.Add(PclsResources.Format(
                         "LOCPLSValidationLocalManifestRequired",
                         "Choose a local manifest JSON file for {0} mode.",
                         PersonalCloudLibrarySourceSettings.LocalFileProviderType));
                 }
-                else if (!File.Exists(Settings.LocalManifestPath))
+                else if (!File.Exists(candidate.LocalManifestPath))
                 {
                     errors.Add(PclsResources.Get("LOCPLSValidationLocalManifestMissing", "The local manifest JSON file does not exist."));
                 }
             }
             else if (string.Equals(sourceProviderType, PersonalCloudLibrarySourceSettings.LocalFolderProviderType, StringComparison.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrWhiteSpace(Settings.LocalLibraryRoot))
+                if (string.IsNullOrWhiteSpace(candidate.LocalLibraryRoot))
                 {
                     errors.Add(PclsResources.Format(
                         "LOCPLSValidationLibraryRootRequired",
                         "Choose a local library root for {0} mode.",
                         PersonalCloudLibrarySourceSettings.LocalFolderProviderType));
                 }
-                else if (!Directory.Exists(Settings.LocalLibraryRoot))
+                else if (!Directory.Exists(candidate.LocalLibraryRoot))
                 {
                     errors.Add(PclsResources.Get("LOCPLSValidationLibraryRootMissing", "The local library root does not exist."));
                 }
 
-                if (string.IsNullOrWhiteSpace(Settings.LocalManifestPath) && string.IsNullOrWhiteSpace(Settings.ManifestRelativePath))
+                if (string.IsNullOrWhiteSpace(candidate.LocalManifestPath) && string.IsNullOrWhiteSpace(candidate.ManifestRelativePath))
                 {
                     errors.Add(PclsResources.Format(
                         "LOCPLSValidationFolderManifestRequired",
                         "Choose or generate a manifest for {0} mode.",
                         PersonalCloudLibrarySourceSettings.LocalFolderProviderType));
                 }
-                else if (!string.IsNullOrWhiteSpace(Settings.LocalManifestPath) && !File.Exists(Settings.LocalManifestPath))
+                else if (!string.IsNullOrWhiteSpace(candidate.LocalManifestPath) && !File.Exists(candidate.LocalManifestPath))
                 {
                     errors.Add(PclsResources.Format(
                         "LOCPLSValidationFolderManifestMissing",
@@ -377,7 +382,7 @@ namespace PersonalCloudLibrarySource
             }
             else if (string.Equals(sourceProviderType, PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType, StringComparison.OrdinalIgnoreCase))
             {
-                if (string.IsNullOrWhiteSpace(Settings.RcloneExecutablePath))
+                if (string.IsNullOrWhiteSpace(candidate.RcloneExecutablePath))
                 {
                     errors.Add(PclsResources.Format(
                         "LOCPLSValidationRcloneExecutableRequired",
@@ -385,7 +390,7 @@ namespace PersonalCloudLibrarySource
                         PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType));
                 }
 
-                if (string.IsNullOrWhiteSpace(Settings.RcloneRemoteName))
+                if (string.IsNullOrWhiteSpace(candidate.RcloneRemoteName))
                 {
                     errors.Add(PclsResources.Format(
                         "LOCPLSValidationRcloneRemoteRequired",
@@ -393,7 +398,7 @@ namespace PersonalCloudLibrarySource
                         PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType));
                 }
 
-                if (string.IsNullOrWhiteSpace(Settings.RcloneManifestPath))
+                if (string.IsNullOrWhiteSpace(candidate.RcloneManifestPath))
                 {
                     errors.Add(PclsResources.Format(
                         "LOCPLSValidationRcloneManifestRequired",
@@ -401,7 +406,7 @@ namespace PersonalCloudLibrarySource
                         PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType));
                 }
 
-                if (Settings.RcloneTimeoutSeconds < 5 || Settings.RcloneTimeoutSeconds > 300)
+                if (candidate.RcloneTimeoutSeconds < 5 || candidate.RcloneTimeoutSeconds > 300)
                 {
                     errors.Add(PclsResources.Get("LOCPLSValidationRcloneTimeout", "The rclone timeout must be between 5 and 300 seconds."));
                 }
@@ -416,11 +421,11 @@ namespace PersonalCloudLibrarySource
                     PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType));
             }
 
-            if (!string.IsNullOrWhiteSpace(Settings.LocalCacheFolder))
+            if (!string.IsNullOrWhiteSpace(candidate.LocalCacheFolder))
             {
                 try
                 {
-                    Path.GetFullPath(Settings.LocalCacheFolder);
+                    Path.GetFullPath(candidate.LocalCacheFolder);
                 }
                 catch (Exception)
                 {
@@ -428,21 +433,21 @@ namespace PersonalCloudLibrarySource
                 }
             }
 
-            if (Settings.AllowDownloads &&
-                string.Equals(PersonalCloudLibrarySource.GetProviderType(Settings),
+            if (candidate.AllowDownloads &&
+                string.Equals(PersonalCloudLibrarySource.GetProviderType(candidate),
                     PersonalCloudLibrarySourceSettings.LocalFolderProviderType,
                     StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(Settings.LocalCacheFolder) &&
-                !string.IsNullOrWhiteSpace(Settings.LocalLibraryRoot) &&
-                (PathBoundary.IsContained(Settings.LocalLibraryRoot, Settings.LocalCacheFolder) ||
-                 PathBoundary.IsContained(Settings.LocalCacheFolder, Settings.LocalLibraryRoot)))
+                !string.IsNullOrWhiteSpace(candidate.LocalCacheFolder) &&
+                !string.IsNullOrWhiteSpace(candidate.LocalLibraryRoot) &&
+                (PathBoundary.IsContained(candidate.LocalLibraryRoot, candidate.LocalCacheFolder) ||
+                 PathBoundary.IsContained(candidate.LocalCacheFolder, candidate.LocalLibraryRoot)))
             {
                 errors.Add("Cache folder must be separate from the source library folder.");
             }
 
-            var uninstallBehavior = string.IsNullOrWhiteSpace(Settings.UninstallBehavior)
+            var uninstallBehavior = string.IsNullOrWhiteSpace(candidate.UninstallBehavior)
                 ? PersonalCloudLibrarySourceSettings.RemoveCachedInstallFolderUninstallBehavior
-                : Settings.UninstallBehavior;
+                : candidate.UninstallBehavior;
             if (Array.IndexOf(UninstallBehaviorOptions, uninstallBehavior) < 0)
             {
                 errors.Add(PclsResources.Get("LOCPLSValidationUninstallBehavior", "Choose a valid uninstall behavior."));
@@ -657,6 +662,11 @@ namespace PersonalCloudLibrarySource
         public void OpenCacheFolder()
         {
             OpenFolder(Settings.LocalCacheFolder, createIfMissing: true);
+        }
+
+        public void OpenCommittedCacheFolder()
+        {
+            OpenFolder(GetRuntimeSettingsSnapshot()?.LocalCacheFolder, createIfMissing: true);
         }
 
         public void OpenDiagnosticsFolder()

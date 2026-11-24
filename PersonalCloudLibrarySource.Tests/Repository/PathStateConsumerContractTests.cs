@@ -42,7 +42,8 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             StringAssert.Contains("importOutcomeService.Import(pluginSettings", core);
             StringAssert.Contains("mapper.Map(parse.ValidItems, settings, diagnostics)", importer);
             StringAssert.Contains("ImportOutcome.Success(source, parse.ValidItems", importer);
-            StringAssert.Contains("manifest = LoadParsedManifest(pluginSettings).Manifest", core);
+            StringAssert.Contains("var parsed = new ManifestParserValidator().Parse(LoadManifestJson(pluginSettings))", core);
+            StringAssert.Contains("manifest = parsed.Manifest", core);
             StringAssert.Contains("manifestLoader.ResolveLocalManifestPath(pluginSettings)", navigation);
             StringAssert.DoesNotContain("ResolveLocalFolderManifestPath", core + navigation);
         }

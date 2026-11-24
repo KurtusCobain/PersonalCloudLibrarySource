@@ -15,12 +15,21 @@
 | [67e6ff98](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45351509513) | 842 pass, 0 fail, 2 skips; 0 warnings; package inspection | Manifest ID collision and enumeration safeguards; archive gate passed |
 | [20e12dd5](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45351650417) | PowerShell: 7 pass, 0 fail; CI step failed | Expected missing-Toolbox child exit code leaked into runner; explicit final status correction pending CI |
 
+| [b2c70ea0](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45352566934) | 842 pass, 0 fail, 2 skips; 0 warnings | Shared package validation, standalone generator, 333-file audit; package/archive and script tests passed |
+| [8e333953](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45352797504) | 845 pass, 0 fail, 2 skips; 0 warnings | Read-only recovery journal review |
+| [c41279b3](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45352956891) | 847 pass, 0 fail, 2 skips; 0 warnings | Legacy controller route freshness |
+| [e6b13de0](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45353149994) | 854 pass, 0 fail, 2 skips; 0 warnings | Remote operand validation and file-only staging cleanup |
+| [ee96a5b9](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45353276912) | 856 pass, 0 fail, 2 skips; 0 warnings | Worker and retry execution guard |
+| [b17f6a75](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45353470187) | 858 pass, 0 fail, 2 skips; 0 warnings | Hosted retry intent and fresh controller routing |
+| [14e7ff8d](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45353612000) | 859 pass, 0 fail, 2 skips; 0 warnings | Reservation indexing and benchmark |
+
 Windows build and CodeQL workflow conclusions are not proof of absence of vulnerabilities or native Playnite acceptance. A passing archive compatibility workflow only qualifies the isolated decoder probe, not shipping 7z/RAR install behavior. Review current run evidence by exact commit.
 
 ## Performance evidence
 
 - 5,000 historical jobs, 4 active, 2,000 progress reads: reference 294.432 ms / indexed 0.675 ms at c6270bf2; 225.171 ms / 0.483 ms at 0ed191f0. Exact byte totals matched.
 - 2,500 synthetic packages / 7,500 synthetic entries: 55.771 ms at d13d0ed7. Exact item count, identity uniqueness and launch priority checked.
+- 5,000 historical jobs, six reserved, 2,000 reservation snapshot reads: 108.283 ms reference / 0.120 ms indexed at 14e7ff8d, identical counts.
 - These are hosted synthetic measurements, not general application speed, actual disk/NAS throughput, startup latency or memory certifications.
 
 ## Remaining gate register
@@ -33,7 +42,7 @@ Windows build and CodeQL workflow conclusions are not proof of absence of vulner
 | Security | No automatic permanent ZIP cleanup; verify filesystem replacement races, hardlinks, process-tree containment, malformed journal and power-loss recovery |
 | Transfer history | Session history still grows; design bounded retention without dropping unresolved evidence or latest retries |
 | Runtime settings and retry | Native Playnite database reconciliation and stale controller/action cases require qualification |
-| Recovery | Persistent reservation refusal implemented; read-only restart presentation and explicit manual review still required |
+| Recovery | Persistent reservation refusal and read-only menu review implemented and regression-tested; manual resolution and native host presentation still require qualification |
 | Multi-source | Experimental activation and isolated identity routing; verify real host import/refresh/migration and source disappearance |
 | Archive support | Shipping ZIP path only; 7z/RAR decoder is isolated compatibility evidence; do not claim full support |
 | UI | Localized resource audit passed; keyboard/controller, DPI, theme and genuine screenshot review pending |

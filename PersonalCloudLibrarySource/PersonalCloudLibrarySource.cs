@@ -839,7 +839,11 @@ namespace PersonalCloudLibrarySource
 
             try
             {
-                manifest = LoadParsedManifest(pluginSettings).Manifest;
+                // Verification of a settings draft must not replace the
+                // active game's validated manifest lookup snapshot.
+                var parsed = new ManifestParserValidator().Parse(LoadManifestJson(pluginSettings));
+                if (!parsed.Succeeded) throw new InvalidOperationException(parsed.Error);
+                manifest = parsed.Manifest;
             }
             catch (Exception ex)
             {

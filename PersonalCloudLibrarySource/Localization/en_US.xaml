@@ -453,4 +453,7 @@
     <sys:String x:Key="LOCPLSTransferRecoveryAdvisory">Reservations may belong to active or interrupted transfers. This review does not authorize retry, deletion, or release. Preserve all staging and journal files.</sys:String>
     <sys:String x:Key="LOCPLSTransferRecoveryRecord">Job: {0}{1}Destination: {2}{1}Staging: {3}</sys:String>
     <sys:String x:Key="LOCPLSTransferRecoveryTruncated">Additional reservations are not displayed.</sys:String>
+    <sys:String x:Key="LOCPLSCommittedGenerationRequired">Save a valid local-folder configuration and close the settings editor before generating a catalog.</sys:String>
+    <sys:String x:Key="LOCPLSCommittedGenerationCompleted">Generated and saved {0} catalog entries. Run Update Game Library to import them.</sys:String>
+    <sys:String x:Key="LOCPLSSettingsEditAlreadyActive">Finish or cancel the open settings edit before starting the setup wizard.</sys:String>
 </ResourceDictionary>

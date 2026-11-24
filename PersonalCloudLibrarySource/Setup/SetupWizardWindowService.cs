@@ -57,6 +57,12 @@ namespace PersonalCloudLibrarySource
                 return;
             }
 
+            if (settingsViewModel.IsSettingsEditActive)
+            {
+                playniteApi.Dialogs.ShowMessage(PclsResources.Get("LOCPLSSettingsEditAlreadyActive",
+                    "Finish or cancel the open settings edit before starting the setup wizard."));
+                return;
+            }
             editCompleted = false;
             var viewModel = new SetupWizardViewModel(settingsViewModel.Settings, new SetupValidationService());
             if (string.IsNullOrWhiteSpace(viewModel.Draft.CachePath))

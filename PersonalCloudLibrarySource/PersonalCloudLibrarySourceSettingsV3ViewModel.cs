@@ -407,18 +407,27 @@ namespace PersonalCloudLibrarySource
 
         public override bool VerifySettings(out List<string> errors)
         {
-            base.Settings = Settings;
-            return base.VerifySettings(out errors);
+            return VerifySettingsSnapshot(Settings, out errors);
         }
 
         public new void VerifySetup()
         {
+            VerifySetupCore(Settings, !IsSettingsEditActive);
+        }
+
+        public void VerifyCommittedSetup()
+        {
+            VerifySetupCore(GetRuntimeSettingsSnapshot(), true);
+        }
+
+        private void VerifySetupCore(PersonalCloudLibrarySourceSettings candidate, bool publishDashboard)
+        {
             try
             {
                 List<string> errors;
-                VerifySettings(out errors);
-                var report = plugin.GenerateVerificationReport(Settings, errors);
-                VerificationDashboardStateService.LatestReport = report;
+                VerifySettingsSnapshot(candidate, out errors);
+                var report = plugin.GenerateVerificationReport(candidate, errors);
+                if (publishDashboard) VerificationDashboardStateService.LatestReport = report;
 
                 var passed = report.ConfigurationErrorsCount == 0 && report.ManifestLoadSucceeded;
                 SetupStatusHeadline = passed
@@ -434,7 +443,7 @@ namespace PersonalCloudLibrarySource
             }
             catch (Exception ex)
             {
-                VerificationDashboardStateService.LatestReport = null;
+                if (publishDashboard) VerificationDashboardStateService.LatestReport = null;
                 SetupStatusHeadline = PclsResources.Get("LOCPLSVerificationFailed", "Setup verification failed.");
                 SetupStatusDetails = ex.Message;
                 MessageBox.Show(
