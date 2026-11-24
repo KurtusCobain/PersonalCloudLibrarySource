@@ -163,6 +163,40 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(File.Exists(Path.Combine(directory, "personal.txt")), Is.True);
         }
 
+        [Test]
+        public void LegacyGuard_RejectsChangedDestinationAndProviderButAllowsDisplayChanges()
+        {
+            var expected = RcloneSettings();
+            var current = RcloneSettings();
+            var original = new PersonalCloudLibraryItem
+                { Id = "game", Title = "Original", SourcePath = "game.exe", CachePath = "game.exe" };
+            var latest = new PersonalCloudLibraryItem
+                { Id = "game", Title = "Renamed", SourcePath = "game.exe", CachePath = "game.exe" };
+            Assert.That(LegacyActionConfigurationGuard.Matches(expected, current, original, latest), Is.True);
+            latest.CachePath = "other.exe";
+            Assert.That(LegacyActionConfigurationGuard.Matches(expected, current, original, latest), Is.False);
+            latest.CachePath = original.CachePath;
+            current.RcloneRemoteName = "other";
+            Assert.That(LegacyActionConfigurationGuard.Matches(expected, current, original, latest), Is.False);
+        }
+
+        [Test]
+        public void LegacyGuard_RejectsDisabledChangedModeAndChangedDeletionPermission()
+        {
+            var expected = RcloneSettings();
+            var current = RcloneSettings();
+            var item = new PersonalCloudLibraryItem { Id = "game" };
+            current.Enabled = false;
+            Assert.That(LegacyActionConfigurationGuard.Matches(expected, current, item, item), Is.False);
+            current.Enabled = true;
+            current.EnableMultiSourceProfiles = true;
+            Assert.That(LegacyActionConfigurationGuard.Matches(expected, current, item, item), Is.False);
+            current.EnableMultiSourceProfiles = false;
+            current.AllowUninstallOutsideCacheFolder = true;
+            Assert.That(LegacyActionConfigurationGuard.Matches(expected, current, item, item), Is.False);
+            Assert.That(LegacyActionConfigurationGuard.Matches(expected, expected, item, null), Is.False);
+        }
+
         private PersonalCloudLibrarySourceSettingsV3 RcloneSettings()
         {
             return new PersonalCloudLibrarySourceSettingsV3

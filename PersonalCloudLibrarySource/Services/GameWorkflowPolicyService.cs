@@ -14,6 +14,48 @@ namespace PersonalCloudLibrarySource
         public string UninstallRefusalReason { get; set; } = string.Empty;
     }
 
+    // Compare only execution-relevant fields, not display metadata. Exact
+    // comparison is deliberately conservative for case-sensitive remotes.
+    public static class LegacyActionConfigurationGuard
+    {
+        public static bool Matches(PersonalCloudLibrarySourceSettingsV3 expected,
+            PersonalCloudLibrarySourceSettingsV3 current,
+            PersonalCloudLibraryItem item, PersonalCloudLibraryItem latest)
+        {
+            return expected != null && current != null && item != null && latest != null &&
+                expected.Enabled && current.Enabled &&
+                !expected.EnableMultiSourceProfiles && !current.EnableMultiSourceProfiles &&
+                expected.AllowDownloads == current.AllowDownloads &&
+                expected.AllowUninstallOutsideCacheFolder == current.AllowUninstallOutsideCacheFolder &&
+                expected.TreatMissingFilesAsUninstalled == current.TreatMissingFilesAsUninstalled &&
+                expected.VerifyAfterTransfer == current.VerifyAfterTransfer &&
+                expected.RemoveIncompleteTransferFiles == current.RemoveIncompleteTransferFiles &&
+                expected.RcloneTimeoutSeconds == current.RcloneTimeoutSeconds &&
+                Same(expected.SourceProviderType, current.SourceProviderType) &&
+                Same(expected.LocalManifestPath, current.LocalManifestPath) &&
+                Same(expected.LocalLibraryRoot, current.LocalLibraryRoot) &&
+                Same(expected.ManifestRelativePath, current.ManifestRelativePath) &&
+                Same(expected.LocalCacheFolder, current.LocalCacheFolder) &&
+                Same(expected.RcloneExecutablePath, current.RcloneExecutablePath) &&
+                Same(expected.RcloneRemoteName, current.RcloneRemoteName) &&
+                Same(expected.RcloneManifestPath, current.RcloneManifestPath) &&
+                Same(expected.RcloneContentRoot, current.RcloneContentRoot) &&
+                Same(expected.UninstallBehavior, current.UninstallBehavior) &&
+                Same(item.Id, latest.Id) &&
+                Same(item.SourceType, latest.SourceType) &&
+                Same(item.SourcePath, latest.SourcePath) &&
+                Same(item.RemotePath, latest.RemotePath) &&
+                Same(item.CachePath, latest.CachePath) &&
+                Same(item.LocalPath, latest.LocalPath) &&
+                Same(item.InstallDirectory, latest.InstallDirectory) &&
+                Same(item.LaunchFile, latest.LaunchFile) &&
+                Same(item.PackageRole, latest.PackageRole);
+        }
+
+        private static bool Same(string first, string second) =>
+            string.Equals(first, second, StringComparison.Ordinal);
+    }
+
     public sealed class GameWorkflowPolicyService
     {
         public GameWorkflowPolicyResult Evaluate(

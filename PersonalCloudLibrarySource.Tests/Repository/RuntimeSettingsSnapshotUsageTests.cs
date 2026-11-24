@@ -25,7 +25,9 @@ namespace PersonalCloudLibrarySource.Tests.Repository
 
             Assert.That(
                 Regex.Matches(source, @"settings\.GetRuntimeSettingsSnapshot\(\)").Count,
-                Is.EqualTo(4));
+                Is.EqualTo(6));
+            Assert.That(source, Does.Contain("CreateLegacyActionGuard(args.Game, item, pluginSettings, true)"));
+            Assert.That(source, Does.Contain("CreateLegacyActionGuard(args.Game, item, pluginSettings, false)"));
             Assert.That(source, Does.Contain("IsCurrentExperimentalActionPlan(plan)"));
             Assert.That(source, Does.Not.Contain("var pluginSettings = settings.Settings;"));
         }

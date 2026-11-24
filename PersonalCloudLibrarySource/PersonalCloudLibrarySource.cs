@@ -295,7 +295,8 @@ namespace PersonalCloudLibrarySource
                         pluginSettings,
                         GetTransferQueue(),
                         ownershipReceipts: new CacheOwnershipReceiptStore(
-                            Path.Combine(GetPluginDataDirectory(), "ownership-receipts"))));
+                            Path.Combine(GetPluginDataDirectory(), "ownership-receipts")),
+                        executionAuthorized: CreateLegacyActionGuard(args.Game, item, pluginSettings, true)));
                     logger.Info($"Personal Cloud Library Source install action returned for {item.Id}.");
                     return installActions;
                 }
@@ -386,7 +387,8 @@ namespace PersonalCloudLibrarySource
 
                     uninstallActions.Add(new PersonalCloudLibraryUninstallController(
                         playniteApi, args.Game, item, pluginSettings,
-                        ownershipReceipts: receipts));
+                        ownershipReceipts: receipts,
+                        executionAuthorized: CreateLegacyActionGuard(args.Game, item, pluginSettings, false)));
                     logger.Info($"Personal Cloud Library Source uninstall action returned for {item.Id}.");
                     return uninstallActions;
                 }
@@ -399,6 +401,41 @@ namespace PersonalCloudLibrarySource
             }
 
             return uninstallActions;
+        }
+
+        private Func<bool> CreateLegacyActionGuard(Playnite.SDK.Models.Game game,
+            PersonalCloudLibraryItem item, PersonalCloudLibrarySourceSettingsV3 expected, bool install)
+        {
+            var gameId = game.Id;
+            var originalId = game.GameId;
+            return () =>
+            {
+                try
+                {
+                    if (game.Id != gameId || game.PluginId != Id ||
+                        !string.Equals(game.GameId, originalId, StringComparison.Ordinal))
+                        return false;
+                    var current = settings.GetRuntimeSettingsSnapshot();
+                    // Do not publish a new runtime manifest snapshot from an
+                    // execution check; this is a private revalidation only.
+                    if (!LegacyActionConfigurationGuard.Matches(expected, current, item, item))
+                        return false;
+                    var parsed = new ManifestParserValidator().Parse(LoadManifestJson(current));
+                    if (!parsed.Succeeded || parsed.Manifest.Items.Count(candidate =>
+                        candidate != null && string.Equals(candidate.Id, originalId,
+                            StringComparison.OrdinalIgnoreCase)) != 1)
+                        return false;
+                    var latest = parsed.ValidItems.SingleOrDefault(candidate =>
+                        string.Equals(candidate.Id, originalId, StringComparison.OrdinalIgnoreCase));
+                    if (!LegacyActionConfigurationGuard.Matches(expected, current, item, latest) ||
+                        !LegacyActionConfigurationGuard.Matches(expected,
+                            settings.GetRuntimeSettingsSnapshot(), item, latest))
+                        return false;
+                    var workflow = new GameWorkflowPolicyService().Evaluate(latest, current);
+                    return install ? workflow.CanInstall : workflow.CanUninstall;
+                }
+                catch (Exception) { return false; }
+            };
         }
 
         public static string GetProviderType(PersonalCloudLibrarySourceSettings pluginSettings)
