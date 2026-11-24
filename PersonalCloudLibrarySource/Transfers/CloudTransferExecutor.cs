@@ -140,7 +140,7 @@ namespace PersonalCloudLibrarySource
 
             if (!result.Succeeded)
             {
-                if (result.RequiresManualRecovery) job.RequiresManualRecovery = true;
+                if (result.RequiresManualRecovery) manager.MarkRequiresManualRecovery(job.Id);
                 TransitionToFailedIfNeeded(job, result.Message);
                 return result;
             }

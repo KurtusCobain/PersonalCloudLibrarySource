@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using System;
 using System.Linq;
+using System.Diagnostics;
 
 namespace PersonalCloudLibrarySource.Tests.Transfers
 {
@@ -145,6 +146,75 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(manager.GetActiveJobForGame(game), Is.SameAs(retry));
             Assert.That(manager.GetLatestRetryableJobForGame(game), Is.SameAs(first));
             Assert.That(manager.Jobs.Count, Is.EqualTo(102));
+        }
+
+        [Test]
+        public void LiveIndexesMatchHistoryAcrossMixedTransitions()
+        {
+            var manager = new CloudTransferManager(2);
+            var first = manager.Enqueue(Guid.NewGuid(), "First", "s", "d", "LocalFolder");
+            var second = manager.Enqueue(Guid.NewGuid(), "Second", "s", "d", "LocalFolder");
+            var third = manager.Enqueue(Guid.NewGuid(), "Third", "s", "d", "LocalFolder");
+            var fourth = manager.Enqueue(Guid.NewGuid(), "Fourth", "s", "d", "LocalFolder");
+            manager.Transition(third.Id, CloudTransferState.Cancelled);
+            manager.Transition(first.Id, CloudTransferState.Failed);
+            manager.SetMaxConcurrentTransfers(1);
+            manager.Transition(second.Id, CloudTransferState.Transferring);
+            manager.Transition(second.Id, CloudTransferState.Completed);
+            manager.Transition(fourth.Id, CloudTransferState.Transferring);
+            manager.UpdateProgress(fourth.Id, 5, 10);
+            var history = manager.Jobs;
+            Assert.That(manager.ActiveCount, Is.EqualTo(history.Count(job => job.IsActive)));
+            Assert.That(manager.QueuedCount, Is.EqualTo(history.Count(job => job.State == CloudTransferState.Queued)));
+            Assert.That(manager.FailedCount, Is.EqualTo(history.Count(job => job.State == CloudTransferState.Failed)));
+            Assert.That(manager.GetAggregateProgress().Percentage, Is.EqualTo(50));
+            Assert.That(history.Count, Is.EqualTo(4));
+        }
+
+        [Test]
+        public void LiveProgressBenchmark_5000HistoricalJobs()
+        {
+            const int historySize = 5000;
+            const int iterations = 2000;
+            var manager = new CloudTransferManager(4);
+            for (var i = 0; i < historySize; i++)
+            {
+                var job = manager.Enqueue(Guid.NewGuid(), "History", "s", "d", "LocalFolder");
+                manager.Transition(job.Id, CloudTransferState.Cancelled);
+            }
+            for (var i = 0; i < 4; i++)
+            {
+                var job = manager.Enqueue(Guid.NewGuid(), "Active", "s", "d", "LocalFolder");
+                manager.Transition(job.Id, CloudTransferState.Transferring);
+                manager.UpdateProgress(job.Id, 50, 100);
+            }
+
+            var snapshot = manager.Jobs;
+            // Same input and byte totals, a conservative reference scan of the
+            // history without the old manager's lock or temporary list allocation.
+            Func<long> scan = () =>
+            {
+                long bytes = 0;
+                foreach (var job in snapshot)
+                    if (job.IsActive) bytes += job.BytesTransferred;
+                return bytes;
+            };
+            Assert.That(scan(), Is.EqualTo(200));
+            Assert.That(manager.GetAggregateProgress().BytesTransferred, Is.EqualTo(200));
+            var scanTimer = Stopwatch.StartNew();
+            long baseline = 0;
+            for (var i = 0; i < iterations; i++) baseline += scan();
+            scanTimer.Stop();
+            var indexedTimer = Stopwatch.StartNew();
+            long indexed = 0;
+            for (var i = 0; i < iterations; i++)
+                indexed += manager.GetAggregateProgress().BytesTransferred;
+            indexedTimer.Stop();
+            Assert.That(indexed, Is.EqualTo(baseline));
+            Assert.That(manager.Jobs.Count, Is.EqualTo(historySize + 4));
+            Console.WriteLine("PCLS_BENCHMARK live_progress history={0} iterations={1} scan_ms={2:F3} indexed_ms={3:F3}",
+                historySize, iterations, scanTimer.Elapsed.TotalMilliseconds, indexedTimer.Elapsed.TotalMilliseconds);
+            // Timings are evidence, not a brittle wall-clock pass/fail threshold.
         }
 
         [Test]

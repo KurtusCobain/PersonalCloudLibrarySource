@@ -10,6 +10,9 @@ namespace PersonalCloudLibrarySource
         private readonly List<CloudTransferJob> jobs = new List<CloudTransferJob>();
         private readonly Dictionary<Guid, CloudTransferJob> jobsById = new Dictionary<Guid, CloudTransferJob>();
         private readonly Dictionary<Guid, List<CloudTransferJob>> jobsByGame = new Dictionary<Guid, List<CloudTransferJob>>();
+        private readonly List<CloudTransferJob> activeJobs = new List<CloudTransferJob>();
+        private readonly List<CloudTransferJob> queuedJobs = new List<CloudTransferJob>();
+        private int failedCount;
         private int maxConcurrentTransfers;
         private long lifecycleRevision;
 
@@ -53,7 +56,7 @@ namespace PersonalCloudLibrarySource
             {
                 lock (syncRoot)
                 {
-                    return jobs.Count(job => job.IsActive);
+                    return activeJobs.Count;
                 }
             }
         }
@@ -64,7 +67,7 @@ namespace PersonalCloudLibrarySource
             {
                 lock (syncRoot)
                 {
-                    return jobs.Count(job => job.State == CloudTransferState.Queued);
+                    return queuedJobs.Count;
                 }
             }
         }
@@ -75,7 +78,7 @@ namespace PersonalCloudLibrarySource
             {
                 lock (syncRoot)
                 {
-                    return jobs.Count(job => job.State == CloudTransferState.Failed);
+                    return failedCount;
                 }
             }
         }
@@ -195,7 +198,7 @@ namespace PersonalCloudLibrarySource
                     job.RequestCancellation();
                 }
 
-                job.SetState(nextState, errorSummary);
+                SetStateLocked(job, nextState, errorSummary);
                 lifecycleRevision++;
                 if (job.IsTerminal)
                 {
@@ -277,7 +280,6 @@ namespace PersonalCloudLibrarySource
         {
             lock (syncRoot)
             {
-                var activeJobs = jobs.Where(job => job.IsActive).ToList();
                 if (activeJobs.Count == 0)
                 {
                     return new CloudTransferAggregateProgress(0, 0, 0, false);
@@ -313,13 +315,13 @@ namespace PersonalCloudLibrarySource
 
         private void StartQueuedJobsLocked()
         {
-            var availableSlots = Math.Max(0, maxConcurrentTransfers - jobs.Count(job => job.IsActive));
-            foreach (var queuedJob in jobs
-                .Where(job => job.State == CloudTransferState.Queued)
+            var availableSlots = Math.Max(0, maxConcurrentTransfers - activeJobs.Count);
+            if (availableSlots == 0 || queuedJobs.Count == 0) return;
+            foreach (var queuedJob in queuedJobs
                 .OrderBy(job => job.CreatedAt)
-                .Take(availableSlots))
+                .Take(availableSlots).ToArray())
             {
-                queuedJob.SetState(CloudTransferState.Preparing, null);
+                SetStateLocked(queuedJob, CloudTransferState.Preparing, null);
             }
         }
 
@@ -334,6 +336,20 @@ namespace PersonalCloudLibrarySource
             }
             attempts.Add(job);
             jobs.Add(job);
+            queuedJobs.Add(job);
+        }
+
+        // Live indexes are maintained under the same lock as the full history.
+        // Terminal attempts remain in the identity and per-game history indexes.
+        private void SetStateLocked(CloudTransferJob job, CloudTransferState state, string error)
+        {
+            var wasActive = job.IsActive;
+            var wasQueued = job.State == CloudTransferState.Queued;
+            job.SetState(state, error);
+            if (wasQueued && state != CloudTransferState.Queued) queuedJobs.Remove(job);
+            if (wasActive && !job.IsActive) activeJobs.Remove(job);
+            else if (!wasActive && job.IsActive) activeJobs.Add(job);
+            if (state == CloudTransferState.Failed) failedCount++;
         }
 
         private CloudTransferJob FindJobLocked(Guid jobId)
