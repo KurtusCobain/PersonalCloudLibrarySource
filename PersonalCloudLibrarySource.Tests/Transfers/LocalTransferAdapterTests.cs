@@ -42,6 +42,47 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void CopyDirectory_ManySmallFilesQualifiesDigestAndInventoryPasses()
+        {
+            const int count = 256;
+            var source = Path.Combine(testRoot, "many-source");
+            var destination = Path.Combine(testRoot, "many-destination");
+            var payload = new byte[16 * 1024];
+            long expectedBytes = 0;
+            for (var i = 0; i < count; i++)
+            {
+                var folder = Path.Combine(source, (i / 16).ToString("D2"));
+                Directory.CreateDirectory(folder);
+                payload[0] = (byte)i;
+                var length = i % 4 == 0 ? 0 : payload.Length;
+                using (var stream = File.Create(Path.Combine(folder, i.ToString("D3") + ".bin")))
+                    stream.Write(payload, 0, length);
+                expectedBytes += length;
+            }
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var result = new LocalTransferAdapter().CopyDirectory(source, destination,
+                Guid.NewGuid(), CancellationToken.None, null);
+            clock.Stop();
+            Assert.That(result.Succeeded, Is.True, result.Message);
+            Assert.That(result.BytesTransferred, Is.EqualTo(expectedBytes));
+            var files = Directory.GetFiles(destination, "*.bin", SearchOption.AllDirectories);
+            Assert.That(files.Length, Is.EqualTo(count));
+            foreach (var file in files)
+            {
+                var index = int.Parse(Path.GetFileNameWithoutExtension(file));
+                var bytes = File.ReadAllBytes(file);
+                Assert.That(bytes.Length, Is.EqualTo(index % 4 == 0 ? 0 : payload.Length));
+                if (bytes.Length > 0)
+                {
+                    Assert.That(bytes[0], Is.EqualTo((byte)index));
+                    Assert.That(bytes[bytes.Length - 1], Is.Zero);
+                }
+            }
+            TestContext.WriteLine("PCLS_LOCAL_SMALL_TREE files={0} bytes={1} elapsed_ms={2:F3}",
+                count, expectedBytes, clock.Elapsed.TotalMilliseconds);
+        }
+
+        [Test]
         public void CopyDirectory_MixedFileSizesAndEmptyDirectoryPreserveContent()
         {
             var source = Path.Combine(testRoot, "source");
