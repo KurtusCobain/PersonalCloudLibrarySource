@@ -60,6 +60,10 @@ namespace PersonalCloudLibrarySource
         private static readonly Encoding Encoding = new UTF8Encoding(false, true);
         private readonly string directory;
         private readonly object syncRoot = new object();
+        // Only this journal instance can complete markers it created. A
+        // restarted instance may inspect and enforce them, not release them.
+        private readonly Dictionary<Guid, TransferPartialPathPolicy.FileIdentity> ownedMarkers =
+            new Dictionary<Guid, TransferPartialPathPolicy.FileIdentity>();
 
         public TransferRecoveryJournal(string directory)
         {
@@ -160,10 +164,12 @@ namespace PersonalCloudLibrarySource
                 TransferPartialPathPolicy.RequireVacant(partial);
                 var path = Marker(job.Id);
                 TransferPartialPathPolicy.RequireVacant(path);
-                using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
                 {
+                    var identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
                     stream.Write(payload, 0, payload.Length);
                     stream.Flush(true);
+                    ownedMarkers.Add(job.Id, identity);
                 }
             }
         }
@@ -176,15 +182,25 @@ namespace PersonalCloudLibrarySource
             using (Acquire())
             {
                 var marker = Marker(job.Id);
-                var existing = Read(marker);
-                if (existing.Item1 != job.GameId ||
-                    !string.Equals(existing.Item2, destination, StringComparison.OrdinalIgnoreCase))
-                    throw new IOException("Transfer recovery record identity changed.");
-                // Never remove a reservation while any staging path is present
-                // or its absence cannot be established.
-                TransferPartialPathPolicy.RequireVacant(TransferPartialPathPolicy.Create(destination, job.Id));
-                TransferPartialPathPolicy.RequireSafePath(marker);
-                File.Delete(marker);
+                TransferPartialPathPolicy.FileIdentity expected;
+                if (!ownedMarkers.TryGetValue(job.Id, out expected))
+                    throw new IOException("Only the originating journal may complete this reservation.");
+                using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(marker, true))
+                {
+                    if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(stream.SafeFileHandle, expected))
+                        throw new IOException("Transfer recovery record was replaced.");
+                    var existing = ReadRecord(marker, stream);
+                    if (existing.Item1 != job.GameId ||
+                        !string.Equals(existing.Item2, destination, StringComparison.OrdinalIgnoreCase))
+                        throw new IOException("Transfer recovery record identity changed.");
+                    // Never remove a reservation while staging is present or
+                    // its absence cannot be established. Delete only the handle
+                    // that passed both identity and bounded payload checks.
+                    TransferPartialPathPolicy.RequireVacant(TransferPartialPathPolicy.Create(destination, job.Id));
+                    TransferPartialPathPolicy.DeleteVerifiedFileHandle(stream.SafeFileHandle);
+                }
+                TransferPartialPathPolicy.RequireVacant(marker);
+                ownedMarkers.Remove(job.Id);
             }
         }
 
@@ -197,7 +213,16 @@ namespace PersonalCloudLibrarySource
             var timer = Stopwatch.StartNew();
             while (true)
             {
-                try { return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None); }
+                try
+                {
+                    var stream = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+                    try
+                    {
+                        TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
+                        return stream;
+                    }
+                    catch { stream.Dispose(); throw; }
+                }
                 catch (IOException ex) when ((ex.HResult & 0xffff) == 32 && timer.ElapsedMilliseconds < 2000)
                 {
                     // Another instance owns the short journal transaction.
@@ -223,23 +248,28 @@ namespace PersonalCloudLibrarySource
 
         private static Tuple<Guid, string, Guid> Read(string path)
         {
-            TransferPartialPathPolicy.RequireSafePath(path);
-            byte[] payload;
-            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+            using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
             {
-                if (stream.Length <= 0 || stream.Length > MaxRecordBytes)
-                    throw new IOException("Transfer recovery record has an invalid size.");
-                payload = new byte[(int)stream.Length];
-                var offset = 0;
-                while (offset < payload.Length)
-                {
-                    var read = stream.Read(payload, offset, payload.Length - offset);
-                    if (read == 0) throw new IOException("Transfer recovery record was truncated.");
-                    offset += read;
-                }
-                if (stream.ReadByte() != -1)
-                    throw new IOException("Transfer recovery record changed during reading.");
+                TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
+                return ReadRecord(path, stream);
             }
+        }
+
+        private static Tuple<Guid, string, Guid> ReadRecord(string path, FileStream stream)
+        {
+            var length = stream.Length;
+            if (length <= 0 || length > MaxRecordBytes)
+                throw new IOException("Transfer recovery record has an invalid size.");
+            var payload = new byte[(int)length];
+            var offset = 0;
+            while (offset < payload.Length)
+            {
+                var read = stream.Read(payload, offset, payload.Length - offset);
+                if (read == 0) throw new IOException("Transfer recovery record was truncated.");
+                offset += read;
+            }
+            if (stream.ReadByte() != -1)
+                throw new IOException("Transfer recovery record changed during reading.");
             var fields = Encoding.GetString(payload).Split('\n');
             Guid gameId, jobId;
             if (fields.Length != 4 || fields[0] != "PCLS-TRANSFER-1" ||

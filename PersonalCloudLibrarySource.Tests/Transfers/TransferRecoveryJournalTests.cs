@@ -143,6 +143,34 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void ReopenedJournalCannotCompleteAnotherInstancesReservation()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var job = Job("file.zip");
+            journal.Begin(job);
+            Assert.Throws<IOException>(() => new TransferRecoveryJournal(records).Complete(job));
+            Assert.That(Directory.GetFiles(records, "*.pending").Length, Is.EqualTo(1));
+            journal.Complete(job);
+            Assert.That(Directory.GetFiles(records, "*.pending"), Is.Empty);
+        }
+
+        [Test]
+        public void SamePayloadReplacementCannotReleaseReservation()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var job = Job("file.zip");
+            journal.Begin(job);
+            var marker = Path.Combine(records, job.Id.ToString("N") + ".pending");
+            var original = Path.Combine(root, "original.pending");
+            File.Move(marker, original);
+            File.Copy(original, marker);
+            Assert.Throws<IOException>(() => journal.Complete(job));
+            Assert.That(File.ReadAllText(marker), Is.EqualTo(File.ReadAllText(original)));
+            Assert.Throws<TransferRetryRefusedException>(() =>
+                new TransferRecoveryJournal(records).Begin(Job("file.zip")));
+        }
+
+        [Test]
         public void ExistingStagingPreventsReleaseAndPreservesContents()
         {
             var journal = new TransferRecoveryJournal(records);
