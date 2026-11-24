@@ -113,6 +113,80 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             }
         }
 
+        [TestCase("../outside.txt", "Unsafe package entry path")]
+        [TestCase("C:/outside.txt", "Unsafe package entry path")]
+        [TestCase("assets/PCLS-LOGO-WIDE.PNG", "Duplicate package entry")]
+        [TestCase("Assets/CON.txt", "Unsafe package entry path")]
+        public void ReleasePackageContract_RejectsUnsafeArchiveNames(string extraEntry, string expected)
+        {
+            WithPackageFixture((repositoryRoot, packagePath) =>
+            {
+                using (var archive = ZipFile.Open(packagePath, ZipArchiveMode.Update))
+                {
+                    using (var stream = archive.CreateEntry(extraEntry).Open())
+                        stream.WriteByte(0);
+                }
+                var result = RunPowerShell(repositoryRoot,
+                    ".\\tools\\test-release-baseline.ps1 -PackagePath '" + packagePath.Replace("'", "''") + "'");
+                Assert.That(result.ExitCode, Is.Not.EqualTo(0), result.Output);
+                Assert.That(result.Output, Does.Contain(expected));
+            });
+        }
+
+        [Test]
+        public void ReleasePackageContract_AcceptsCleanArchiveAndRejectsOversizedMetadata()
+        {
+            WithPackageFixture((repositoryRoot, packagePath) =>
+            {
+                var command = ".\\tools\\test-release-baseline.ps1 -PackagePath '" + packagePath.Replace("'", "''") + "'";
+                var valid = RunPowerShell(repositoryRoot, command);
+                Assert.That(valid.ExitCode, Is.EqualTo(0), valid.Output);
+                using (var archive = ZipFile.Open(packagePath, ZipArchiveMode.Update))
+                {
+                    archive.GetEntry("LICENSE").Delete();
+                    using (var stream = archive.CreateEntry("LICENSE").Open())
+                    {
+                        var bytes = new byte[65537];
+                        stream.Write(bytes, 0, bytes.Length);
+                    }
+                }
+                var invalid = RunPowerShell(repositoryRoot, command);
+                Assert.That(invalid.ExitCode, Is.Not.EqualTo(0), invalid.Output);
+                Assert.That(invalid.Output, Does.Contain("metadata exceeds inspection budget"));
+            });
+        }
+
+        private static void WithPackageFixture(Action<string, string> action)
+        {
+            var repositoryRoot = FindRepositoryRoot();
+            var version = File.ReadLines(Path.Combine(repositoryRoot, "PersonalCloudLibrarySource", "extension.yaml"))
+                .Single(line => line.StartsWith("Version:", StringComparison.Ordinal))
+                .Substring("Version:".Length).Trim();
+            var temporaryRoot = Path.Combine(Path.GetTempPath(), "pcls-package-review-" + Guid.NewGuid().ToString("N"));
+            var packagePath = Path.Combine(temporaryRoot, "PersonalCloudLibrarySource-" + version + ".pext");
+            Directory.CreateDirectory(temporaryRoot);
+            try
+            {
+                using (var archive = ZipFile.Open(packagePath, ZipArchiveMode.Create))
+                {
+                    foreach (var name in new[] { "PersonalCloudLibrarySource.dll", "icon.png",
+                        "Localization/en_US.xaml", "Assets/pcls-logo-wide.png" })
+                    {
+                        using (var stream = archive.CreateEntry(name).Open()) stream.WriteByte(0);
+                    }
+                    using (var writer = new StreamWriter(archive.CreateEntry("extension.yaml").Open()))
+                        writer.WriteLine("Version: " + version);
+                    using (var writer = new StreamWriter(archive.CreateEntry("LICENSE").Open()))
+                        writer.Write(File.ReadAllText(Path.Combine(repositoryRoot, "LICENSE")));
+                }
+                action(repositoryRoot, packagePath);
+            }
+            finally
+            {
+                if (Directory.Exists(temporaryRoot)) Directory.Delete(temporaryRoot, true);
+            }
+        }
+
         private static bool IsRestoredGeneratedOrTemporary(string path)
         {
             var segments = path.Split('/');
