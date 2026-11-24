@@ -82,8 +82,9 @@ namespace PersonalCloudLibrarySource
                 {
                     message.AppendLine();
                     message.AppendLine(PclsResources.Format("LOCPLSTransferRecoveryRecord",
-                        "Job: {0}{1}Destination: {2}{1}Staging: {3}",
-                        record.JobId, Environment.NewLine, record.Destination, record.StagingPath));
+                        "Job: {0}{1}Destination: {2} ({4}){1}Staging: {3} ({5})",
+                        record.JobId, Environment.NewLine, record.Destination, record.StagingPath,
+                        DescribeRecoveryPathState(record.DestinationState), DescribeRecoveryPathState(record.StagingState)));
                 }
                 if (snapshot.Records.Count > 20)
                     message.AppendLine(PclsResources.Get("LOCPLSTransferRecoveryTruncated",
@@ -95,6 +96,21 @@ namespace PersonalCloudLibrarySource
                 if (!transferPresentationDisposed)
                     playniteApi.Dialogs.ShowMessage(PclsResources.Get("LOCPLSTransferRecoveryIncomplete",
                         "The journal could not be fully verified. Do not assume recovery is clear."), title);
+            }
+        }
+
+        private static string DescribeRecoveryPathState(TransferRecoveryPathState state)
+        {
+            switch (state)
+            {
+                case TransferRecoveryPathState.Missing:
+                    return PclsResources.Get("LOCPLSTransferRecoveryPathMissing", "not found during review");
+                case TransferRecoveryPathState.File:
+                    return PclsResources.Get("LOCPLSTransferRecoveryPathFile", "file observed");
+                case TransferRecoveryPathState.Directory:
+                    return PclsResources.Get("LOCPLSTransferRecoveryPathDirectory", "directory observed");
+                default:
+                    return PclsResources.Get("LOCPLSTransferRecoveryPathUnverified", "unverified");
             }
         }
 

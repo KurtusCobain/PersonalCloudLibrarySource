@@ -8,19 +8,33 @@ using System.Collections.ObjectModel;
 
 namespace PersonalCloudLibrarySource
 {
+    // Point-in-time observations only; never cleanup authorization.
+    public enum TransferRecoveryPathState
+    {
+        Unverified = 0,
+        Missing = 1,
+        File = 2,
+        Directory = 3
+    }
+
     public sealed class TransferRecoveryRecord
     {
-        internal TransferRecoveryRecord(Guid gameId, Guid jobId, string destination, string stagingPath)
+        internal TransferRecoveryRecord(Guid gameId, Guid jobId, string destination, string stagingPath,
+            TransferRecoveryPathState destinationState, TransferRecoveryPathState stagingState)
         {
             GameId = gameId;
             JobId = jobId;
             Destination = destination;
             StagingPath = stagingPath;
+            DestinationState = destinationState;
+            StagingState = stagingState;
         }
         public Guid GameId { get; }
         public Guid JobId { get; }
         public string Destination { get; }
         public string StagingPath { get; }
+        public TransferRecoveryPathState DestinationState { get; }
+        public TransferRecoveryPathState StagingState { get; }
     }
 
     public sealed class TransferRecoverySnapshot
@@ -81,7 +95,13 @@ namespace PersonalCloudLibrarySource
                         {
                             var record = Read(marker);
                             var staging = TransferPartialPathPolicy.Create(record.Item2, record.Item3);
-                            records.Add(new TransferRecoveryRecord(record.Item1, record.Item3, record.Item2, staging));
+                            var destinationState = InspectPath(record.Item2);
+                            var stagingState = InspectPath(staging);
+                            if (destinationState == TransferRecoveryPathState.Unverified ||
+                                stagingState == TransferRecoveryPathState.Unverified)
+                                complete = false;
+                            records.Add(new TransferRecoveryRecord(record.Item1, record.Item3, record.Item2, staging,
+                                destinationState, stagingState));
                         }
                         catch (Exception ex) when (IsInspectionFailure(ex)) { unreadable++; }
                     }
@@ -89,6 +109,22 @@ namespace PersonalCloudLibrarySource
                 catch (Exception ex) when (IsInspectionFailure(ex)) { complete = false; }
             }
             return new TransferRecoverySnapshot(records, unreadable, complete && unreadable == 0);
+        }
+
+        private static TransferRecoveryPathState InspectPath(string path)
+        {
+            try
+            {
+                TransferPartialPathPolicy.RequireSafePath(path);
+                var attributes = File.GetAttributes(path);
+                if ((attributes & FileAttributes.ReparsePoint) != 0)
+                    return TransferRecoveryPathState.Unverified;
+                return (attributes & FileAttributes.Directory) != 0
+                    ? TransferRecoveryPathState.Directory : TransferRecoveryPathState.File;
+            }
+            catch (FileNotFoundException) { return TransferRecoveryPathState.Missing; }
+            catch (DirectoryNotFoundException) { return TransferRecoveryPathState.Missing; }
+            catch (Exception ex) when (IsInspectionFailure(ex)) { return TransferRecoveryPathState.Unverified; }
         }
 
         private static bool IsInspectionFailure(Exception error) =>

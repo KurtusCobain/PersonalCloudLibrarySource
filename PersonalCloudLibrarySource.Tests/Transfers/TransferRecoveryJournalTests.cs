@@ -61,6 +61,31 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void Inspect_ReportsObservedPathTypesWithoutChangingEvidence()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var job = Job("file.zip");
+            journal.Begin(job);
+            var partial = TransferPartialPathPolicy.Create(job.Destination, job.Id);
+            var initial = journal.Inspect();
+            Assert.That(initial.Records[0].DestinationState, Is.EqualTo(TransferRecoveryPathState.Missing));
+            Assert.That(initial.Records[0].StagingState, Is.EqualTo(TransferRecoveryPathState.Missing));
+
+            File.WriteAllText(job.Destination, "existing destination");
+            Directory.CreateDirectory(partial);
+            var evidence = Path.Combine(partial, "preserve.txt");
+            File.WriteAllText(evidence, "preserve");
+            var observed = journal.Inspect();
+            Assert.That(observed.IsComplete, Is.True);
+            Assert.That(observed.Records[0].DestinationState, Is.EqualTo(TransferRecoveryPathState.File));
+            Assert.That(observed.Records[0].StagingState, Is.EqualTo(TransferRecoveryPathState.Directory));
+            Assert.That(File.ReadAllText(job.Destination), Is.EqualTo("existing destination"));
+            Assert.That(File.ReadAllText(evidence), Is.EqualTo("preserve"));
+            Assert.That(Directory.GetFiles(records, "*.pending").Length, Is.EqualTo(1));
+            Assert.Throws<TransferRetryRefusedException>(() => journal.Begin(Job("file.zip")));
+        }
+
+        [Test]
         public void Inspect_UnexpectedJournalTypeIsNotReportedAsEmptySuccess()
         {
             File.WriteAllText(records, "preserve");
