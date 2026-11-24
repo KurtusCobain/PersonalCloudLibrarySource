@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/v1-combined-integration-20261103
+      - audit/pcls-stabilization-20261124
   pull_request:
     branches:
       - main
@@ -21,17 +22,19 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
       - name: Set up MSBuild
-        uses: microsoft/setup-msbuild@v2
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2
 
       - name: Restore NuGet packages
         shell: pwsh
         run: nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln
 
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4
         with:
           languages: csharp
           build-mode: manual
@@ -45,7 +48,7 @@ jobs:
 
       - name: Analyze C# to local SARIF (retain existing default setup)
         id: codeql
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@1bd86f2fdb4b86187fa4059f16f31a3202acc9ea # v4
         with:
           category: "/language:csharp/v1-integration"
           output: codeql-results
@@ -81,7 +84,7 @@ jobs:
 
       - name: Retain private SARIF evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pcls-codeql-csharp-${{ github.run_number }}
           path: codeql-results/**/*.sarif

@@ -4,16 +4,23 @@ on:
   push:
     branches:
       - main
+      - audit/pcls-stabilization-20261124
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: microsoft/setup-msbuild@v2
+      - uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2
 
       - name: Resolve package identity
         shell: pwsh
@@ -48,7 +55,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pcls-test-results-${{ github.run_number }}
           path: TestResult.xml
@@ -71,7 +78,7 @@ jobs:
 
       - name: Upload package diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pcls-package-diagnostics-${{ github.run_number }}
           path: package-build.log
@@ -121,7 +128,7 @@ jobs:
           Write-Host 'Package inspection passed.'
 
       - name: Upload test package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: PersonalCloudLibrarySource-${{ env.PCLS_VERSION }}-test
           path: dist/PersonalCloudLibrarySource-${{ env.PCLS_VERSION }}.pext
