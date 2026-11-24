@@ -270,6 +270,29 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void Copy_UnconfirmedChildExitPreservesStagingEvenWhenCancelled()
+        {
+            var destination = Path.Combine(testRoot, "cache", "uncertain.zip");
+            var jobId = Guid.NewGuid();
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var runner = new FakeRcloneProcessRunner(request =>
+                {
+                    File.WriteAllText(request.DestinationPath, "possibly active");
+                    cancellation.Cancel();
+                    return RcloneProcessResult.Failure("child not stopped", processExitConfirmed: false);
+                }) { ReportProgress = false };
+                var result = new RcloneTransferAdapter(runner).Copy(CreateSettings(),
+                    "library/uncertain.zip", destination, false, jobId, cancellation.Token, null);
+                Assert.That(result.Succeeded, Is.False);
+                Assert.That(result.Cancelled, Is.False);
+                Assert.That(File.Exists(destination), Is.False);
+                Assert.That(File.ReadAllText(TransferPartialPathPolicy.Create(destination, jobId)),
+                    Is.EqualTo("possibly active"));
+            }
+        }
+
+        [Test]
         public void Copy_ThrowingFinalProgressCallback_FailsBeforeCommitAndCleansPartial()
         {
             var destination = Path.Combine(testRoot, "cache", "progress.zip");

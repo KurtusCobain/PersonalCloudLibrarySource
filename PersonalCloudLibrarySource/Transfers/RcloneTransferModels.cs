@@ -20,6 +20,8 @@ namespace PersonalCloudLibrarySource
         public bool Succeeded { get; set; }
         public bool WasCancelled { get; set; }
         public bool TimedOut { get; set; }
+        // False means no filesystem cleanup or publication is safe yet.
+        public bool ProcessExitConfirmed { get; set; } = true;
         public int ExitCode { get; set; }
         public string Output { get; set; } = string.Empty;
         public string Error { get; set; } = string.Empty;
@@ -51,7 +53,7 @@ namespace PersonalCloudLibrarySource
             string error = null,
             Exception exception = null,
             int exitCode = -1,
-            bool timedOut = false)
+            bool timedOut = false, bool processExitConfirmed = true)
         {
             return new RcloneProcessResult
             {
@@ -59,7 +61,8 @@ namespace PersonalCloudLibrarySource
                 Error = error ?? string.Empty,
                 Exception = exception,
                 ExitCode = exitCode,
-                TimedOut = timedOut
+                TimedOut = timedOut,
+                ProcessExitConfirmed = processExitConfirmed
             };
         }
     }

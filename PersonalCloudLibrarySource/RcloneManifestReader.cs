@@ -103,7 +103,7 @@ namespace PersonalCloudLibrarySource
                 if (process.ExitCode != 0)
                 {
                     throw new InvalidOperationException(
-                        $"rclone cat failed with exit code {process.ExitCode}: {TrimForLog(error.ToString())}");
+                        $"rclone cat failed with exit code {process.ExitCode}. Check the configured remote and manifest path.");
                 }
 
                 var json = output.ToString();

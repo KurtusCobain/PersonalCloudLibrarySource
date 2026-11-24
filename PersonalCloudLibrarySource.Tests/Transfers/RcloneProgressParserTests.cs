@@ -22,6 +22,16 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void TryParse_OverflowReturnsFalse()
+        {
+            long transferred, total;
+            Assert.That(RcloneProgressParser.TryParse(
+                "Transferred: 999999999999999 TiB / 999999999999999 TiB", out transferred, out total), Is.False);
+            Assert.That(transferred, Is.Zero);
+            Assert.That(total, Is.Zero);
+        }
+
+        [Test]
         public void TryParse_UnrelatedLine_ReturnsFalse()
         {
             long transferred;

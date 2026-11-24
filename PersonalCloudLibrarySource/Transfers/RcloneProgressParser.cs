@@ -33,9 +33,17 @@ namespace PersonalCloudLibrarySource
                 return false;
             }
 
-            transferredBytes = ToBytes(transferred, match.Groups[2].Value);
-            totalBytes = ToBytes(total, match.Groups[4].Value);
-            return totalBytes >= 0 && transferredBytes >= 0;
+            try
+            {
+                transferredBytes = ToBytes(transferred, match.Groups[2].Value);
+                totalBytes = ToBytes(total, match.Groups[4].Value);
+                return totalBytes >= 0 && transferredBytes >= 0;
+            }
+            catch (OverflowException)
+            {
+                transferredBytes = totalBytes = 0;
+                return false;
+            }
         }
 
         private static long ToBytes(double value, string unit)

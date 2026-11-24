@@ -31,6 +31,19 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void RepeatedObservationsDoNotExtendDeadline()
+        {
+            var start = new DateTime(2026, 7, 13, 12, 0, 0, DateTimeKind.Utc);
+            var timeout = new RcloneActivityTimeout(start, TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(10));
+            timeout.RecordObservation(start.AddSeconds(2), 100, 1000);
+            timeout.RecordObservation(start.AddSeconds(8), 100, 1000);
+            timeout.RecordObservation(start.AddSeconds(11), null, null);
+            Assert.That(timeout.GetExpiredKind(start.AddSeconds(12)), Is.EqualTo(RcloneTimeoutKind.Inactivity));
+            timeout.RecordObservation(start.AddSeconds(13), 200, 1000);
+            Assert.That(timeout.GetExpiredKind(start.AddSeconds(22)), Is.EqualTo(RcloneTimeoutKind.None));
+        }
+
+        [Test]
         public void FirstOutputEndsConnectPhaseAndStartsInactivityWindow()
         {
             var start = new DateTime(2026, 7, 13, 12, 0, 0, DateTimeKind.Utc);

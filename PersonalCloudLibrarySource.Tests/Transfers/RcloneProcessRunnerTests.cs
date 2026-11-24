@@ -31,7 +31,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             var process = new FakeProcessHandle();
             var runner = new RcloneProcessRunner(new FakeProcessFactory(process));
             var cancellation = new CancellationTokenSource();
-            cancellation.Cancel();
+            process.OnTimedWait = () => cancellation.Cancel();
 
             var result = runner.Run(
                 new RcloneTransferRequest
@@ -59,13 +59,14 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             var process = new FakeProcessHandle { ThrowOnKill = true };
             var runner = new RcloneProcessRunner(new FakeProcessFactory(process));
             var cancellation = new CancellationTokenSource();
-            cancellation.Cancel();
+            process.OnTimedWait = () => cancellation.Cancel();
 
             var result = runner.Run(CreateRequest(), cancellation.Token, null);
 
             Assert.That(result.Succeeded, Is.False);
             Assert.That(result.WasCancelled, Is.False);
             Assert.That(result.Message, Does.Contain("could not stop"));
+            Assert.That(result.ProcessExitConfirmed, Is.False);
             Assert.That(process.TimedWaitCount, Is.GreaterThanOrEqualTo(2));
             Assert.That(process.Disposed, Is.True);
         }
@@ -125,6 +126,28 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             }
         }
 
+        [Test]
+        public void Run_PreCancelledDoesNotStartChild()
+        {
+            var process = new FakeProcessHandle();
+            var result = new RcloneProcessRunner(new FakeProcessFactory(process)).Run(
+                CreateRequest(), new CancellationToken(true), null);
+            Assert.That(result.WasCancelled, Is.True);
+            Assert.That(process.StartCount, Is.Zero);
+        }
+
+        [Test]
+        public void Run_ReadSetupFailureStopsStartedChild()
+        {
+            var process = new FakeProcessHandle { ThrowOnBeginRead = true };
+            var result = new RcloneProcessRunner(new FakeProcessFactory(process)).Run(
+                CreateRequest(), CancellationToken.None, null);
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.ProcessExitConfirmed, Is.True);
+            Assert.That(process.KillCount, Is.EqualTo(1));
+            Assert.That(process.Disposed, Is.True);
+        }
+
         private static RcloneTransferRequest CreateRequest()
         {
             return new RcloneTransferRequest
@@ -165,13 +188,17 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             public int TimedWaitCount { get; private set; }
             public bool Disposed { get; private set; }
             public bool ThrowOnKill { get; set; }
+            public Action OnTimedWait { get; set; }
+            public int StartCount { get; private set; }
+            public bool ThrowOnBeginRead { get; set; }
 
-            public bool Start() => true;
-            public void BeginOutputReadLine() { }
+            public bool Start() { StartCount++; return true; }
+            public void BeginOutputReadLine() { if (ThrowOnBeginRead) throw new IOException("fixture"); }
             public void BeginErrorReadLine() { }
             public bool WaitForExit(int milliseconds)
             {
                 TimedWaitCount++;
+                OnTimedWait?.Invoke();
                 return HasExited;
             }
 

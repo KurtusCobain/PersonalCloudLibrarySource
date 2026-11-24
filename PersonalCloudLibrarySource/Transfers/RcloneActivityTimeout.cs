@@ -17,6 +17,8 @@ namespace PersonalCloudLibrarySource
         private readonly TimeSpan inactivityTimeout;
         private DateTime lastActivityAt;
         private bool connected;
+        private long maxTransferred = -1;
+        private long maxTotal = -1;
 
         public RcloneActivityTimeout(
             DateTime startedAt,
@@ -47,6 +49,24 @@ namespace PersonalCloudLibrarySource
                 if (timestamp > lastActivityAt)
                 {
                     lastActivityAt = timestamp;
+                }
+            }
+        }
+
+        // Initial output establishes activity; unchanged statistics do not
+        // indefinitely extend the inactivity deadline.
+        public void RecordObservation(DateTime timestamp, long? transferred, long? total)
+        {
+            lock (syncRoot)
+            {
+                var advanced = (transferred.HasValue && transferred.Value > maxTransferred) ||
+                    (total.HasValue && total.Value > maxTotal);
+                if (transferred.HasValue) maxTransferred = Math.Max(maxTransferred, transferred.Value);
+                if (total.HasValue) maxTotal = Math.Max(maxTotal, total.Value);
+                if (!connected || advanced)
+                {
+                    connected = true;
+                    if (timestamp > lastActivityAt) lastActivityAt = timestamp;
                 }
             }
         }

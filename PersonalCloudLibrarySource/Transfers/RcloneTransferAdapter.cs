@@ -110,6 +110,10 @@ namespace PersonalCloudLibrarySource
                 };
                 phase?.Invoke(CloudTransferState.Transferring);
                 var processResult = processRunner.Run(request, cancellationToken, progress);
+                if (!processResult.ProcessExitConfirmed)
+                    return CloudTransferExecutionResult.Failure(
+                        "rclone exit was not confirmed. Partial data was preserved; stop the process and review staging before retrying.");
+
                 if (processResult.WasCancelled || cancellationToken.IsCancellationRequested)
                 {
                     if (!TryDeletePartial(partialPath, out cleanupError))
@@ -128,10 +132,8 @@ namespace PersonalCloudLibrarySource
                             "Transfer failed and partial cleanup failed: " + cleanupError,
                             processResult.Exception);
                     }
-                    var detail = string.IsNullOrWhiteSpace(processResult.Error)
-                        ? processResult.Message
-                        : processResult.Message + " " + RcloneManifestReader.TrimForLog(processResult.Error);
-                    return CloudTransferExecutionResult.Failure(detail, processResult.Exception);
+                    // Do not propagate arbitrary provider stderr or exception text.
+                    return CloudTransferExecutionResult.Failure(processResult.Message);
                 }
 
                 long copiedBytes;

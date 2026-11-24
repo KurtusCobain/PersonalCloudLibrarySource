@@ -29,6 +29,9 @@ namespace PersonalCloudLibrarySource
                 return RcloneProcessResult.Failure("rclone request is missing.");
             }
 
+            if (cancellationToken.IsCancellationRequested)
+                return RcloneProcessResult.Cancelled("rclone transfer cancelled before launch.");
+
             var output = new StringBuilder();
             var error = new StringBuilder();
             var syncRoot = new object();
@@ -49,57 +52,62 @@ namespace PersonalCloudLibrarySource
                         CreateNoWindow = true
                     };
 
-                    RcloneActivityTimeout activityTimeout = null;
+                    var clock = Stopwatch.StartNew();
+                    var epoch = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+                    var connectTimeoutSeconds = NormalizeTimeout(request.ConnectTimeoutSeconds, request.TimeoutSeconds);
+                    var inactivityTimeoutSeconds = NormalizeTimeout(request.InactivityTimeoutSeconds, request.TimeoutSeconds);
+                    var activityTimeout = new RcloneActivityTimeout(epoch,
+                        TimeSpan.FromSeconds(connectTimeoutSeconds), TimeSpan.FromSeconds(inactivityTimeoutSeconds));
+                    var callbackFailed = 0;
+                    var outputEnded = 0;
+                    var errorEnded = 0;
+                    var started = false;
 
                     DataReceivedEventHandler outputHandler = (sender, args) =>
                     {
-                        HandleLine(
-                            args.Data,
-                            output,
-                            syncRoot,
-                            progress,
-                            () => activityTimeout?.RecordActivity(DateTime.UtcNow));
+                        if (args.Data == null) { Interlocked.Exchange(ref outputEnded, 1); return; }
+                        try
+                        {
+                            HandleLine(args.Data, output, syncRoot, progress,
+                                activityTimeout, epoch + clock.Elapsed);
+                        }
+                        catch { Interlocked.Exchange(ref callbackFailed, 1); }
                     };
                     DataReceivedEventHandler errorHandler = (sender, args) =>
                     {
-                        HandleLine(
-                            args.Data,
-                            error,
-                            syncRoot,
-                            progress,
-                            () => activityTimeout?.RecordActivity(DateTime.UtcNow));
+                        if (args.Data == null) { Interlocked.Exchange(ref errorEnded, 1); return; }
+                        try
+                        {
+                            HandleLine(args.Data, error, syncRoot, progress,
+                                activityTimeout, epoch + clock.Elapsed);
+                        }
+                        catch { Interlocked.Exchange(ref callbackFailed, 1); }
                     };
                     process.OutputDataReceived += outputHandler;
                     process.ErrorDataReceived += errorHandler;
 
-                    if (!process.Start())
+                    try
                     {
-                        return RcloneProcessResult.Failure("rclone did not start.");
-                    }
-
-                    var connectTimeoutSeconds = NormalizeTimeout(
-                        request.ConnectTimeoutSeconds,
-                        request.TimeoutSeconds);
-                    var inactivityTimeoutSeconds = NormalizeTimeout(
-                        request.InactivityTimeoutSeconds,
-                        request.TimeoutSeconds);
-                    activityTimeout = new RcloneActivityTimeout(
-                        DateTime.UtcNow,
-                        TimeSpan.FromSeconds(connectTimeoutSeconds),
-                        TimeSpan.FromSeconds(inactivityTimeoutSeconds));
-                    process.BeginOutputReadLine();
+                        if (!process.Start())
+                            return RcloneProcessResult.Failure("rclone did not start.");
+                        started = true;
+                        process.BeginOutputReadLine();
                     process.BeginErrorReadLine();
 
                     while (!process.WaitForExit(200))
                     {
+                        if (Volatile.Read(ref callbackFailed) != 0)
+                            return RcloneProcessResult.Failure("rclone progress callback failed.",
+                                processExitConfirmed: TryStop(process));
                         if (cancellationToken.IsCancellationRequested)
                         {
                             return TryStop(process)
                                 ? RcloneProcessResult.Cancelled("rclone transfer cancelled.")
-                                : RcloneProcessResult.Failure("rclone cancellation could not stop the child process.");
+                                : RcloneProcessResult.Failure("rclone cancellation could not stop the child process.",
+                                    processExitConfirmed: false);
                         }
 
-                        var expiredKind = activityTimeout.GetExpiredKind(DateTime.UtcNow);
+                        var expiredKind = activityTimeout.GetExpiredKind(epoch + clock.Elapsed);
                         if (expiredKind != RcloneTimeoutKind.None)
                         {
                             if (!TryStop(process))
@@ -109,7 +117,7 @@ namespace PersonalCloudLibrarySource
                                     GetText(error, syncRoot),
                                     null,
                                     -1,
-                                    true);
+                                    true, processExitConfirmed: false);
                             }
 
                             return RcloneProcessResult.Failure(
@@ -123,9 +131,17 @@ namespace PersonalCloudLibrarySource
                         }
                     }
 
-                    process.WaitForExit();
-                    process.OutputDataReceived -= outputHandler;
-                    process.ErrorDataReceived -= errorHandler;
+                    // Bound asynchronous pipe EOF; descendants can retain pipe handles.
+                    var drain = Stopwatch.StartNew();
+                    while (Volatile.Read(ref outputEnded) == 0 || Volatile.Read(ref errorEnded) == 0)
+                    {
+                        if (drain.Elapsed >= TimeSpan.FromSeconds(5) || cancellationToken.IsCancellationRequested)
+                            return RcloneProcessResult.Failure("rclone output drain was not confirmed.",
+                                processExitConfirmed: false);
+                        Thread.Sleep(20);
+                    }
+                    if (Volatile.Read(ref callbackFailed) != 0)
+                        return RcloneProcessResult.Failure("rclone progress callback failed.");
 
                     var outputText = GetText(output, syncRoot);
                     var errorText = GetText(error, syncRoot);
@@ -144,11 +160,23 @@ namespace PersonalCloudLibrarySource
                         errorText,
                         null,
                         process.ExitCode);
+                    }
+                    catch (Exception)
+                    {
+                        return RcloneProcessResult.Failure("Unable to run rclone; review the executable and transfer settings.",
+                            processExitConfirmed: !started || TryStop(process));
+                    }
+                    finally
+                    {
+                        process.OutputDataReceived -= outputHandler;
+                        process.ErrorDataReceived -= errorHandler;
+                    }
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                return RcloneProcessResult.Failure("Unable to run rclone: " + ex.Message, null, ex);
+                return RcloneProcessResult.Failure("Unable to initialize rclone process handling.",
+                    processExitConfirmed: false);
             }
         }
 
@@ -157,7 +185,7 @@ namespace PersonalCloudLibrarySource
             StringBuilder target,
             object syncRoot,
             Action<long, long?> progress,
-            Action activity)
+            RcloneActivityTimeout activity, DateTime timestamp)
         {
             if (line == null)
             {
@@ -169,14 +197,13 @@ namespace PersonalCloudLibrarySource
                 AppendLineBounded(target, line, 16 * 1024);
             }
 
-            activity?.Invoke();
-
             long transferred;
             long total;
-            if (RcloneProgressParser.TryParse(line, out transferred, out total))
-            {
-                progress?.Invoke(transferred, total);
-            }
+            var parsed = RcloneProgressParser.TryParse(line, out transferred, out total);
+            if (!string.IsNullOrWhiteSpace(line))
+                activity.RecordObservation(timestamp, parsed ? (long?)transferred : null,
+                    parsed ? (long?)total : null);
+            if (parsed) progress?.Invoke(transferred, total);
         }
 
         // Retain a bounded diagnostic tail; progress parsing still receives
