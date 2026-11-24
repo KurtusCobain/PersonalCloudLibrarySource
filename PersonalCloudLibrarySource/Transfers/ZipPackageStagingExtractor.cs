@@ -32,6 +32,7 @@ namespace PersonalCloudLibrarySource
         {
             var createdFiles = new List<CreatedFileRecord>();
             var createdDirectories = new List<string>();
+            var createdDirectoryIndex = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             string staging = null;
             try
             {
@@ -111,6 +112,7 @@ namespace PersonalCloudLibrarySource
                     cancellationToken.ThrowIfCancellationRequested();
                     TransferPartialPathPolicy.CreateExclusiveDirectory(staging);
                     createdDirectories.Add(staging);
+                    createdDirectoryIndex.Add(staging);
                     long copiedTotal = 0;
                     var buffer = new byte[CopyBufferBytes];
 
@@ -162,11 +164,11 @@ namespace PersonalCloudLibrarySource
                         {
                             if (central[index].ExpectedCrc32 != 0)
                                 throw new InvalidDataException("Archive directory has a nonzero CRC.");
-                            EnsurePrivateDirectory(staging, target, createdDirectories);
+                            EnsurePrivateDirectory(staging, target, createdDirectories, createdDirectoryIndex);
                             continue;
                         }
 
-                        EnsurePrivateDirectory(staging, Path.GetDirectoryName(target), createdDirectories);
+                        EnsurePrivateDirectory(staging, Path.GetDirectoryName(target), createdDirectories, createdDirectoryIndex);
                         if (!policy.Authorize(cacheRoot, target, false).Allowed)
                             throw new IOException("ZIP output path or ancestor became unsafe.");
                         if (File.Exists(target) || Directory.Exists(target))
@@ -373,7 +375,7 @@ namespace PersonalCloudLibrarySource
         }
 
         private static void EnsurePrivateDirectory(string staging, string directory,
-            List<string> createdDirectories)
+            List<string> createdDirectories, HashSet<string> createdDirectoryIndex)
         {
             var full = Path.GetFullPath(directory);
             if (!string.Equals(staging, full, StringComparison.OrdinalIgnoreCase) &&
@@ -397,7 +399,7 @@ namespace PersonalCloudLibrarySource
                     throw new IOException("Archive directory conflicts with an existing file.");
                 if (Directory.Exists(current))
                 {
-                    if (!createdDirectories.Contains(current, StringComparer.OrdinalIgnoreCase) ||
+                    if (!createdDirectoryIndex.Contains(current) ||
                         (File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
                         throw new IOException("Archive staging contains an unexpected or linked directory.");
                 }
@@ -405,6 +407,7 @@ namespace PersonalCloudLibrarySource
                 {
                     TransferPartialPathPolicy.CreateExclusiveDirectory(current);
                     createdDirectories.Add(current);
+                    createdDirectoryIndex.Add(current);
                 }
             }
         }

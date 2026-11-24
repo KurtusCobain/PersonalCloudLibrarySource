@@ -158,6 +158,13 @@ namespace PersonalCloudLibrarySource
                 cancellationToken.ThrowIfCancellationRequested();
                 phase?.Invoke(CloudTransferState.Finalizing);
                 cancellationToken.ThrowIfCancellationRequested();
+                try { TransferPartialPathPolicy.RequirePublicationPaths(partialPath, normalizedDestination, isDirectory); }
+                catch (Exception)
+                {
+                    return CloudTransferExecutionResult.Failure(
+                        "Transfer publication paths changed; staging was preserved for review.",
+                        requiresManualRecovery: true);
+                }
                 if (isDirectory)
                 {
                     Directory.Move(partialPath, normalizedDestination);

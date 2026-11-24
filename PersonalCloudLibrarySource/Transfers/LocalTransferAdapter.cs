@@ -224,8 +224,19 @@ namespace PersonalCloudLibrarySource
                 foreach (var directory in directories)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    TransferPartialPathPolicy.CreateExclusiveDirectory(
-                        Path.Combine(partialDirectory, GetRelativePath(sourceRoot, directory)));
+                    try
+                    {
+                        TransferPartialPathPolicy.CreateExclusiveDirectory(
+                            Path.Combine(partialDirectory, GetRelativePath(sourceRoot, directory)));
+                    }
+                    catch (Exception)
+                    {
+                        // A failed exclusive create may expose an unrelated
+                        // directory in our tree. Never recursively roll it back.
+                        return CloudTransferExecutionResult.Failure(
+                            "Private staging directory ownership is uncertain; preserve staging for review.",
+                            requiresManualRecovery: true);
+                    }
                 }
 
                 var copyBuffer = new byte[bufferSize];
@@ -235,21 +246,34 @@ namespace PersonalCloudLibrarySource
                     var relativePath = GetRelativePath(sourceRoot, sourceFile);
                     var destinationFile = Path.Combine(partialDirectory, relativePath);
                     var targetDirectory = Path.GetDirectoryName(destinationFile);
-                    if (!string.IsNullOrWhiteSpace(targetDirectory))
+                    var fileCreated = false;
+                    try
                     {
-                        TransferPartialPathPolicy.RequireSafePath(targetDirectory);
-                        if (!Directory.Exists(targetDirectory))
-                            throw new IOException("Private staging directory disappeared during transfer.");
-                    }
+                        if (!string.IsNullOrWhiteSpace(targetDirectory))
+                        {
+                            TransferPartialPathPolicy.RequireSafePath(targetDirectory);
+                            if (!Directory.Exists(targetDirectory))
+                                throw new IOException("Private staging directory disappeared during transfer.");
+                        }
 
-                    transferred = CopyFileContents(
-                        sourceFile,
-                        destinationFile,
-                        cancellationToken,
-                        totalBytes,
-                        transferred,
-                        progress,
-                        copyBuffer);
+                        transferred = CopyFileContents(
+                            sourceFile,
+                            destinationFile,
+                            cancellationToken,
+                            totalBytes,
+                            transferred,
+                            progress,
+                            copyBuffer,
+                            () => fileCreated = true);
+                    }
+                    catch (Exception) when (!fileCreated)
+                    {
+                        // Failure before successful CreateNew does not give us
+                        // ownership of an entry that may have appeared.
+                        return CloudTransferExecutionResult.Failure(
+                            "Private staging file ownership is uncertain; preserve staging for review.",
+                            requiresManualRecovery: true);
+                    }
                 }
 
                 phase?.Invoke(CloudTransferState.Verifying);

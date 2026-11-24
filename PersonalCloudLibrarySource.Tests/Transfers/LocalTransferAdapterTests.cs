@@ -227,6 +227,31 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void CopyDirectory_UnexpectedFileDuringCopyIsPreserved()
+        {
+            var source = Path.Combine(testRoot, "source");
+            var destination = Path.Combine(testRoot, "destination");
+            Directory.CreateDirectory(source);
+            File.WriteAllText(Path.Combine(source, "first.txt"), "first");
+            File.WriteAllText(Path.Combine(source, "second.txt"), "second");
+            var jobId = Guid.NewGuid();
+            var partial = TransferPartialPathPolicy.Create(destination, jobId);
+            string foreign = null;
+            var result = new LocalTransferAdapter().CopyDirectory(source, destination, jobId,
+                CancellationToken.None, (bytes, total) =>
+                {
+                    if (foreign != null) return;
+                    foreign = File.Exists(Path.Combine(partial, "first.txt"))
+                        ? Path.Combine(partial, "second.txt") : Path.Combine(partial, "first.txt");
+                    File.WriteAllText(foreign, "foreign");
+                });
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.RequiresManualRecovery, Is.True);
+            Assert.That(File.ReadAllText(foreign), Is.EqualTo("foreign"));
+            Assert.That(Directory.Exists(destination), Is.False);
+        }
+
+        [Test]
         public void CopyFile_ExistingDestination_FailsWithoutOverwriting()
         {
             var source = Path.Combine(testRoot, "source.txt");

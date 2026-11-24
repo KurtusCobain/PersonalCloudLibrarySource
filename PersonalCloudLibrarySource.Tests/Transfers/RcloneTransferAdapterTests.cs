@@ -333,6 +333,28 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void Copy_DestinationAppearsAtFinalizationPreservesStaging()
+        {
+            var destination = Path.Combine(testRoot, "cache", "final.zip");
+            var jobId = Guid.NewGuid();
+            var runner = new FakeRcloneProcessRunner(request =>
+            {
+                File.WriteAllText(request.DestinationPath, "download");
+                return RcloneProcessResult.Success("ok");
+            });
+            var result = new RcloneTransferAdapter(runner).Copy(CreateSettings(),
+                "library/final.zip", destination, false, jobId, CancellationToken.None, null,
+                state =>
+                {
+                    if (state == CloudTransferState.Finalizing) File.WriteAllText(destination, "foreign");
+                });
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.RequiresManualRecovery, Is.True);
+            Assert.That(File.ReadAllText(destination), Is.EqualTo("foreign"));
+            Assert.That(File.ReadAllText(TransferPartialPathPolicy.Create(destination, jobId)), Is.EqualTo("download"));
+        }
+
+        [Test]
         public void Copy_ThrowingFinalProgressCallback_FailsBeforeCommitAndCleansPartial()
         {
             var destination = Path.Combine(testRoot, "cache", "progress.zip");
