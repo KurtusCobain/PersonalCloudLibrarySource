@@ -192,6 +192,25 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void NativeHandlePublicationPublishesVerifiedSourceToVacantSibling()
+        {
+            var staging = Path.Combine(testRoot, "staging.bin");
+            var destination = Path.Combine(testRoot, "destination.bin");
+            File.WriteAllText(staging, "owned");
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+            var open = typeof(TransferPartialPathPolicy).GetMethod("OpenPrivateFileForReview", flags);
+            var publish = typeof(TransferPartialPathPolicy).GetMethod("PublishVerifiedHandle", flags);
+            using (var stream = (FileStream)open.Invoke(null, new object[] { staging, true }))
+            {
+                // Unwrapped native failure details remain visible in CI.
+                try { publish.Invoke(null, new object[] { stream.SafeFileHandle, staging, destination }); }
+                catch (System.Reflection.TargetInvocationException ex) { throw ex.InnerException; }
+            }
+            Assert.That(File.Exists(staging), Is.False);
+            Assert.That(File.ReadAllText(destination), Is.EqualTo("owned"));
+        }
+
+        [Test]
         public void NativeHandlePublicationRefusesUnrelatedSourceHandle()
         {
             var actual = Path.Combine(testRoot, "actual.bin");
