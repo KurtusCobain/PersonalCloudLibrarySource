@@ -332,6 +332,13 @@ namespace PersonalCloudLibrarySource
             // The parser refuses catalogs with more than 100,000 items.
             // Never write a generated manifest that our importer cannot read.
             ValidateGeneratedItemCount(items.Count);
+            var generatedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in items)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!generatedIds.Add(item.Id))
+                    throw new InvalidOperationException("Generated game IDs collide. Resolve duplicate names or provide an explicit manifest; existing game identities were not changed.");
+            }
             var sortedItems = items
                 .OrderBy(item => item.Platform, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(item => item.Title, StringComparer.OrdinalIgnoreCase)
@@ -424,40 +431,75 @@ namespace PersonalCloudLibrarySource
             int maxEntries)
         {
             var pending = new Stack<string>();
+            var observed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var enumeratedEntries = 0;
+            var inspectAttributes = fileSystem is ManifestGenerationFileSystem;
             pending.Push(rootFullPath);
+            observed.Add(rootFullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             while (pending.Count > 0)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var current = pending.Pop();
+                if (inspectAttributes)
+                {
+                    var attributes = File.GetAttributes(current);
+                    if ((attributes & FileAttributes.ReparsePoint) != 0 ||
+                        (attributes & FileAttributes.Directory) == 0)
+                        throw new IOException("Library directory became linked or unavailable during discovery.");
+                }
                 foreach (var directory in fileSystem.EnumerateDirectories(current))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    // Never follow junctions/symlinks into arbitrary directories or cycles.
-                    if (fileSystem is ManifestGenerationFileSystem &&
-                        (File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
-                        continue;
-                    if (!PathBoundary.IsContained(rootFullPath, directory))
-                        continue;
-                    var entry = NewScanEntry(rootFullPath, directory);
-                    if (!string.IsNullOrWhiteSpace(entry.Path))
-                        directories.Add(entry);
-                    if (directories.Count + files.Count > maxEntries)
-                        throw new InvalidOperationException("Library scan limit reached (" + maxEntries + " entries). Choose a smaller source folder.");
-                    pending.Push(directory);
+                    CheckScanBudget(ref enumeratedEntries, maxEntries);
+                    var child = ValidateDirectChild(rootFullPath, current, directory, observed);
+                    if (inspectAttributes)
+                    {
+                        var attributes = File.GetAttributes(child);
+                        if ((attributes & FileAttributes.ReparsePoint) != 0) continue;
+                        if ((attributes & FileAttributes.Directory) == 0)
+                            throw new IOException("Library entry changed type during discovery.");
+                    }
+                    directories.Add(NewScanEntry(rootFullPath, child));
+                    pending.Push(child);
                 }
 
                 foreach (var file in fileSystem.EnumerateFiles(current))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    if (!PathBoundary.IsContained(rootFullPath, file))
-                        continue;
-                    var entry = NewScanEntry(rootFullPath, file);
-                    if (!string.IsNullOrWhiteSpace(entry.Path))
-                        files.Add(entry);
-                    if (directories.Count + files.Count > maxEntries)
-                        throw new InvalidOperationException("Library scan limit reached (" + maxEntries + " entries). Choose a smaller source folder.");
+                    CheckScanBudget(ref enumeratedEntries, maxEntries);
+                    var child = ValidateDirectChild(rootFullPath, current, file, observed);
+                    if (inspectAttributes)
+                    {
+                        var attributes = File.GetAttributes(child);
+                        if ((attributes & FileAttributes.ReparsePoint) != 0) continue;
+                        if ((attributes & FileAttributes.Directory) != 0)
+                            throw new IOException("Library entry changed type during discovery.");
+                    }
+                    files.Add(NewScanEntry(rootFullPath, child));
                 }
             }
+        }
+
+        private static void CheckScanBudget(ref int count, int maxEntries)
+        {
+            // Include ignored and linked entries in the enumeration budget.
+            if (++count > maxEntries)
+                throw new InvalidOperationException("Library scan limit reached (" + maxEntries + " entries). Choose a smaller source folder.");
+        }
+
+        private static string ValidateDirectChild(string root, string current, string path,
+            HashSet<string> observed)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path))
+                throw new IOException("Library enumeration returned an invalid path.");
+            var full = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var parent = Path.GetDirectoryName(full);
+            if (string.IsNullOrEmpty(parent) ||
+                !string.Equals(parent.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                    current.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), StringComparison.OrdinalIgnoreCase) ||
+                !PathBoundary.IsContained(root, full) || !observed.Add(full))
+                throw new IOException("Library enumeration returned an outside, repeated or non-child path.");
+            return full;
         }
 
         private static ScanEntry NewScanEntry(string rootFullPath, string path)

@@ -162,6 +162,55 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Preview_RejectsCollidingGeneratedIdsWithoutChangingExistingManifest()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "PCLS-IdentityCollision-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(root);
+                File.WriteAllText(Path.Combine(root, "A+B.nes"), "first");
+                File.WriteAllText(Path.Combine(root, "A-B.nes"), "second");
+                var target = Path.Combine(root, "catalog.json");
+                File.WriteAllText(target, "existing");
+                var options = new ManifestGenerationOptions { SourceRoot = root, OutputPath = target, NoReport = true };
+                var previewError = Assert.Throws<InvalidOperationException>(() =>
+                    new ManifestGenerationService().Preview(options, CancellationToken.None));
+                Assert.That(previewError.Message, Does.Contain("IDs collide"));
+                Assert.Throws<InvalidOperationException>(() => new ManifestGenerationService().Generate(options));
+                Assert.That(File.ReadAllText(target), Is.EqualTo("existing"));
+            }
+            finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Preview_RefusesMalformedOrRepeatedEnumeration(bool repeated)
+        {
+            var error = Assert.Throws<IOException>(() =>
+                new ManifestGenerationService(new InvalidFileSystem(repeated)).Preview(
+                    new ManifestGenerationOptions { SourceRoot = @"C:\Games" }, CancellationToken.None));
+            Assert.That(error.Message, Does.Contain("outside, repeated or non-child"));
+        }
+
+        private sealed class InvalidFileSystem : IManifestGenerationFileSystem
+        {
+            private readonly bool repeated;
+            public InvalidFileSystem(bool repeated) { this.repeated = repeated; }
+            public bool DirectoryExists(string path) => true;
+            public IEnumerable<string> EnumerateDirectories(string path) =>
+                Enumerable.Empty<string>();
+            public IEnumerable<string> EnumerateFiles(string path)
+            {
+                if (repeated)
+                {
+                    yield return Path.Combine(path, "game.nes");
+                    yield return Path.Combine(path, "GAME.NES");
+                }
+                else yield return Path.Combine(path, "..", "outside.nes");
+            }
+        }
+
+        [Test]
         public void Preview_FailsCleanly_OnExcessiveEntriesWithoutWriting()
         {
             var service = new ManifestGenerationService(new OversizedFileSystem());
