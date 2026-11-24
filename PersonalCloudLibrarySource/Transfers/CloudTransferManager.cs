@@ -8,6 +8,8 @@ namespace PersonalCloudLibrarySource
     {
         private readonly object syncRoot = new object();
         private readonly List<CloudTransferJob> jobs = new List<CloudTransferJob>();
+        private readonly Dictionary<Guid, CloudTransferJob> jobsById = new Dictionary<Guid, CloudTransferJob>();
+        private readonly Dictionary<Guid, List<CloudTransferJob>> jobsByGame = new Dictionary<Guid, List<CloudTransferJob>>();
         private int maxConcurrentTransfers;
 
         public CloudTransferManager(int maxConcurrentTransfers)
@@ -90,7 +92,7 @@ namespace PersonalCloudLibrarySource
                     destination,
                     providerType,
                     isDirectory);
-                jobs.Add(job);
+                RegisterJobLocked(job);
                 StartQueuedJobsLocked();
             }
 
@@ -110,13 +112,13 @@ namespace PersonalCloudLibrarySource
         {
             lock (syncRoot)
             {
-                return jobs
-                    .Select((job, index) => new { Job = job, Index = index })
-                    .Where(value => value.Job.GameId == gameId && !value.Job.IsTerminal)
-                    .OrderByDescending(value => value.Job.CreatedAt)
-                    .ThenByDescending(value => value.Index)
-                    .Select(value => value.Job)
-                    .FirstOrDefault();
+                List<CloudTransferJob> attempts;
+                if (!jobsByGame.TryGetValue(gameId, out attempts)) return null;
+                CloudTransferJob newest = null;
+                foreach (var job in attempts)
+                    if (!job.IsTerminal && (newest == null || job.CreatedAt >= newest.CreatedAt))
+                        newest = job;
+                return newest;
             }
         }
 
@@ -124,16 +126,19 @@ namespace PersonalCloudLibrarySource
         {
             lock (syncRoot)
             {
-                return jobs
-                    .Select((job, index) => new { Job = job, Index = index })
-                    .Where(value =>
-                        value.Job.GameId == gameId &&
-                        value.Job.CanRetry)
-                    .OrderByDescending(value => value.Job.CompletedAt ?? value.Job.CreatedAt)
-                    .ThenByDescending(value => value.Job.CreatedAt)
-                    .ThenByDescending(value => value.Index)
-                    .Select(value => value.Job)
-                    .FirstOrDefault();
+                List<CloudTransferJob> attempts;
+                if (!jobsByGame.TryGetValue(gameId, out attempts)) return null;
+                CloudTransferJob newest = null;
+                foreach (var job in attempts)
+                {
+                    if (!job.CanRetry) continue;
+                    if (newest == null ||
+                        (job.CompletedAt ?? job.CreatedAt) > (newest.CompletedAt ?? newest.CreatedAt) ||
+                        ((job.CompletedAt ?? job.CreatedAt) == (newest.CompletedAt ?? newest.CreatedAt) &&
+                            job.CreatedAt >= newest.CreatedAt))
+                        newest = job;
+                }
+                return newest;
             }
         }
 
@@ -238,7 +243,7 @@ namespace PersonalCloudLibrarySource
                     failedJob.ProviderType,
                     failedJob.IsDirectory,
                     failedJob.Id);
-                jobs.Add(retry);
+                RegisterJobLocked(retry);
                 StartQueuedJobsLocked();
             }
 
@@ -257,10 +262,24 @@ namespace PersonalCloudLibrarySource
                 }
 
                 var isIndeterminate = activeJobs.Any(job => !job.TotalBytes.HasValue || job.TotalBytes.Value <= 0);
-                var bytesTransferred = activeJobs.Sum(job => Math.Max(0, job.BytesTransferred));
-                var totalBytes = isIndeterminate
-                    ? 0
-                    : activeJobs.Sum(job => Math.Max(0, job.TotalBytes.GetValueOrDefault()));
+                long bytesTransferred = 0;
+                long totalBytes = 0;
+                foreach (var job in activeJobs)
+                {
+                    var bytes = Math.Max(0, job.BytesTransferred);
+                    var total = Math.Max(0, job.TotalBytes.GetValueOrDefault());
+                    if (bytes > long.MaxValue - bytesTransferred || total > long.MaxValue - totalBytes)
+                    {
+                        // The aggregate cannot represent the provider totals.
+                        // Show indeterminate rather than overflow or a fake percentage.
+                        isIndeterminate = true;
+                        bytesTransferred = 0;
+                        break;
+                    }
+                    bytesTransferred += bytes;
+                    totalBytes += total;
+                }
+                if (isIndeterminate) totalBytes = 0;
 
                 return new CloudTransferAggregateProgress(
                     activeJobs.Count,
@@ -282,10 +301,23 @@ namespace PersonalCloudLibrarySource
             }
         }
 
+        private void RegisterJobLocked(CloudTransferJob job)
+        {
+            jobsById.Add(job.Id, job);
+            List<CloudTransferJob> attempts;
+            if (!jobsByGame.TryGetValue(job.GameId, out attempts))
+            {
+                attempts = new List<CloudTransferJob>();
+                jobsByGame.Add(job.GameId, attempts);
+            }
+            attempts.Add(job);
+            jobs.Add(job);
+        }
+
         private CloudTransferJob FindJobLocked(Guid jobId)
         {
-            var job = jobs.FirstOrDefault(value => value.Id == jobId);
-            if (job == null)
+            CloudTransferJob job;
+            if (!jobsById.TryGetValue(jobId, out job))
             {
                 throw new KeyNotFoundException("Transfer job was not found: " + jobId);
             }

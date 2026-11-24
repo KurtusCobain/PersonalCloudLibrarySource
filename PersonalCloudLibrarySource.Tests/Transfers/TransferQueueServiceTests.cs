@@ -256,6 +256,24 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void DifferentGamesCannotReserveOverlappingDestinations()
+        {
+            var manager = new CloudTransferManager(1);
+            var executor = new CancellationAwareExecutor(manager);
+            using (var queue = new TransferQueueService(manager, executor))
+            {
+                var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "pcls-overlap-fixture");
+                var first = queue.EnqueueLocal(Guid.NewGuid(), "First", "source", root, "LocalFolder", true);
+                Assert.Throws<TransferRetryRefusedException>(() =>
+                    queue.EnqueueLocal(Guid.NewGuid(), "Second", "other",
+                        System.IO.Path.Combine(root, "child.exe"), "LocalFolder", false));
+                Assert.That(manager.Jobs.Count, Is.EqualTo(1));
+                queue.Cancel(first.Id);
+                Assert.That(queue.GetCompletion(first.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+            }
+        }
+
+        [Test]
         public void Retry_RejectsChangedRemoteAndDisabledDownloads()
         {
             var manager = new CloudTransferManager(1);

@@ -98,6 +98,40 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void AggregateProgress_ProviderTotalsOverflowBecomeIndeterminate()
+        {
+            var manager = new CloudTransferManager(2);
+            var first = manager.Enqueue(Guid.NewGuid(), "First", "source-1", "dest-1", "LocalFolder");
+            var second = manager.Enqueue(Guid.NewGuid(), "Second", "source-2", "dest-2", "LocalFolder");
+            manager.Transition(first.Id, CloudTransferState.Transferring);
+            manager.Transition(second.Id, CloudTransferState.Transferring);
+            manager.UpdateProgress(first.Id, long.MaxValue, long.MaxValue);
+            manager.UpdateProgress(second.Id, 1, 1);
+            var aggregate = manager.GetAggregateProgress();
+            Assert.That(aggregate.IsIndeterminate, Is.True);
+            Assert.That(aggregate.TotalBytes, Is.Zero);
+        }
+
+        [Test]
+        public void IndexedLookup_PreservesHistoryAndRetryIdentity()
+        {
+            var manager = new CloudTransferManager(1);
+            var game = Guid.NewGuid();
+            var first = manager.Enqueue(game, "First", "source", "dest", "LocalFolder");
+            manager.Transition(first.Id, CloudTransferState.Failed);
+            var retry = manager.Retry(first.Id);
+            for (var index = 0; index < 100; index++)
+            {
+                var other = manager.Enqueue(Guid.NewGuid(), "Other", "source", "dest", "LocalFolder");
+                manager.Transition(other.Id, CloudTransferState.Cancelled);
+            }
+            Assert.That(manager.GetJob(first.Id), Is.SameAs(first));
+            Assert.That(manager.GetActiveJobForGame(game), Is.SameAs(retry));
+            Assert.That(manager.GetLatestRetryableJobForGame(game), Is.SameAs(first));
+            Assert.That(manager.Jobs.Count, Is.EqualTo(102));
+        }
+
+        [Test]
         public void AggregateProgress_UnknownActiveTotal_IsIndeterminate()
         {
             var manager = new CloudTransferManager(1);

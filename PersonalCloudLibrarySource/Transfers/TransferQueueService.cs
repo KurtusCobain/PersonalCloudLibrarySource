@@ -298,6 +298,13 @@ namespace PersonalCloudLibrarySource
                         ? "Transfer failed." : request.Job.ErrorSummary,
                     requiresManualRecovery: request.Job.RequiresManualRecovery);
 
+            // Completed/quarantined attempts cannot be retried. Retain
+            // their history and result, but release the configuration object.
+            lock (syncRoot)
+            {
+                if (request.Job.State == CloudTransferState.Completed || request.Job.RequiresManualRecovery)
+                    request.Settings = null;
+            }
             PublishTerminalOnce(request.Job);
             request.Completion.TrySetResult(result);
         }
@@ -361,11 +368,16 @@ namespace PersonalCloudLibrarySource
         {
             foreach (var job in manager.Jobs)
             {
-                if (!job.RequiresManualRecovery) continue;
-                if (job.GameId == gameId || PathBoundary.IsContained(job.Destination, destination) ||
-                    PathBoundary.IsContained(destination, job.Destination))
+                if (job.IsTerminal && !job.RequiresManualRecovery) continue;
+                var overlaps = job.GameId == gameId ||
+                    PathBoundary.IsContained(job.Destination, destination) ||
+                    PathBoundary.IsContained(destination, job.Destination);
+                if (!overlaps) continue;
+                if (job.RequiresManualRecovery)
                     throw new TransferRetryRefusedException(
                         "A prior transfer requires manual recovery. Stop the process and inspect preserved staging before any new attempt.");
+                throw new TransferRetryRefusedException(
+                    "Another transfer already reserves an overlapping cache destination.");
             }
         }
 
