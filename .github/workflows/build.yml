@@ -43,6 +43,18 @@ jobs:
         shell: powershell
         run: .\tools\test-release-validation.ps1
 
+      - name: Audit tracked repository inputs
+        shell: pwsh
+        run: .\tools\audit-repository.ps1 -ReportPath "$env:RUNNER_TEMP\pcls-repository-audit.json"
+
+      - name: Upload repository audit
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pcls-repository-audit-${{ github.run_number }}
+          path: ${{ runner.temp }}/pcls-repository-audit.json
+          if-no-files-found: warn
+
       - name: Restore NuGet packages
         run: nuget restore .\PersonalCloudLibrarySource\PersonalCloudLibrarySource.sln
 

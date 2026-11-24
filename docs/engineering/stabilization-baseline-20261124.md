@@ -150,3 +150,7 @@ Reviewed the eight tracked PowerShell scripts/modules for filesystem/process mut
 ## Release-validator exit status and updated qualification
 
 Verified 67e6ff98 Windows run 45351509513: 842 pass, zero failures/warnings, two opt-in skips, package and archive compatibility passed. Manifest discovery benchmark 54.056 ms for 2,500 packages/7,500 entries. Shared release inspection candidate 20e12dd5: all seven PowerShell test cases reported passing, yet CI step failed because expected missing-Toolbox child process exit status was not reset. Explicitly return exit 0 only after the existing failed-case count check; no failure suppression. Latest Windows qualification remains pending. CH-Rm deferred.
+
+## Repeatable tracked-file audit
+
+Add tools/audit-repository.ps1 and a read-only CI evidence artifact: exact checkout SHA, each tracked file size/hash, PowerShell AST parsing, XML well-formedness with external resolution/DTD prohibited, JSON parsing, distribution YAML subset parsing, and conservative lexical private-member triage across production C#, tests, XAML and scripts. Findings are candidates only, not deletion authority. All other YAML and binary/Markdown files are inventoried, not claimed fully parsed/reviewed. The generated report is written outside the checkout and not packaged or tracked. CI emits candidate names and counts for follow-up review; no user data or provider credentials consulted. CH-Rm deferred.
