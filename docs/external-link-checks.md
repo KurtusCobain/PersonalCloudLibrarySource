@@ -29,3 +29,14 @@ Checked with HTTP `HEAD` requests on 2026-07-14. All listed endpoints returned H
 |---|---|
 | Verified existing GitHub PR/issue on 2026-11-01 | https://github.com/KurtusCobain/PersonalCloudLibrarySource/pull/21 |
 | Verified existing GitHub PR/issue on 2026-11-01 | https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/17 |
+
+## Stabilization roadmap issue verification — 2026-11-24
+
+| Result | URL |
+|---|---|
+| Verified open issue via GitHub API on 2026-11-24 | https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/12 |
+| Verified open issue via GitHub API on 2026-11-24 | https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/13 |
+| Verified open issue via GitHub API on 2026-11-24 | https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/14 |
+| Verified open issue via GitHub API on 2026-11-24 | https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/18 |
+| Verified open issue via GitHub API on 2026-11-24 | https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/19 |
+| Verified open issue via GitHub API on 2026-11-24 | https://github.com/KurtusCobain/PersonalCloudLibrarySource/issues/20 |
