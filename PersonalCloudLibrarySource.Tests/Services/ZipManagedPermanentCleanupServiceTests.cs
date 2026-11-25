@@ -250,9 +250,11 @@ namespace PersonalCloudLibrarySource.Tests.Services
                     Directory.GetFiles(recoveryRoot, "*.purge.json").Single()));
             var target = Path.Combine(quarantine, manifest.Files[0].RelativePath);
             Assert.That(File.Exists(target), Is.False);
-            File.WriteAllText(target, "user replacement");
+            // Identical content is still not proof that this is the file
+            // whose earlier deletion was authorized.
+            File.WriteAllText(target, "game original binary");
             Assert.That(Purge().Succeeded, Is.False);
-            Assert.That(File.ReadAllText(target), Is.EqualTo("user replacement"));
+            Assert.That(File.ReadAllText(target), Is.EqualTo("game original binary"));
         }
 
         [Test]

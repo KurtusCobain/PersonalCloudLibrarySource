@@ -176,15 +176,12 @@ namespace PersonalCloudLibrarySource
                     {
                         TransferPartialPathPolicy.CapturePrivateFileIdentity(input.SafeFileHandle);
                         if (input.Length != expected.Length ||
-                            !string.Equals(Digest(input), expected.Sha256,
+                            !string.Equals(Digest(input, token), expected.Sha256,
                                 StringComparison.Ordinal))
                             return Refuse(result, "Original file content changed; no further deletions.");
-                        if (!File.Exists(marker))
-                        {
-                            if (!WriteCreateOnly(marker, IntentText(
-                                manifest.TransactionId, expected)))
-                                return Refuse(result, "Could not save file deletion intent.");
-                        }
+                        if (!WriteCreateOnly(marker, IntentText(
+                            manifest.TransactionId, expected)))
+                            return Refuse(result, "Could not save file deletion intent.");
                         if (!ValidIntent(marker, manifest.TransactionId, expected))
                             return Refuse(result, "File deletion intent is corrupt.");
                         token.ThrowIfCancellationRequested();
@@ -405,9 +402,14 @@ namespace PersonalCloudLibrarySource
             for (var index = 0; index < manifest.Files.Count; index++)
             {
                 var file = manifest.Files[index];
-                if (found.Contains("F:" + file.RelativePath)) continue;
-                if (!ValidIntent(IntentPath(journalPath, index),
-                    manifest.TransactionId, file))
+                var marker = IntentPath(journalPath, index);
+                if (found.Contains("F:" + file.RelativePath))
+                {
+                    if (CacheOwnershipReceiptStore.ExistsOrCannotVerifyAbsence(marker))
+                        return false;
+                    continue;
+                }
+                if (!ValidIntent(marker, manifest.TransactionId, file))
                     return false;
             }
             // Missing original directories are possible after an interrupted
@@ -498,10 +500,27 @@ namespace PersonalCloudLibrarySource
                 (x >= 'A' && x <= 'F'));
         }
 
-        private static string Digest(Stream stream)
+        private static string Digest(Stream stream, CancellationToken token)
         {
             using (var sha = SHA256.Create())
-                return BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", "");
+            {
+                var buffer = new byte[65536];
+                long remaining = stream.Length;
+                if (remaining < 0 || remaining > CacheTreeInventoryScanner.MaximumFileBytes)
+                    throw new IOException("Cleanup digest exceeds the inventory size limit.");
+                while (remaining > 0)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var count = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                    if (count == 0) throw new IOException("Cleanup digest input was truncated.");
+                    sha.TransformBlock(buffer, 0, count, buffer, 0);
+                    remaining -= count;
+                }
+                token.ThrowIfCancellationRequested();
+                if (stream.ReadByte() != -1) throw new IOException("Cleanup digest input grew.");
+                sha.TransformFinalBlock(new byte[0], 0, 0);
+                return BitConverter.ToString(sha.Hash).Replace("-", "");
+            }
         }
 
         private static string Serialize(ZipCleanupManifest manifest)
