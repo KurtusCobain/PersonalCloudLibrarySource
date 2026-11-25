@@ -263,6 +263,25 @@ namespace PersonalCloudLibrarySource.Tests.Services
                 CancellationToken.None, missing).InventoryVerified, Is.False);
         }
 
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW",
+            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CreateHardLinkNative(string link, string existing, IntPtr reserved);
+
+        [Test]
+        public void HardlinkedBaselineCannotAuthorizeAddedSaveException()
+        {
+            var path = Directory.GetFiles(Path.Combine(root, "baselines"), "*.json")[0];
+            var alias = Path.Combine(root, "baseline-alias.json");
+            Assert.That(CreateHardLinkNative(alias, path, IntPtr.Zero), Is.True);
+            var save = Path.Combine(extraction.Destination, "personal.sav");
+            File.WriteAllText(save, "preserve");
+            int count;
+            Assert.That(Verified(out count), Is.False);
+            Assert.That(File.ReadAllText(save), Is.EqualTo("preserve"));
+            Assert.That(File.ReadAllBytes(alias), Is.EqualTo(File.ReadAllBytes(path)));
+        }
+
         [Test]
         public void CorruptBaselineCannotAuthorizeMutableData()
         {

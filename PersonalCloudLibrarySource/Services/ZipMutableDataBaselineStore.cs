@@ -81,25 +81,9 @@ namespace PersonalCloudLibrarySource
                 }.Serialize(document);
                 if (Encoding.UTF8.GetByteCount(data) > MaxBaselineBytes)
                     return false;
-                Directory.CreateDirectory(storeRoot);
                 var path = RecordPath(cacheRoot, gameId);
-                if (File.Exists(path)) return false;
-                var temporary = Path.Combine(storeRoot,
-                    Guid.NewGuid().ToString("N") + ".tmp");
-                try
-                {
-                    using (var stream = new FileStream(temporary, FileMode.CreateNew,
-                        FileAccess.Write, FileShare.None))
-                    using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
-                        writer.Write(data);
-                    if (File.Exists(path)) return false;
-                    File.Move(temporary, path);
-                    return true;
-                }
-                finally
-                {
-                    if (File.Exists(temporary)) File.Delete(temporary);
-                }
+                TransferPartialPathPolicy.WritePrivateRecord(path, data, MaxBaselineBytes, CancellationToken.None);
+                return true;
             }
             catch (Exception ex) when (ex is IOException ||
                 ex is UnauthorizedAccessException || ex is InvalidOperationException ||
@@ -137,17 +121,12 @@ namespace PersonalCloudLibrarySource
                     (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
                     return false;
                 ZipMutableDataBaseline saved;
-                using (var input = new FileStream(path, FileMode.Open,
-                    FileAccess.Read, FileShare.Read))
-                {
-                    if (input.Length <= 0 || input.Length > MaxBaselineBytes)
-                        return false;
-                    using (var reader = new StreamReader(input, Encoding.UTF8))
-                        saved = new JavaScriptSerializer
-                        {
-                            MaxJsonLength = MaxBaselineBytes
-                        }.Deserialize<ZipMutableDataBaseline>(reader.ReadToEnd());
-                }
+                using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
+                    saved = new JavaScriptSerializer
+                    {
+                        MaxJsonLength = MaxBaselineBytes
+                    }.Deserialize<ZipMutableDataBaseline>(
+                        TransferPartialPathPolicy.ReadPrivateRecord(input, MaxBaselineBytes));
                 if (saved == null || saved.Version != 1 ||
                     !string.Equals(saved.GameId, gameId, StringComparison.Ordinal) ||
                     !string.Equals(PathBoundary.Normalize(saved.CacheRoot),

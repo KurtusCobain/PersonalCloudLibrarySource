@@ -308,6 +308,73 @@ namespace PersonalCloudLibrarySource
             RequireVacant(staging);
         }
 
+        // Bounded, ordinary, single-link private metadata records. The caller
+        // may keep the same inspected stream open for an authorized revocation.
+        internal static string ReadPrivateRecord(FileStream stream, int maxBytes)
+        {
+            CapturePrivateFileIdentity(stream.SafeFileHandle);
+            var length = stream.Length;
+            if (length <= 0 || length > maxBytes)
+                throw new IOException("Private record exceeds its readable size limit.");
+            var bytes = new byte[(int)length];
+            var offset = 0;
+            while (offset < bytes.Length)
+            {
+                var count = stream.Read(bytes, offset, bytes.Length - offset);
+                if (count == 0) throw new IOException("Private record was truncated.");
+                offset += count;
+            }
+            if (stream.ReadByte() != -1)
+                throw new IOException("Private record changed during inspection.");
+            var text = new System.Text.UTF8Encoding(false, true).GetString(bytes);
+            return text.Length > 0 && text[0] == '\uFEFF' ? text.Substring(1) : text;
+        }
+
+        internal static void WritePrivateRecord(string path, string text, int maxBytes,
+            System.Threading.CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            var payload = new System.Text.UTF8Encoding(false, true).GetBytes(text);
+            if (payload.Length == 0 || payload.Length > maxBytes)
+                throw new IOException("Private record exceeds its readable size limit.");
+            RequireVacant(path);
+            var parent = Path.GetDirectoryName(Path.GetFullPath(path));
+            Directory.CreateDirectory(parent);
+            RequireSafePath(parent);
+            var temporary = Path.Combine(parent, Guid.NewGuid().ToString("N") + ".tmp");
+            RequireVacant(temporary);
+            FileIdentity identity;
+            using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+            {
+                identity = CapturePrivateFileIdentity(output.SafeFileHandle);
+                output.Write(payload, 0, payload.Length);
+                output.Flush(true);
+            }
+            token.ThrowIfCancellationRequested();
+            using (var input = OpenPrivateFileForReview(temporary, true))
+            {
+                if (!MatchesPrivateFileIdentity(input.SafeFileHandle, identity) || input.Length != payload.Length)
+                    throw new IOException("Private record staging identity or length changed.");
+                var buffer = new byte[Math.Min(65536, payload.Length)];
+                var offset = 0;
+                while (offset < payload.Length)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var count = input.Read(buffer, 0, Math.Min(buffer.Length, payload.Length - offset));
+                    if (count == 0) throw new IOException("Private record staging was truncated.");
+                    for (var i = 0; i < count; i++)
+                        if (buffer[i] != payload[offset + i])
+                            throw new IOException("Private record staging contents changed.");
+                    offset += count;
+                }
+                if (input.ReadByte() != -1) throw new IOException("Private record staging grew.");
+                token.ThrowIfCancellationRequested();
+                PublishVerifiedHandle(input.SafeFileHandle, temporary, path);
+            }
+            // On uncertainty leave the temporary evidence, never delete by path.
+            RequireVacant(temporary);
+        }
+
         public static string Create(string destinationPath, Guid jobId)
         {
             if (string.IsNullOrWhiteSpace(destinationPath))
