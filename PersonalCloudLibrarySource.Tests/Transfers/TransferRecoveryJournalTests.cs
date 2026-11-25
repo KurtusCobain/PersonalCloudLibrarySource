@@ -201,6 +201,25 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void Inspect_DistinguishesCurrentJournalUnknownAndReplacedMarkers()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var job = Job("file.zip");
+            journal.Begin(job);
+            Assert.That(journal.Inspect().Records[0].Origin, Is.EqualTo(TransferRecoveryOrigin.CurrentJournal));
+            Assert.That(new TransferRecoveryJournal(records).Inspect().Records[0].Origin,
+                Is.EqualTo(TransferRecoveryOrigin.Unknown));
+            var marker = Path.Combine(records, job.Id.ToString("N") + ".pending");
+            var original = Path.Combine(root, "original.pending");
+            File.Move(marker, original);
+            File.Copy(original, marker);
+            var snapshot = journal.Inspect();
+            Assert.That(snapshot.IsComplete, Is.False);
+            Assert.That(snapshot.Records[0].Origin, Is.EqualTo(TransferRecoveryOrigin.Replaced));
+            Assert.That(File.ReadAllBytes(marker), Is.EqualTo(File.ReadAllBytes(original)));
+        }
+
+        [Test]
         public void SamePayloadReplacementCannotReleaseReservation()
         {
             var journal = new TransferRecoveryJournal(records);

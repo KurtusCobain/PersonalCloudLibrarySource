@@ -17,10 +17,20 @@ namespace PersonalCloudLibrarySource
         Directory = 3
     }
 
+    // Observations are not proof that a transfer has stopped. In particular,
+    // an unknown origin may be a live reservation owned by another instance.
+    public enum TransferRecoveryOrigin
+    {
+        Unknown = 0,
+        CurrentJournal = 1,
+        Replaced = 2
+    }
+
     public sealed class TransferRecoveryRecord
     {
         internal TransferRecoveryRecord(Guid gameId, Guid jobId, string destination, string stagingPath,
-            TransferRecoveryPathState destinationState, TransferRecoveryPathState stagingState)
+            TransferRecoveryPathState destinationState, TransferRecoveryPathState stagingState,
+            TransferRecoveryOrigin origin)
         {
             GameId = gameId;
             JobId = jobId;
@@ -28,6 +38,7 @@ namespace PersonalCloudLibrarySource
             StagingPath = stagingPath;
             DestinationState = destinationState;
             StagingState = stagingState;
+            Origin = origin;
         }
         public Guid GameId { get; }
         public Guid JobId { get; }
@@ -35,6 +46,7 @@ namespace PersonalCloudLibrarySource
         public string StagingPath { get; }
         public TransferRecoveryPathState DestinationState { get; }
         public TransferRecoveryPathState StagingState { get; }
+        public TransferRecoveryOrigin Origin { get; }
     }
 
     public sealed class TransferRecoverySnapshot
@@ -111,7 +123,19 @@ namespace PersonalCloudLibrarySource
                         if (++count > MaxRecords) { complete = false; break; }
                         try
                         {
-                            var record = Read(marker);
+                            TransferPartialPathPolicy.FileIdentity observedIdentity;
+                            Tuple<Guid, string, Guid> record;
+                            using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(marker, false))
+                            {
+                                observedIdentity = TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
+                                record = ReadRecord(marker, stream);
+                            }
+                            TransferPartialPathPolicy.FileIdentity expected;
+                            var origin = !ownedMarkers.TryGetValue(record.Item3, out expected)
+                                ? TransferRecoveryOrigin.Unknown
+                                : TransferPartialPathPolicy.SameIdentity(expected, observedIdentity)
+                                    ? TransferRecoveryOrigin.CurrentJournal : TransferRecoveryOrigin.Replaced;
+                            if (origin == TransferRecoveryOrigin.Replaced) complete = false;
                             var staging = TransferPartialPathPolicy.Create(record.Item2, record.Item3);
                             var destinationState = InspectPath(record.Item2);
                             var stagingState = InspectPath(staging);
@@ -119,7 +143,7 @@ namespace PersonalCloudLibrarySource
                                 stagingState == TransferRecoveryPathState.Unverified)
                                 complete = false;
                             records.Add(new TransferRecoveryRecord(record.Item1, record.Item3, record.Item2, staging,
-                                destinationState, stagingState));
+                                destinationState, stagingState, origin));
                         }
                         catch (Exception ex) when (IsInspectionFailure(ex)) { unreadable++; }
                     }
