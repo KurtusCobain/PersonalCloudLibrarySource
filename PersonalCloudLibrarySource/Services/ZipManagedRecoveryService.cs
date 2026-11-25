@@ -62,9 +62,10 @@ namespace PersonalCloudLibrarySource
                 string root, original, recovery, journal;
                 if (!TryLocations(cacheRoot, gameId, out root, out original,
                     out recovery, out journal)) return false;
-                return File.Exists(journal) || Directory.Exists(journal);
+                TransferPartialPathPolicy.RequireSafePath(journal);
+                return CacheOwnershipReceiptStore.ExistsOrCannotVerifyAbsence(journal);
             }
-            catch (Exception) { return false; }
+            catch (Exception) { return true; }
         }
 
         public ZipRecoveryAssessment Inspect(string cacheRoot, string gameId)
@@ -81,8 +82,9 @@ namespace PersonalCloudLibrarySource
                     out recovery, out journal)) return result;
                 result.OriginalDirectory = original;
                 result.RecoveryDirectory = recovery;
-                var recordExists = File.Exists(journal) || Directory.Exists(journal);
-                var recoveryExists = File.Exists(recovery) || Directory.Exists(recovery);
+                TransferPartialPathPolicy.RequireSafePath(journal);
+                var recordExists = CacheOwnershipReceiptStore.ExistsOrCannotVerifyAbsence(journal);
+                var recoveryExists = CacheOwnershipReceiptStore.ExistsOrCannotVerifyAbsence(recovery);
                 if (!recordExists)
                 {
                     result.State = recoveryExists
@@ -266,11 +268,7 @@ namespace PersonalCloudLibrarySource
                     out recovery, out journal)) return false;
                 ZipRecoveryJournalEntry entry;
                 if (!TryReadJournal(cacheRoot, gameId, out entry) ||
-                    File.Exists(journal + ".purge.json") ||
-                    Directory.Exists(journal + ".purge.json") ||
-                    File.Exists(journal + ".purged") ||
-                    File.Exists(journal + ".restored") ||
-                    Directory.Exists(journal + ".restored") ||
+                    HasFinalizationFootprint(journal) ||
                     !Directory.Exists(original) || File.Exists(recovery) ||
                     Directory.Exists(recovery) ||
                     approvals.HasApprovalFootprint(gameId, cacheRoot))
@@ -322,8 +320,7 @@ namespace PersonalCloudLibrarySource
                     out recovery, out journal)) return false;
                 ZipRecoveryJournalEntry entry;
                 if (!TryReadJournal(cacheRoot, gameId, out entry) ||
-                    File.Exists(journal + ".restored") ||
-                    Directory.Exists(journal + ".restored") ||
+                    HasFinalizationFootprint(journal) ||
                     File.Exists(original) || Directory.Exists(original) ||
                     !Directory.Exists(recovery) ||
                     approvals.HasApprovalFootprint(gameId, cacheRoot))
@@ -392,14 +389,21 @@ namespace PersonalCloudLibrarySource
                     SafeCacheDeletionExecutor.GetUnsafeDescendantReason(directory));
         }
 
+        private static bool HasFinalizationFootprint(string journal)
+        {
+            foreach (var suffix in new[] { ".purge.json", ".purged", ".restored" })
+            {
+                var path = journal + suffix;
+                TransferPartialPathPolicy.RequireSafePath(path);
+                if (CacheOwnershipReceiptStore.ExistsOrCannotVerifyAbsence(path)) return true;
+            }
+            return false;
+        }
+
         private bool TryReadRestoredMarker(string path, string transactionId)
         {
-            if (!File.Exists(path) ||
-                (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
-                return false;
-            var info = new FileInfo(path);
-            return info.Length > 0 && info.Length <= 64 &&
-                string.Equals(File.ReadAllText(path, Encoding.ASCII),
+            using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
+                return string.Equals(TransferPartialPathPolicy.ReadPrivateRecord(input, 64),
                     transactionId, StringComparison.Ordinal);
         }
 
@@ -407,25 +411,8 @@ namespace PersonalCloudLibrarySource
         {
             try
             {
-                if (File.Exists(path) || Directory.Exists(path))
-                    return false;
-                var temp = Path.Combine(storeRoot,
-                    Guid.NewGuid().ToString("N") + ".tmp");
-                try
-                {
-                    using (var output = new FileStream(temp,
-                        FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                    using (var writer = new StreamWriter(output, Encoding.ASCII))
-                        writer.Write(transactionId);
-                    if (File.Exists(path) || Directory.Exists(path))
-                        return false;
-                    File.Move(temp, path);
-                    return true;
-                }
-                finally
-                {
-                    if (File.Exists(temp)) File.Delete(temp);
-                }
+                TransferPartialPathPolicy.WritePrivateRecord(path, transactionId, 64, CancellationToken.None);
+                return true;
             }
             catch (Exception ex) when (ex is IOException ||
                 ex is UnauthorizedAccessException || ex is ArgumentException ||
@@ -437,31 +424,12 @@ namespace PersonalCloudLibrarySource
 
         private bool TryCreateJournal(string journal, ZipRecoveryJournalEntry entry)
         {
-            if (File.Exists(journal) || Directory.Exists(journal)) return false;
             var serialized = new JavaScriptSerializer
             {
                 MaxJsonLength = MaxJournalBytes
             }.Serialize(entry);
-            if (Encoding.UTF8.GetByteCount(serialized) > MaxJournalBytes)
-                return false;
-            Directory.CreateDirectory(storeRoot);
-            var temp = Path.Combine(storeRoot,
-                Guid.NewGuid().ToString("N") + ".tmp");
-            try
-            {
-                using (var output = new FileStream(temp, FileMode.CreateNew,
-                    FileAccess.Write, FileShare.None))
-                using (var writer = new StreamWriter(output, new UTF8Encoding(false)))
-                    writer.Write(serialized);
-                if (File.Exists(journal) || Directory.Exists(journal))
-                    return false;
-                File.Move(temp, journal);
-                return true;
-            }
-            finally
-            {
-                if (File.Exists(temp)) File.Delete(temp);
-            }
+            TransferPartialPathPolicy.WritePrivateRecord(journal, serialized, MaxJournalBytes, CancellationToken.None);
+            return true;
         }
 
         private bool TryReadJournal(string cacheRoot, string gameId,
@@ -474,17 +442,12 @@ namespace PersonalCloudLibrarySource
                 !File.Exists(journal) ||
                 (File.GetAttributes(journal) & FileAttributes.ReparsePoint) != 0)
                 return false;
-            using (var stream = new FileStream(journal,
-                FileMode.Open, FileAccess.Read, FileShare.Read))
-            {
-                if (stream.Length <= 0 || stream.Length > MaxJournalBytes)
-                    return false;
-                using (var reader = new StreamReader(stream, Encoding.UTF8))
-                    entry = new JavaScriptSerializer
-                    {
-                        MaxJsonLength = MaxJournalBytes
-                    }.Deserialize<ZipRecoveryJournalEntry>(reader.ReadToEnd());
-            }
+            using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(journal, false))
+                entry = new JavaScriptSerializer
+                {
+                    MaxJsonLength = MaxJournalBytes
+                }.Deserialize<ZipRecoveryJournalEntry>(
+                    TransferPartialPathPolicy.ReadPrivateRecord(stream, MaxJournalBytes));
             return entry != null && entry.Version == 1 &&
                 string.Equals(entry.GameId, gameId, StringComparison.Ordinal) &&
                 string.Equals(entry.CacheRoot, root, StringComparison.OrdinalIgnoreCase) &&

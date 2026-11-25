@@ -101,6 +101,42 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(record.Destination, Is.EqualTo(plan.Destination));
         }
 
+        [TestCase(".purge.json", false)]
+        [TestCase(".purged", false)]
+        [TestCase(".purged", true)]
+        public void FinalizationFootprintBlocksRestoreWithoutMovingContent(string suffix, bool directory)
+        {
+            Assert.That(Quarantine(), Is.True);
+            var quarantined = RecoveryDirectory();
+            var journal = Directory.GetFiles(Path.Combine(root, "journals"), "*.json").Single();
+            var footprint = journal + suffix;
+            if (directory) Directory.CreateDirectory(footprint);
+            else File.WriteAllText(footprint, "unverified cleanup evidence");
+            Assert.That(Restore(), Is.False);
+            Assert.That(Directory.Exists(plan.Destination), Is.False);
+            Assert.That(File.ReadAllText(Path.Combine(quarantined, "Game.exe")), Is.EqualTo("original game"));
+        }
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW",
+            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CreateHardLinkNative(string link, string existing, IntPtr reserved);
+
+        [Test]
+        public void HardlinkedRecoveryJournalRefusesRestoreAndRetainsEvidence()
+        {
+            Assert.That(Quarantine(), Is.True);
+            var quarantined = RecoveryDirectory();
+            var journal = Directory.GetFiles(Path.Combine(root, "journals"), "*.json").Single();
+            var alias = Path.Combine(root, "journal-alias.json");
+            Assert.That(CreateHardLinkNative(alias, journal, IntPtr.Zero), Is.True);
+            Assert.That(recovery.HasJournalFootprint(cache, gameId), Is.True);
+            Assert.That(recovery.Inspect(cache, gameId).State, Is.EqualTo(ZipRecoveryState.Ambiguous));
+            Assert.That(Restore(), Is.False);
+            Assert.That(File.Exists(Path.Combine(quarantined, "Game.exe")), Is.True);
+            Assert.That(File.ReadAllBytes(alias), Is.EqualTo(File.ReadAllBytes(journal)));
+        }
+
         [Test]
         public void RestoreReturnsSameFolderWithoutRemovingOriginalReceiptOrJournal()
         {
