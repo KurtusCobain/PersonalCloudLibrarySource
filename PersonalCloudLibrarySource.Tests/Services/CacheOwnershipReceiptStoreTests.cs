@@ -64,12 +64,41 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(receipt.Destination, Is.EqualTo(PathBoundary.Normalize(game)));
         }
 
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW",
+            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CreateHardLinkNative(string link, string existing, IntPtr reserved);
+
+        [Test]
+        public void HardlinkedReceiptIsNotTrustedButRetainsFootprint()
+        {
+            var store = new CacheOwnershipReceiptStore(receipts);
+            store.RecordCompleted(cache, "game-id", game);
+            var path = Directory.GetFiles(receipts, "*.json")[0];
+            var alias = Path.Combine(root, "receipt-alias.json");
+            Assert.That(CreateHardLinkNative(alias, path, IntPtr.Zero), Is.True);
+            CacheOwnershipReceipt receipt;
+            Assert.That(store.TryRead(cache, "game-id", out receipt), Is.False);
+            Assert.That(store.HasReceiptFootprint(cache, "game-id"), Is.True);
+            Assert.That(File.ReadAllBytes(path), Is.EqualTo(File.ReadAllBytes(alias)));
+        }
+
+        [Test]
+        public void OversizedReceiptIsRefusedBeforeCreatingStore()
+        {
+            var store = new CacheOwnershipReceiptStore(receipts);
+            Assert.Throws<IOException>(() => store.RecordCompleted(cache, new string('x', 5000), game));
+            Assert.That(Directory.Exists(receipts), Is.False);
+            Assert.That(Directory.Exists(game), Is.True);
+        }
+
         [Test]
         public void RecordingSameItemAgainRefusesOverwrite()
         {
             var store = new CacheOwnershipReceiptStore(receipts);
             store.RecordCompleted(cache, "game-id", game);
             Assert.Throws<IOException>(() => store.RecordCompleted(cache, "game-id", game));
+            Assert.That(Directory.GetFiles(receipts, "*.tmp"), Is.Empty);
         }
 
         [Test]

@@ -91,10 +91,11 @@ namespace PersonalCloudLibrarySource
                 var path = ReceiptFile(cacheRoot, itemId);
                 TransferPartialPathPolicy.RequireSafePath(path);
                 if (!File.Exists(path)) return false;
-                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+                using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
                 {
+                    TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
                     if (stream.Length > 4096) return false;
-                    using (var reader = new StreamReader(stream, Encoding.UTF8))
+                    using (var reader = new StreamReader(stream, new UTF8Encoding(false, true)))
                     {
                         var buffer = new char[4097];
                         var count = reader.ReadBlock(buffer, 0, buffer.Length);
@@ -241,24 +242,40 @@ namespace PersonalCloudLibrarySource
                 InventoryDirectoryCount = inventory?.DirectoryCount ?? 0
             };
             var path = ReceiptFile(cacheRoot, itemId);
+            var payload = new UTF8Encoding(false, true).GetBytes(new JavaScriptSerializer().Serialize(receipt));
+            if (payload.Length > 4096)
+                throw new IOException("Ownership receipt exceeds its readable size limit.");
+            TransferPartialPathPolicy.RequireSafePath(destination);
+            TransferPartialPathPolicy.RequireSafePath(storeRoot);
+            TransferPartialPathPolicy.RequireVacant(path);
             Directory.CreateDirectory(storeRoot);
-            // CreateNew refuses to overwrite a prior ownership claim. A unique
-            // staging name and rename avoid exposing truncated receipt contents.
+            // CreateNew plus a durable bounded payload and no-replace handle
+            // rename. If any stage is uncertain, preserve the temporary file
+            // as evidence instead of deleting a pathname we no longer own.
             var temporary = Path.Combine(storeRoot, Guid.NewGuid().ToString("N") + ".tmp");
-            try
+            TransferPartialPathPolicy.RequireVacant(temporary);
+            TransferPartialPathPolicy.FileIdentity identity;
+            using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
             {
-                using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
-                    writer.Write(new JavaScriptSerializer().Serialize(receipt));
+                identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
+                stream.Write(payload, 0, payload.Length);
+                stream.Flush(true);
+            }
+            cancellationToken.ThrowIfCancellationRequested();
+            using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(temporary, true))
+            {
+                if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(stream.SafeFileHandle, identity) ||
+                    stream.Length != payload.Length)
+                    throw new IOException("Ownership receipt staging identity or length changed.");
+                for (var i = 0; i < payload.Length; i++)
+                    if (stream.ReadByte() != payload[i])
+                        throw new IOException("Ownership receipt staging contents changed.");
+                if (stream.ReadByte() != -1)
+                    throw new IOException("Ownership receipt staging contents changed.");
                 cancellationToken.ThrowIfCancellationRequested();
-                if (File.Exists(path))
-                    throw new IOException("An ownership receipt already exists for this item.");
-                File.Move(temporary, path);
+                TransferPartialPathPolicy.PublishVerifiedHandle(stream.SafeFileHandle, temporary, path);
             }
-            finally
-            {
-                if (File.Exists(temporary)) File.Delete(temporary);
-            }
+            TransferPartialPathPolicy.RequireVacant(temporary);
         }
     }
 }
