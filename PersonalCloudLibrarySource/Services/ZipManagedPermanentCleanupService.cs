@@ -167,13 +167,14 @@ namespace PersonalCloudLibrarySource
                     if (!SafeFile(cacheRoot, path))
                         return Refuse(result, "Original file is linked or unsafe.");
 
-                    // Keep a read-only, write-denying handle until deletion.
-                    // FileShare.Delete lets Windows mark the verified file for
-                    // deletion; sharing failures stop rather than weakening
-                    // the integrity check. Never delete based only on name.
-                    using (var input = new FileStream(path, FileMode.Open,
-                        FileAccess.Read, FileShare.Read | FileShare.Delete))
+                    // A present file with a pre-existing intent may be a
+                    // replacement or a crash before disposition. Do not replay
+                    // that uncertain operation against a present pathname.
+                    if (CacheOwnershipReceiptStore.ExistsOrCannotVerifyAbsence(marker))
+                        return Refuse(result, "A present file has a prior deletion intent; preserve it for manual review.");
+                    using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, true))
                     {
+                        TransferPartialPathPolicy.CapturePrivateFileIdentity(input.SafeFileHandle);
                         if (input.Length != expected.Length ||
                             !string.Equals(Digest(input), expected.Sha256,
                                 StringComparison.Ordinal))
@@ -189,8 +190,10 @@ namespace PersonalCloudLibrarySource
                         token.ThrowIfCancellationRequested();
                         if (!SafeFile(cacheRoot, path))
                             return Refuse(result, "File path became unsafe.");
-                        File.Delete(path);
+                        TransferPartialPathPolicy.CapturePrivateFileIdentity(input.SafeFileHandle);
+                        TransferPartialPathPolicy.DeleteVerifiedFileHandle(input.SafeFileHandle);
                     }
+                    TransferPartialPathPolicy.RequireVacant(path);
                     result.RemovedFiles++;
                     onFileRemoved?.Invoke(result.RemovedFiles);
                 }
@@ -209,10 +212,12 @@ namespace PersonalCloudLibrarySource
                             .Authorize(cacheRoot, directory, false).Allowed)
                         return Refuse(result, "Unsafe directory during cleanup.");
                     if (Directory.Exists(directory))
-                        Directory.Delete(directory, false); // empty ONLY
+                        TransferPartialPathPolicy.DeleteOwnedEmptyDirectory(directory,
+                            TransferPartialPathPolicy.ObserveDirectoryIdentity(directory)); // empty ONLY
                 }
                 if (Directory.Exists(destination))
-                    Directory.Delete(destination, false); // empty ONLY
+                    TransferPartialPathPolicy.DeleteOwnedEmptyDirectory(destination,
+                        TransferPartialPathPolicy.ObserveDirectoryIdentity(destination)); // empty ONLY
                 if (Directory.Exists(destination) || File.Exists(destination))
                     return Refuse(result, "Cleanup folder still contains files; preserve it.");
                 var finalMarker = manifestPath.Substring(0,
@@ -258,7 +263,7 @@ namespace PersonalCloudLibrarySource
                     PathBoundary.Normalize(state.OriginalDirectory),
                     StringComparison.OrdinalIgnoreCase))
                 return false;
-            var current = new CacheTreeInventoryScanner().Scan(cacheRoot,
+            var current = new CacheTreeInventoryScanner().ScanDetailed(cacheRoot,
                 state.RecoveryDirectory, token);
             if (current.FileCount != receipt.InventoryFileCount ||
                 current.DirectoryCount != receipt.InventoryDirectoryCount ||
@@ -269,36 +274,23 @@ namespace PersonalCloudLibrarySource
 
             var files = new List<ZipCleanupFile>();
             var dirs = new List<string>();
-            foreach (var entry in current.EntryPaths)
+            // Use the exact entries whose digest was compared to the receipt.
+            // A separate per-file scan could adopt a transient replacement
+            // even if a later whole-tree scan matched the original again.
+            foreach (var entry in current.DetailedEntries)
             {
                 token.ThrowIfCancellationRequested();
-                var relative = entry.Substring(2);
-                var path = Located(state.RecoveryDirectory, relative);
-                if (string.IsNullOrEmpty(path)) return false;
-                if (entry.StartsWith("D:", StringComparison.Ordinal))
-                    dirs.Add(relative);
+                if (Located(state.RecoveryDirectory, entry.RelativePath) == null) return false;
+                if (entry.IsDirectory)
+                    dirs.Add(entry.RelativePath);
                 else
-                {
-                    if (!SafeFile(cacheRoot, path)) return false;
-                    using (var input = new FileStream(path, FileMode.Open,
-                        FileAccess.Read, FileShare.Read))
-                        files.Add(new ZipCleanupFile
-                        {
-                            RelativePath = relative,
-                            Length = input.Length,
-                            Sha256 = Digest(input)
-                        });
-                }
+                    files.Add(new ZipCleanupFile
+                    {
+                        RelativePath = entry.RelativePath,
+                        Length = entry.FileBytes,
+                        Sha256 = entry.Sha256
+                    });
             }
-            // A second whole-tree check prevents silent adoption of files
-            // arriving during manifest construction.
-            var again = new CacheTreeInventoryScanner().Scan(cacheRoot,
-                state.RecoveryDirectory, token);
-            if (again.FileCount != current.FileCount ||
-                again.DirectoryCount != current.DirectoryCount ||
-                !string.Equals(again.Fingerprint, current.Fingerprint,
-                    StringComparison.Ordinal))
-                return false;
             manifest = new ZipCleanupManifest
             {
                 Version = 1, GameId = gameId,
@@ -320,16 +312,12 @@ namespace PersonalCloudLibrarySource
             if (!File.Exists(file) ||
                 (File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)
                 return false;
-            using (var input = new FileStream(file, FileMode.Open,
-                FileAccess.Read, FileShare.Read))
-            {
-                if (input.Length <= 0 || input.Length > MaxManifestBytes) return false;
-                using (var reader = new StreamReader(input, Encoding.UTF8))
-                    manifest = new JavaScriptSerializer
-                    {
-                        MaxJsonLength = MaxManifestBytes
-                    }.Deserialize<ZipCleanupManifest>(reader.ReadToEnd());
-            }
+            using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(file, false))
+                manifest = new JavaScriptSerializer
+                {
+                    MaxJsonLength = MaxManifestBytes
+                }.Deserialize<ZipCleanupManifest>(
+                    TransferPartialPathPolicy.ReadPrivateRecord(input, MaxManifestBytes));
             if (manifest == null || manifest.Version != 1 ||
                 manifest.Files == null || manifest.Directories == null ||
                 manifest.Files.Count > MaxFiles ||
@@ -358,14 +346,28 @@ namespace PersonalCloudLibrarySource
                 if (entry == null || entry.Length < 0 ||
                     !ValidHash(entry.Sha256) ||
                     Located(state.RecoveryDirectory, entry.RelativePath) == null ||
-                    !unique.Add("F:" + entry.RelativePath))
+                    !unique.Add(entry.RelativePath))
                     return false;
             }
             foreach (var dir in manifest.Directories)
                 if (Located(state.RecoveryDirectory, dir) == null ||
-                    !unique.Add("D:" + dir))
+                    !unique.Add(dir))
                     return false;
-            return true;
+
+            // A copied fingerprint field is not evidence that this manifest's
+            // paths, byte counts and hashes match the original inventory.
+            // Preserve canonical order because deletion-intent indexes depend on it.
+            if (!manifest.Files.Select(x => x.RelativePath).SequenceEqual(
+                    manifest.Files.Select(x => x.RelativePath).OrderBy(x => x, StringComparer.Ordinal)) ||
+                !manifest.Directories.SequenceEqual(manifest.Directories.OrderBy(x => x, StringComparer.Ordinal)))
+                return false;
+            var records = manifest.Files.Select(x => "F:" + x.RelativePath + ":" + x.Length + ":" + x.Sha256)
+                .Concat(manifest.Directories.Select(x => "D:" + x))
+                .OrderBy(x => x, StringComparer.Ordinal);
+            using (var sha = SHA256.Create())
+                return string.Equals(BitConverter.ToString(sha.ComputeHash(
+                    Encoding.UTF8.GetBytes(string.Join("\n", records)))).Replace("-", ""),
+                    receipt.InventoryFingerprint, StringComparison.Ordinal);
         }
 
         private static bool CheckCurrentTree(ZipCleanupManifest manifest,
@@ -481,12 +483,9 @@ namespace PersonalCloudLibrarySource
         {
             try
             {
-                if (!File.Exists(path) ||
-                    (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0 ||
-                    new FileInfo(path).Length > 1200)
-                    return false;
-                return string.Equals(File.ReadAllText(path, Encoding.UTF8),
-                    IntentText(id, file), StringComparison.Ordinal);
+                using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
+                    return string.Equals(TransferPartialPathPolicy.ReadPrivateRecord(input, 1200),
+                        IntentText(id, file), StringComparison.Ordinal);
             }
             catch (Exception) { return false; }
         }
@@ -515,27 +514,10 @@ namespace PersonalCloudLibrarySource
 
         private static bool WriteCreateOnly(string path, string value)
         {
-            if (File.Exists(path) || Directory.Exists(path))
-                return false;
-            var parent = Path.GetDirectoryName(path);
-            Directory.CreateDirectory(parent);
-            var temp = Path.Combine(parent,
-                Guid.NewGuid().ToString("N") + ".tmp");
-            try
-            {
-                using (var output = new FileStream(temp,
-                    FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                using (var writer = new StreamWriter(output, new UTF8Encoding(false)))
-                    writer.Write(value);
-                if (File.Exists(path) || Directory.Exists(path))
-                    return false;
-                File.Move(temp, path);
-                return true;
-            }
-            finally
-            {
-                if (File.Exists(temp)) File.Delete(temp);
-            }
+            var limit = path.EndsWith(".purge.json", StringComparison.Ordinal) ? MaxManifestBytes :
+                path.EndsWith(".purged", StringComparison.Ordinal) ? 64 : 1200;
+            TransferPartialPathPolicy.WritePrivateRecord(path, value, limit, CancellationToken.None);
+            return true;
         }
     }
 }

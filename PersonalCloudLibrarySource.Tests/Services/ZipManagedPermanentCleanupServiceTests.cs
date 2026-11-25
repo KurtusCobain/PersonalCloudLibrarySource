@@ -221,6 +221,41 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void ForgedManifestDigestCannotAdoptModifiedRemainingFile()
+        {
+            using (var cancel = new CancellationTokenSource())
+                Assert.That(Purge(true, cancel.Token, count => cancel.Cancel()).Succeeded, Is.False);
+            var path = Directory.GetFiles(recoveryRoot, "*.purge.json").Single();
+            var serializer = new System.Web.Script.Serialization.JavaScriptSerializer();
+            var manifest = serializer.Deserialize<ZipCleanupManifest>(File.ReadAllText(path));
+            var remaining = manifest.Files.First(f => File.Exists(Path.Combine(quarantine, f.RelativePath)));
+            var target = Path.Combine(quarantine, remaining.RelativePath);
+            var replacement = Encoding.UTF8.GetBytes("user replacement");
+            File.WriteAllBytes(target, replacement);
+            remaining.Length = replacement.Length;
+            using (var sha = SHA256.Create())
+                remaining.Sha256 = BitConverter.ToString(sha.ComputeHash(replacement)).Replace("-", "");
+            File.WriteAllText(path, serializer.Serialize(manifest));
+            Assert.That(Purge().Succeeded, Is.False);
+            Assert.That(File.ReadAllBytes(target), Is.EqualTo(replacement));
+        }
+
+        [Test]
+        public void RecreatedFileWithPriorIntentIsPreserved()
+        {
+            using (var cancel = new CancellationTokenSource())
+                Assert.That(Purge(true, cancel.Token, count => cancel.Cancel()).Succeeded, Is.False);
+            var manifest = new System.Web.Script.Serialization.JavaScriptSerializer()
+                .Deserialize<ZipCleanupManifest>(File.ReadAllText(
+                    Directory.GetFiles(recoveryRoot, "*.purge.json").Single()));
+            var target = Path.Combine(quarantine, manifest.Files[0].RelativePath);
+            Assert.That(File.Exists(target), Is.False);
+            File.WriteAllText(target, "user replacement");
+            Assert.That(Purge().Succeeded, Is.False);
+            Assert.That(File.ReadAllText(target), Is.EqualTo("user replacement"));
+        }
+
+        [Test]
         public void InvalidReceiptBlocksFirstRemovalWithoutCreatingJournal()
         {
             var file = Directory.GetFiles(Path.Combine(root, "receipts"),
