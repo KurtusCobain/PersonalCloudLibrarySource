@@ -177,6 +177,47 @@ namespace PersonalCloudLibrarySource.Tests.Services
             }
         }
 
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW",
+            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CreateHardLinkNative(string link, string existing, IntPtr reserved);
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void InventoryRefusesHardlinksIncludingAddedSaveExceptions(bool addedSave)
+        {
+            var original = Path.Combine(root, "original.bin");
+            File.WriteAllText(original, "preserve");
+            var alias = Path.Combine(game, addedSave ? "personal.sav" : "alias.bin");
+            Assert.That(CreateHardLinkNative(alias, original, IntPtr.Zero), Is.True);
+            var scanner = new CacheTreeInventoryScanner();
+            if (addedSave)
+                Assert.Throws<IOException>(() => scanner.ScanWithAddedSaves(cache, game,
+                    new System.Collections.Generic.HashSet<string>(), CancellationToken.None));
+            else
+                Assert.Throws<IOException>(() => scanner.Scan(cache, game));
+            Assert.That(File.ReadAllText(original), Is.EqualTo("preserve"));
+            Assert.That(File.ReadAllText(alias), Is.EqualTo("preserve"));
+        }
+
+        [Test]
+        public void UnicodeAndDirectoryRecordsPreserveExactLegacyFingerprint()
+        {
+            var folder = Path.Combine(game, "日本語");
+            Directory.CreateDirectory(folder);
+            var relative = Path.Combine("日本語", "é.bin");
+            var bytes = new byte[] { 1, 2, 3 };
+            File.WriteAllBytes(Path.Combine(game, relative), bytes);
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                var records = new[] { "D:日本語", "F:" + relative + ":3:" +
+                    BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "") };
+                var expected = BitConverter.ToString(sha.ComputeHash(
+                    System.Text.Encoding.UTF8.GetBytes(string.Join("\n", records)))).Replace("-", "");
+                Assert.That(new CacheTreeInventoryScanner().Scan(cache, game).Fingerprint, Is.EqualTo(expected));
+            }
+        }
+
         [Test]
         public void EmptyFolderHasDeterministicFingerprint()
         {

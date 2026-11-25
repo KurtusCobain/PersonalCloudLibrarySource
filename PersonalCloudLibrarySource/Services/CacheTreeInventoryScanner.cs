@@ -82,6 +82,7 @@ namespace PersonalCloudLibrarySource
                 throw new DirectoryNotFoundException("Inventory target directory does not exist.");
 
             var root = PathBoundary.Normalize(target);
+            var rootIdentity = TransferPartialPathPolicy.ObserveDirectoryIdentity(root);
             var result = new CacheTreeInventory();
             var entries = new List<string>();
             var entryPaths = new List<string>();
@@ -139,18 +140,24 @@ namespace PersonalCloudLibrarySource
                             throw new IOException("Inventory file exceeds size limit.");
                         if (!original)
                         {
-                            if (!IsAllowedNewSaveFile(relative) ||
-                                info.Length > 64L * 1024 * 1024 ||
-                                result.IgnoredAddedSaveCount >= 1024)
-                                throw new IOException("Unrecorded file is not permitted save data.");
+                            using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(entry, false))
+                            {
+                                TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
+                                if (!IsAllowedNewSaveFile(relative) ||
+                                    stream.Length != info.Length ||
+                                    stream.Length > 64L * 1024 * 1024 ||
+                                    result.IgnoredAddedSaveCount >= 1024)
+                                    throw new IOException("Unrecorded file is not permitted save data.");
+                            }
                             result.IgnoredAddedSaveCount++;
                             continue;
                         }
                         result.FileCount++;
                         entryPaths.Add(identifier);
                         using (var sha = SHA256.Create())
-                        using (var stream = new FileStream(entry, FileMode.Open, FileAccess.Read, FileShare.Read))
+                        using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(entry, false))
                         {
+                            TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
                             // Bind the length to the opened stream and cap the
                             // actual bytes read, even if the file changes after stat.
                             var expectedLength = stream.Length;
@@ -178,6 +185,8 @@ namespace PersonalCloudLibrarySource
                     }
                 }
             }
+            cancellationToken.ThrowIfCancellationRequested();
+            TransferPartialPathPolicy.RequireDirectoryIdentity(root, rootIdentity);
             entries.Sort(StringComparer.Ordinal);
             entryPaths.Sort(StringComparer.Ordinal);
             result.EntryPaths = entryPaths.AsReadOnly();
@@ -189,8 +198,24 @@ namespace PersonalCloudLibrarySource
             }
             using (var sha = SHA256.Create())
             {
-                var bytes = Encoding.UTF8.GetBytes(string.Join("\n", entries));
-                result.Fingerprint = BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "");
+                // Same V2 wire fingerprint: sorted UTF-8 records separated
+                // by LF, no trailing LF. Avoid constructing the entire joined
+                // string and a second full-size byte array at the same time.
+                var separator = new byte[] { 10 };
+                var encoded = new byte[1024];
+                for (var i = 0; i < entries.Count; i++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (i != 0) sha.TransformBlock(separator, 0, 1, separator, 0);
+                    var record = entries[i];
+                    var needed = Encoding.UTF8.GetByteCount(record);
+                    if (needed > encoded.Length) encoded = new byte[needed];
+                    var length = Encoding.UTF8.GetBytes(record, 0, record.Length, encoded, 0);
+                    if (length != 0) sha.TransformBlock(encoded, 0, length, encoded, 0);
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+                sha.TransformFinalBlock(new byte[0], 0, 0);
+                result.Fingerprint = BitConverter.ToString(sha.Hash).Replace("-", "");
             }
             return result;
         }
