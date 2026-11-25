@@ -11,6 +11,7 @@ namespace PersonalCloudLibrarySource
         private DashboardTransferActivityBridge transferActivityBridge;
         private readonly DashboardRefreshPostGate dashboardTransferRefreshGate = new DashboardRefreshPostGate();
         private bool transferPresentationDisposed;
+        private bool recoveryReviewInProgress;
         private long lastDashboardTransferRevision = -1;
 
         internal CloudTransferManager GetTransferManager()
@@ -63,6 +64,8 @@ namespace PersonalCloudLibrarySource
 
         private async void ReviewTransferRecovery()
         {
+            if (recoveryReviewInProgress || transferPresentationDisposed) return;
+            recoveryReviewInProgress = true;
             var title = PclsResources.Get("LOCPLSTransferRecoveryReview", "Review Transfer Recovery");
             try
             {
@@ -78,6 +81,8 @@ namespace PersonalCloudLibrarySource
                         "The journal could not be fully verified. Do not assume recovery is clear."));
                 message.AppendLine(PclsResources.Get("LOCPLSTransferRecoveryAdvisory",
                     "Reservations may belong to active or interrupted transfers. This review does not authorize retry, deletion, or release. Preserve all staging and journal files."));
+                message.AppendLine(PclsResources.Format("LOCPLSTransferRecoveryJournalLocation",
+                    "Journal location: {0}", System.IO.Path.Combine(GetPluginDataDirectory(), "transfer-recovery")));
                 foreach (var record in System.Linq.Enumerable.Take(snapshot.Records, 20))
                 {
                     message.AppendLine();
@@ -85,6 +90,8 @@ namespace PersonalCloudLibrarySource
                         "Job: {0}{1}Destination: {2} ({4}){1}Staging: {3} ({5})",
                         record.JobId, Environment.NewLine, record.Destination, record.StagingPath,
                         DescribeRecoveryPathState(record.DestinationState), DescribeRecoveryPathState(record.StagingState)));
+                    message.AppendLine(PclsResources.Format("LOCPLSTransferRecoveryOrigin",
+                        "Marker origin: {0}", DescribeRecoveryOrigin(record.Origin)));
                 }
                 if (snapshot.Records.Count > 20)
                     message.AppendLine(PclsResources.Get("LOCPLSTransferRecoveryTruncated",
@@ -96,6 +103,20 @@ namespace PersonalCloudLibrarySource
                 if (!transferPresentationDisposed)
                     playniteApi.Dialogs.ShowMessage(PclsResources.Get("LOCPLSTransferRecoveryIncomplete",
                         "The journal could not be fully verified. Do not assume recovery is clear."), title);
+            }
+            finally { recoveryReviewInProgress = false; }
+        }
+
+        private static string DescribeRecoveryOrigin(TransferRecoveryOrigin origin)
+        {
+            switch (origin)
+            {
+                case TransferRecoveryOrigin.CurrentJournal:
+                    return PclsResources.Get("LOCPLSTransferRecoveryOriginCurrent", "recorded by this session; may still be active");
+                case TransferRecoveryOrigin.Replaced:
+                    return PclsResources.Get("LOCPLSTransferRecoveryOriginReplaced", "identity changed; preserve evidence");
+                default:
+                    return PclsResources.Get("LOCPLSTransferRecoveryOriginUnknown", "unknown session; activity not established");
             }
         }
 
