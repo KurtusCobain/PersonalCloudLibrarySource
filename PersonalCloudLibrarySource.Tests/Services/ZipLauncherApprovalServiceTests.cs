@@ -286,6 +286,35 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(approvals.HasApproval(item.Id, cache), Is.True);
         }
 
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW",
+            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CreateHardLinkNative(string link, string existing, IntPtr reserved);
+
+        [Test]
+        public void HardlinkedApprovalCannotActivateOrRevokeButRetainsFootprint()
+        {
+            Assert.That(Approve(), Is.True);
+            var path = Directory.GetFiles(Path.Combine(root, "approvals"), "*.json")[0];
+            var alias = Path.Combine(root, "approval-alias.json");
+            Assert.That(CreateHardLinkNative(alias, path, IntPtr.Zero), Is.True);
+            Assert.That(approvals.HasApprovalFootprint(item.Id, cache), Is.True);
+            Assert.That(approvals.HasApproval(item.Id, cache), Is.False);
+            Assert.That(approvals.ApprovedGameIds(), Is.Empty);
+            Assert.That(approvals.TryApply(item, settings, Game(), receipts), Is.False);
+            string reason;
+            Assert.That(approvals.TryRevoke(item.Id, cache, true, out reason), Is.False);
+            Assert.That(File.ReadAllBytes(path), Is.EqualTo(File.ReadAllBytes(alias)));
+        }
+
+        [Test]
+        public void UnexpectedApprovalStoreFileRetainsFootprint()
+        {
+            File.WriteAllText(Path.Combine(root, "approvals"), "unexpected");
+            Assert.That(approvals.HasApprovalFootprint(item.Id, cache), Is.True);
+            Assert.That(Approve(), Is.False);
+        }
+
         [Test]
         public void CorruptedApprovalIsNeverDeletedByRevocation()
         {

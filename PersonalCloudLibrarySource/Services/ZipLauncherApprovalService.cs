@@ -44,6 +44,7 @@ namespace PersonalCloudLibrarySource
             var ids = new HashSet<string>(StringComparer.Ordinal);
             try
             {
+                TransferPartialPathPolicy.RequireSafePath(storeRoot);
                 if (!Directory.Exists(storeRoot)) return ids;
                 var files = Directory.EnumerateFiles(storeRoot, "*.json",
                     SearchOption.TopDirectoryOnly).Take(257).ToList();
@@ -52,22 +53,15 @@ namespace PersonalCloudLibrarySource
                 {
                     if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)
                         continue;
-                    using (var input = new FileStream(file, FileMode.Open,
-                        FileAccess.Read, FileShare.Read))
+                    using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(file, false))
                     {
                         if (input.Length <= 0 || input.Length > MaxBytes) continue;
-                        using (var reader = new StreamReader(input, Encoding.UTF8))
-                        {
-                            var record = new JavaScriptSerializer
-                            {
-                                MaxJsonLength = MaxBytes
-                            }.Deserialize<ZipLauncherApproval>(reader.ReadToEnd());
-                            if (record != null && record.Version == 1 &&
-                                !string.IsNullOrWhiteSpace(record.GameId) &&
-                                !string.IsNullOrWhiteSpace(
-                                    ZipManagedExtractionService.ReceiptKeyForGame(record.GameId)))
-                                ids.Add(record.GameId);
-                        }
+                        var record = DeserializeApproval(input);
+                        if (record != null && record.Version == 1 &&
+                            !string.IsNullOrWhiteSpace(record.GameId) &&
+                            !string.IsNullOrWhiteSpace(
+                                ZipManagedExtractionService.ReceiptKeyForGame(record.GameId)))
+                            ids.Add(record.GameId);
                     }
                 }
             }
@@ -96,7 +90,14 @@ namespace PersonalCloudLibrarySource
                     !SafeSeparateStore(cacheRoot))
                     return true;
                 var path = RecordPath(gameId, cacheRoot);
-                return File.Exists(path) || Directory.Exists(path);
+                TransferPartialPathPolicy.RequireSafePath(path);
+                try
+                {
+                    if ((File.GetAttributes(storeRoot) & FileAttributes.Directory) == 0) return true;
+                }
+                catch (FileNotFoundException) { return false; }
+                catch (DirectoryNotFoundException) { return false; }
+                return CacheOwnershipReceiptStore.ExistsOrCannotVerifyAbsence(path);
             }
             catch (Exception)
             {
@@ -128,18 +129,22 @@ namespace PersonalCloudLibrarySource
                 return false;
             try
             {
-                ZipLauncherApproval saved;
-                if (!TryReadApproval(gameId, cacheRoot, out saved))
-                {
-                    reason = "No valid launcher approval was found for this game and cache.";
-                    return false;
-                }
+                if (string.IsNullOrWhiteSpace(ZipManagedExtractionService.ReceiptKeyForGame(gameId)) ||
+                    !SafeSeparateStore(cacheRoot)) return false;
                 var recordPath = RecordPath(gameId, cacheRoot);
-                // The validated record is deliberately outside the cache.
-                // Never delete a link or use an approval path from JSON.
-                if ((File.GetAttributes(recordPath) & FileAttributes.ReparsePoint) != 0)
-                    return false;
-                File.Delete(recordPath);
+                // Authorize and delete the SAME open ordinary record, never a
+                // second pathname lookup after deserialization.
+                using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(recordPath, true))
+                {
+                    if (!MatchesApprovalIdentity(DeserializeApproval(input), gameId, cacheRoot))
+                    {
+                        reason = "No valid launcher approval was found for this game and cache.";
+                        return false;
+                    }
+                    TransferPartialPathPolicy.CapturePrivateFileIdentity(input.SafeFileHandle);
+                    TransferPartialPathPolicy.DeleteVerifiedFileHandle(input.SafeFileHandle);
+                }
+                TransferPartialPathPolicy.RequireVacant(recordPath);
                 reason = "Launcher approval revoked. Update Game Library to remove the managed ZIP Play action. Extracted files and ownership records were preserved.";
                 return true;
             }
@@ -167,15 +172,19 @@ namespace PersonalCloudLibrarySource
             if (!File.Exists(path) ||
                 (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
                 return false;
-            using (var stream = new FileStream(path, FileMode.Open,
-                FileAccess.Read, FileShare.Read))
-            {
-                if (stream.Length <= 0 || stream.Length > MaxBytes)
-                    return false;
-                using (var reader = new StreamReader(stream, Encoding.UTF8))
-                    saved = new JavaScriptSerializer { MaxJsonLength = MaxBytes }
-                        .Deserialize<ZipLauncherApproval>(reader.ReadToEnd());
-            }
+            using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
+                saved = DeserializeApproval(stream);
+            return MatchesApprovalIdentity(saved, gameId, cacheRoot);
+        }
+
+        private static ZipLauncherApproval DeserializeApproval(FileStream stream)
+        {
+            return new JavaScriptSerializer { MaxJsonLength = MaxBytes }
+                .Deserialize<ZipLauncherApproval>(TransferPartialPathPolicy.ReadPrivateRecord(stream, MaxBytes));
+        }
+
+        private static bool MatchesApprovalIdentity(ZipLauncherApproval saved, string gameId, string cacheRoot)
+        {
             return saved != null && saved.Version == 1 &&
                 string.Equals(saved.GameId, gameId, StringComparison.Ordinal) &&
                 !string.IsNullOrWhiteSpace(saved.CacheRoot) &&
@@ -248,27 +257,11 @@ namespace PersonalCloudLibrarySource
 
                 // Create-only write in the plugin data directory; no game files
                 // are edited and no pre-existing approval is overwritten.
-                Directory.CreateDirectory(storeRoot);
-                var temp = Path.Combine(storeRoot,
-                    Guid.NewGuid().ToString("N") + ".tmp");
-                try
-                {
-                    using (var output = new FileStream(temp, FileMode.CreateNew,
-                        FileAccess.Write, FileShare.None))
-                    using (var writer = new StreamWriter(output,
-                        new UTF8Encoding(false)))
-                        writer.Write(new JavaScriptSerializer().Serialize(document));
-                    cancellationToken.ThrowIfCancellationRequested();
-                    if (File.Exists(recordPath))
-                        return false;
-                    File.Move(temp, recordPath);
-                    reason = "Launcher approved. Update Game Library to refresh Playnite.";
-                    return true;
-                }
-                finally
-                {
-                    if (File.Exists(temp)) File.Delete(temp);
-                }
+                TransferPartialPathPolicy.WritePrivateRecord(recordPath,
+                    new JavaScriptSerializer { MaxJsonLength = MaxBytes }.Serialize(document),
+                    MaxBytes, cancellationToken);
+                reason = "Launcher approved. Update Game Library to refresh Playnite.";
+                return true;
             }
             catch (OperationCanceledException)
             {
@@ -301,18 +294,8 @@ namespace PersonalCloudLibrarySource
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!SafeSeparateStore(settings.LocalCacheFolder)) return false;
-                var path = RecordPath(item.Id, settings.LocalCacheFolder);
-                if (!File.Exists(path)) return false;
                 ZipLauncherApproval saved;
-                using (var input = new FileStream(path, FileMode.Open,
-                    FileAccess.Read, FileShare.Read))
-                {
-                    if (input.Length <= 0 || input.Length > MaxBytes)
-                        return false;
-                    using (var reader = new StreamReader(input, Encoding.UTF8))
-                        saved = new JavaScriptSerializer { MaxJsonLength = MaxBytes }
-                            .Deserialize<ZipLauncherApproval>(reader.ReadToEnd());
-                }
+                if (!TryReadApproval(item.Id, settings.LocalCacheFolder, out saved)) return false;
                 if (saved == null || saved.Version != 1 ||
                     !string.Equals(saved.GameId, item.Id, StringComparison.Ordinal) ||
                     !string.Equals(saved.SourceBinding,
