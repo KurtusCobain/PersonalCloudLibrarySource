@@ -158,6 +158,42 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void DirectoryExecutor_RefusesHardlinkBeforeDeletingOrdinaryFiles()
+        {
+            var original = Path.Combine(testRoot, "original.bin");
+            var cached = Path.Combine(cacheRoot, "cached");
+            Directory.CreateDirectory(cached);
+            var ordinary = Path.Combine(cached, "ordinary.bin");
+            var alias = Path.Combine(cached, "alias.bin");
+            File.WriteAllText(original, "preserve original");
+            File.WriteAllText(ordinary, "preserve ordinary");
+            Assert.That(CreateHardLinkNative(alias, original, IntPtr.Zero), Is.True);
+            var result = new SafeCacheDeletionExecutor().Delete(cacheRoot, cached, false);
+            Assert.That(result.Allowed, Is.False);
+            Assert.That(File.ReadAllText(original), Is.EqualTo("preserve original"));
+            Assert.That(File.ReadAllText(alias), Is.EqualTo("preserve original"));
+            Assert.That(File.ReadAllText(ordinary), Is.EqualTo("preserve ordinary"));
+        }
+
+        [Test]
+        public void DirectoryExecutor_RefusesLockedDescendantBeforeDeletingOrdinaryFiles()
+        {
+            var cached = Path.Combine(cacheRoot, "cached");
+            Directory.CreateDirectory(cached);
+            var ordinary = Path.Combine(cached, "ordinary.bin");
+            var locked = Path.Combine(cached, "locked.bin");
+            File.WriteAllText(ordinary, "preserve ordinary");
+            File.WriteAllText(locked, "preserve locked");
+            using (var stream = File.Open(locked, FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                var result = new SafeCacheDeletionExecutor().Delete(cacheRoot, cached, false);
+                Assert.That(result.Allowed, Is.False);
+                Assert.That(File.ReadAllText(ordinary), Is.EqualTo("preserve ordinary"));
+            }
+            Assert.That(File.ReadAllText(locked), Is.EqualTo("preserve locked"));
+        }
+
+        [Test]
         public void FileOnlyExecutor_NeverInvokesDirectoryRemoval()
         {
             var replacement = Path.Combine(cacheRoot, "replaced.exe");

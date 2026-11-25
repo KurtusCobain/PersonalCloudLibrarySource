@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Collections.Generic;
 
 namespace PersonalCloudLibrarySource
 {
@@ -131,7 +132,7 @@ namespace PersonalCloudLibrarySource
         private readonly Action<string> deleteDirectory;
 
         public SafeCacheDeletionExecutor()
-            : this(new SafeCacheDeletionPolicy(), DeleteOrdinaryFileHandle, path => Directory.Delete(path, true))
+            : this(new SafeCacheDeletionPolicy(), DeleteOrdinaryFileHandle, DeleteInspectedDirectory)
         {
         }
 
@@ -165,6 +166,69 @@ namespace PersonalCloudLibrarySource
             TransferPartialPathPolicy.RequireVacant(path);
         }
 
+        // Legacy explicit directory API only. The shipping uninstall controller
+        // still refuses folder removal. Inventory the entire ordinary tree
+        // before any mutation; never recursively remove newly encountered
+        // entries and never treat an inventory as a durable ownership receipt.
+        private static void DeleteInspectedDirectory(string root)
+        {
+            var directories = new List<string> { root };
+            var identities = new Dictionary<string, TransferPartialPathPolicy.FileIdentity>(
+                StringComparer.OrdinalIgnoreCase);
+            var files = new List<string>();
+            identities.Add(root, TransferPartialPathPolicy.ObserveDirectoryIdentity(root));
+            var refusal = SafeFileTreeTraversal.Walk(root, SafeFileTreeTraversal.DefaultMaxEntries,
+                System.Threading.CancellationToken.None, (path, attributes) =>
+                {
+                    if ((attributes & FileAttributes.Directory) != 0)
+                    {
+                        identities.Add(path, TransferPartialPathPolicy.ObserveDirectoryIdentity(path));
+                        directories.Add(path);
+                    }
+                    else
+                    {
+                        // Validate deletion access and single-link identity
+                        // before starting any deletion.
+                        using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(path, true))
+                            identities.Add(path, TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle));
+                        files.Add(path);
+                    }
+                });
+            if (!string.IsNullOrEmpty(refusal)) throw new IOException(refusal);
+
+            // Recheck the containing chain against the inventory. These
+            // observations narrow substitution races but are not pinned
+            // ancestor handles or a filesystem-wide transaction.
+            Action<string> verifyParents = path =>
+            {
+                var parent = Path.GetDirectoryName(path);
+                while (parent != null && identities.ContainsKey(parent))
+                {
+                    TransferPartialPathPolicy.RequireDirectoryIdentity(parent, identities[parent]);
+                    if (string.Equals(parent, root, StringComparison.OrdinalIgnoreCase)) return;
+                    parent = Path.GetDirectoryName(parent);
+                }
+                throw new IOException("Cache directory ancestry was not recorded.");
+            };
+            foreach (var path in files)
+            {
+                verifyParents(path);
+                using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(path, true))
+                {
+                    if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(stream.SafeFileHandle, identities[path]))
+                        throw new IOException("Cache file identity changed; refusing removal.");
+                    TransferPartialPathPolicy.DeleteVerifiedFileHandle(stream.SafeFileHandle);
+                }
+                TransferPartialPathPolicy.RequireVacant(path);
+            }
+            for (var i = directories.Count - 1; i >= 0; i--)
+            {
+                var path = directories[i];
+                if (!string.Equals(path, root, StringComparison.OrdinalIgnoreCase)) verifyParents(path);
+                TransferPartialPathPolicy.DeleteOwnedEmptyDirectory(path, identities[path]);
+            }
+        }
+
         // File-only permission must never fall through to recursive removal
         // when a cached file is missing or has been replaced by a directory.
         public CacheDeletionAuthorization DeleteFileOnly(string cacheRoot, string targetPath, bool allowOutsideCache)
@@ -193,10 +257,20 @@ namespace PersonalCloudLibrarySource
             {
                 // File.Delete/Directory.Delete recursion is not an authorization
                 // to traverse descendants that were never inspected.
-                var refusal = GetUnsafeDescendantReason(authorization.TargetPath);
-                if (!string.IsNullOrWhiteSpace(refusal))
-                    return new CacheDeletionAuthorization { Reason = refusal };
-                deleteDirectory(authorization.TargetPath);
+                try
+                {
+                    var refusal = GetUnsafeDescendantReason(authorization.TargetPath);
+                    if (!string.IsNullOrWhiteSpace(refusal))
+                        return new CacheDeletionAuthorization { Reason = refusal };
+                    deleteDirectory(authorization.TargetPath);
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    return new CacheDeletionAuthorization
+                    {
+                        Reason = "Directory removal could not be verified; some entries may already have been removed: " + ex.Message
+                    };
+                }
             }
             else return new CacheDeletionAuthorization { Reason = "uninstall target does not exist" };
             return authorization;
