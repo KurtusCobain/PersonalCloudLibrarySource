@@ -64,9 +64,15 @@
 | [2d4d0f03](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45494395197) | 912 standard pass, 0 fail, 2 standard skips; 0 warnings; 2/2 real-rclone | Partial reservation write quarantine; archive passed |
 | [c0ca3dc3](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45494467679) | 913 standard pass, 0 fail, 2 standard skips; 0 warnings; 2/2 real-rclone | Timed local tree correctness fixture; archive passed |
 
+| [72e2e5eb](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45494757069) | 915 standard pass, 0 fail, 2 standard skips; 0 warnings; 2/2 real-rclone | Malformed-record fixes; archive and CodeQL passed |
+| [19b1a045](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45650590082) | 916 standard pass, 0 fail, 2 standard skips; 0 warnings; 2/2 real-rclone | Marker-origin diagnostics; archive passed |
+| [351cb029](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45650653485) | 916 standard pass, 0 fail, 2 standard skips; 0 warnings; 2/2 real-rclone | Localized recovery dialog; archive passed |
+
 ### Pending candidates (not qualified at this ledger entry)
 
-- [f6006859](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45494563971): invalid UTF-8 and persisted journal-overlap refusal.
+- [33fd1f1e](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45650769653): legacy identity-based directory removal.
+- [e8b45e1b](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45650873433): bounded durable receipt publication and hardlink refusal.
+- [89b2d83d](https://github.com/KurtusCobain/PersonalCloudLibrarySource/commit/89b2d83d5b081a54ab760e24527b25fab63cca46): no-follow inventory and compatible streamed fingerprint.
 - Later CodeQL conclusions must be read against the exact candidate SHA; no success assumed.
 
 Windows build and CodeQL workflow conclusions are not proof of absence of vulnerabilities or native Playnite acceptance. A passing archive compatibility workflow only qualifies the isolated decoder probe, not shipping 7z/RAR install behavior. Review current run evidence by exact commit.
@@ -90,7 +96,7 @@ Windows build and CodeQL workflow conclusions are not proof of absence of vulner
 | Security | Windows fixtures qualify local/ZIP file and directory identities, local/ZIP no-replace source-handle publication, rclone whole-job launch containment, originating marker identity, and rclone root ownership. Post-exit rclone integrity and separate 2/2 real binary gate passed. Parent-relative publication experiment failed and was withdrawn; source-handle no-replace rename plus source identity check restored and verified. No-follow journal lock/concurrency qualified. Full ancestor pinning, create-to-open race, directory/member publication transaction, receipt-bound uninstall, further malformed journal and power-loss recovery remain open. No automatic permanent ZIP cleanup or recovery release. |
 | Transfer history | Soft cap verified in Windows fixtures: 512 ordinary terminal attempts, batched pruning, protected unclaimed results/latest retry/fences/quarantine; 550-transfer fixture passed. Native host acceptance pending; protected history may exceed cap. |
 | Runtime settings and retry | Native Playnite database reconciliation and stale controller/action cases require qualification |
-| Recovery | Originating marker identity enforced; restarted instances remain read-only for completion. Nonempty rclone directory failures/cancellations preserve staging and quarantine the job. Explicit recovery release remains blocked by persistent process/ownership evidence, ancestor identity, and native host presentation. |
+| Recovery | Originating marker identity enforced; restarted instances remain read-only for completion. Nonempty rclone directory failures/cancellations preserve staging and quarantine the job. Read-only marker-origin diagnostics and localized dialog qualify on Windows CI. Explicit recovery release remains blocked by persistent process/ownership evidence, ancestor identity, and native host presentation. |
 | Multi-source | Experimental activation and isolated identity routing; verify real host import/refresh/migration and source disappearance |
 | Archive support | Shipping ZIP path only; 7z/RAR decoder is isolated compatibility evidence; do not claim full support |
 | UI | Localized resource audit passed; keyboard/controller, DPI, theme and genuine screenshot review pending |
