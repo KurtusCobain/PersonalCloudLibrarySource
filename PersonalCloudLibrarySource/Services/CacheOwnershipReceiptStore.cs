@@ -93,28 +93,21 @@ namespace PersonalCloudLibrarySource
                 if (!File.Exists(path)) return false;
                 using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
                 {
-                    TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
-                    if (stream.Length > 4096) return false;
-                    using (var reader = new StreamReader(stream, new UTF8Encoding(false, true)))
-                    {
-                        var buffer = new char[4097];
-                        var count = reader.ReadBlock(buffer, 0, buffer.Length);
-                        if (count > 4096 || stream.Length > 4096) return false;
-                        var parsed = new JavaScriptSerializer { MaxJsonLength = 4096 }
-                            .Deserialize<CacheOwnershipReceipt>(new string(buffer, 0, count));
-                        if (parsed == null || (parsed.Version != 1 && parsed.Version != 2) ||
-                            !string.Equals(parsed.ItemId, itemId, StringComparison.Ordinal) ||
-                            !string.Equals(PathBoundary.Normalize(parsed.CacheRoot),
-                                PathBoundary.Normalize(cacheRoot), StringComparison.OrdinalIgnoreCase) ||
-                            string.IsNullOrWhiteSpace(parsed.Destination) ||
-                            !PathBoundary.IsContained(cacheRoot, parsed.Destination) ||
-                            string.Equals(PathBoundary.Normalize(parsed.Destination),
-                                PathBoundary.Normalize(cacheRoot), StringComparison.OrdinalIgnoreCase) ||
-                            (parsed.Version == 2 && !IsValidV2Inventory(parsed)))
-                            return false;
-                        receipt = parsed;
-                        return true;
-                    }
+                    var parsed = new JavaScriptSerializer { MaxJsonLength = 4096 }
+                        .Deserialize<CacheOwnershipReceipt>(
+                            TransferPartialPathPolicy.ReadPrivateRecord(stream, 4096));
+                    if (parsed == null || (parsed.Version != 1 && parsed.Version != 2) ||
+                        !string.Equals(parsed.ItemId, itemId, StringComparison.Ordinal) ||
+                        !string.Equals(PathBoundary.Normalize(parsed.CacheRoot),
+                            PathBoundary.Normalize(cacheRoot), StringComparison.OrdinalIgnoreCase) ||
+                        string.IsNullOrWhiteSpace(parsed.Destination) ||
+                        !PathBoundary.IsContained(cacheRoot, parsed.Destination) ||
+                        string.Equals(PathBoundary.Normalize(parsed.Destination),
+                            PathBoundary.Normalize(cacheRoot), StringComparison.OrdinalIgnoreCase) ||
+                        (parsed.Version == 2 && !IsValidV2Inventory(parsed)))
+                        return false;
+                    receipt = parsed;
+                    return true;
                 }
             }
             catch (Exception)
@@ -242,40 +235,9 @@ namespace PersonalCloudLibrarySource
                 InventoryDirectoryCount = inventory?.DirectoryCount ?? 0
             };
             var path = ReceiptFile(cacheRoot, itemId);
-            var payload = new UTF8Encoding(false, true).GetBytes(new JavaScriptSerializer().Serialize(receipt));
-            if (payload.Length > 4096)
-                throw new IOException("Ownership receipt exceeds its readable size limit.");
             TransferPartialPathPolicy.RequireSafePath(destination);
-            TransferPartialPathPolicy.RequireSafePath(storeRoot);
-            TransferPartialPathPolicy.RequireVacant(path);
-            Directory.CreateDirectory(storeRoot);
-            // CreateNew plus a durable bounded payload and no-replace handle
-            // rename. If any stage is uncertain, preserve the temporary file
-            // as evidence instead of deleting a pathname we no longer own.
-            var temporary = Path.Combine(storeRoot, Guid.NewGuid().ToString("N") + ".tmp");
-            TransferPartialPathPolicy.RequireVacant(temporary);
-            TransferPartialPathPolicy.FileIdentity identity;
-            using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
-            {
-                identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
-                stream.Write(payload, 0, payload.Length);
-                stream.Flush(true);
-            }
-            cancellationToken.ThrowIfCancellationRequested();
-            using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(temporary, true))
-            {
-                if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(stream.SafeFileHandle, identity) ||
-                    stream.Length != payload.Length)
-                    throw new IOException("Ownership receipt staging identity or length changed.");
-                for (var i = 0; i < payload.Length; i++)
-                    if (stream.ReadByte() != payload[i])
-                        throw new IOException("Ownership receipt staging contents changed.");
-                if (stream.ReadByte() != -1)
-                    throw new IOException("Ownership receipt staging contents changed.");
-                cancellationToken.ThrowIfCancellationRequested();
-                TransferPartialPathPolicy.PublishVerifiedHandle(stream.SafeFileHandle, temporary, path);
-            }
-            TransferPartialPathPolicy.RequireVacant(temporary);
+            TransferPartialPathPolicy.WritePrivateRecord(path,
+                new JavaScriptSerializer().Serialize(receipt), 4096, cancellationToken);
         }
     }
 }
