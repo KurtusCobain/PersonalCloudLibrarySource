@@ -98,6 +98,9 @@ The following supplement A10–A32. They remain NOT RUN until performed in the d
 | R20 | File-only uninstall prepared before recovery becomes uncertain | Existing hosted controller refuses before deletion; unrelated files preserved; no recursive or permanent removal authority | |
 | R21 | Concurrent host transfer-service access and shutdown | One queue/manager per host; late creation refused after shutdown begins, workers remain bounded; no duplicate transfer execution | |
 
+| R22 | Ordinary file-only removal during competing reservation admission | Same journal lock excludes cooperating admission during deletion; existing pending evidence or lock contention refuses removal; no new destructive authority | |
+| R23 | Guarded deletion and drive-root path normalization | Ordinary file removal preserves siblings and releases ancestor handles; ambiguous roots refuse, repeated absolute root normalization stays absolute; no volume-root removal | |
+
 ## Stop rules
 
 Stop on possible source/user-data mutation, unexpected deletion, incorrect cross-source identity, unauthorized launcher execution, unexplained host freeze or unknown process ownership. Preserve logs, journal and staging. Do not automatically remove evidence, rerun a destructive operation, or bypass a refusal to obtain a PASS. Reviewers and owner adjudicate the failure before continuing.

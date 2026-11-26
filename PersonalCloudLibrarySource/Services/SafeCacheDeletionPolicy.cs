@@ -24,6 +24,9 @@ namespace PersonalCloudLibrarySource
                 if (IsUnsupportedWindowsPath(targetPath) ||
                     (!string.IsNullOrWhiteSpace(cacheRoot) && IsUnsupportedWindowsPath(cacheRoot)))
                     return Refuse("device namespaces, alternate streams and ambiguous Windows paths are unsupported");
+                if (!string.IsNullOrWhiteSpace(cacheRoot) &&
+                    Path.IsPathRooted(cacheRoot) && !IsFullyRooted(cacheRoot))
+                    return Refuse("configured cache root must not be drive-relative or root-relative");
                 if (IsVolumeOrShareRoot(targetPath)) return Refuse("uninstall target is a drive or share root");
                 target = PathBoundary.Normalize(targetPath);
                 cache = string.IsNullOrWhiteSpace(cacheRoot) ? string.Empty : PathBoundary.Normalize(cacheRoot);

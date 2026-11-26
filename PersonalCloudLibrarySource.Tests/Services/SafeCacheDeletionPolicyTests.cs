@@ -75,6 +75,23 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(new SafeCacheDeletionPolicy().Authorize(cacheRoot, target, true).Allowed, Is.False);
         }
 
+        [TestCase(@"C:")]
+        [TestCase(@"C:relative")]
+        [TestCase(@"\relative")]
+        public void Authorize_RefusesAmbiguousConfiguredCacheRootEvenWithOutsideOptIn(string root)
+        {
+            var path = Path.Combine(cacheRoot, "game.exe");
+            File.WriteAllText(path, "preserve");
+            var called = false;
+            var executor = new SafeCacheDeletionExecutor(new SafeCacheDeletionPolicy(),
+                ignored => called = true, ignored => called = true);
+            var result = executor.DeleteFileOnly(root, path, true);
+            Assert.That(result.Allowed, Is.False);
+            Assert.That(result.Reason, Does.Contain("relative"));
+            Assert.That(called, Is.False);
+            Assert.That(File.ReadAllText(path), Is.EqualTo("preserve"));
+        }
+
         [Test]
         public void Authorize_OutsideOptInNeverAuthorizesCacheAncestor()
         {
