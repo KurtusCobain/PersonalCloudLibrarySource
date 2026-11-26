@@ -113,6 +113,34 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(File.Exists(source), Is.True);
         }
 
+        private sealed class CancelAfterReadStream : MemoryStream
+        {
+            private readonly CancellationTokenSource cancellation;
+            public CancelAfterReadStream(byte[] bytes, CancellationTokenSource cancellation)
+                : base(bytes) { this.cancellation = cancellation; }
+            public override int Read(byte[] buffer, int offset, int count)
+            {
+                var read = base.Read(buffer, offset, count);
+                cancellation.Cancel();
+                return read;
+            }
+        }
+
+        [Test]
+        public void SourceHashObservesCancellationBetweenChunks()
+        {
+            var hash = typeof(ZipPackageReviewService).GetMethod("HashSource",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+            using (var cancellation = new CancellationTokenSource())
+            using (var stream = new CancelAfterReadStream(new byte[131072], cancellation))
+            {
+                var error = Assert.Throws<System.Reflection.TargetInvocationException>(() =>
+                    hash.Invoke(null, new object[] { stream, cancellation.Token }));
+                Assert.That(error.InnerException, Is.TypeOf<OperationCanceledException>());
+                Assert.That(stream.Position, Is.LessThan(stream.Length));
+            }
+        }
+
         [Test]
         public void ApprovedZipStaysReadLockedDuringStreamingOnWindows()
         {

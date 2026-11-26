@@ -31,6 +31,17 @@ namespace PersonalCloudLibrarySource
             Guid jobId, CancellationToken cancellationToken,
             Action<long, long?> progress = null)
         {
+            return ExtractVerifiedZip(archivePath, cacheRoot, destinationDirectory,
+                jobId, cancellationToken, progress, null);
+        }
+
+        // Only the approval service supplies an already verified stream.
+        // Ownership of that stream stays with the caller.
+        internal CloudTransferExecutionResult ExtractVerifiedZip(
+            string archivePath, string cacheRoot, string destinationDirectory,
+            Guid jobId, CancellationToken cancellationToken,
+            Action<long, long?> progress, FileStream verifiedSource)
+        {
             var createdFiles = new List<CreatedFileRecord>();
             var createdDirectories = new List<string>();
             var createdDirectoryIndex = new Dictionary<string, TransferPartialPathPolicy.FileIdentity>(StringComparer.OrdinalIgnoreCase);
@@ -47,8 +58,9 @@ namespace PersonalCloudLibrarySource
                 if (string.IsNullOrWhiteSpace(cacheRoot) || !Directory.Exists(cacheRoot))
                     return CloudTransferExecutionResult.Failure(
                         "The configured cache root must already exist.");
-                if (string.IsNullOrWhiteSpace(archivePath) || !File.Exists(archivePath) ||
-                    (File.GetAttributes(archivePath) & FileAttributes.ReparsePoint) != 0)
+                if (string.IsNullOrWhiteSpace(archivePath) ||
+                    (verifiedSource == null && (!File.Exists(archivePath) ||
+                    (File.GetAttributes(archivePath) & FileAttributes.ReparsePoint) != 0)))
                     return CloudTransferExecutionResult.Failure(
                         "Archive source is missing or is a filesystem link.");
 
@@ -73,9 +85,12 @@ namespace PersonalCloudLibrarySource
                     return CloudTransferExecutionResult.Failure(
                         "Private extraction staging path is unsafe or already exists.");
 
-                using (var source = new FileStream(archivePath, FileMode.Open,
-                    FileAccess.Read, FileShare.Read))
+                // Dispose only streams opened here; the approval service
+                // owns its original read handle until this operation returns.
+                using (var opened = verifiedSource == null
+                    ? TransferPartialPathPolicy.OpenArchiveSource(archivePath) : null)
                 {
+                    var source = verifiedSource ?? opened;
                     // .NET Framework 4.6.2 ZipArchiveEntry does not expose
                     // external attributes. Read and validate ZIP32 metadata
                     // separately so Unix links cannot be disguised as files.

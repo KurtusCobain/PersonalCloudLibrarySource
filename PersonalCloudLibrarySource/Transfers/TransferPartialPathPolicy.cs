@@ -227,6 +227,24 @@ namespace PersonalCloudLibrarySource
             catch { handle.Dispose(); throw; }
         }
 
+        // Original archives are read-only input, not owned staging. An
+        // ordinary hardlinked source is allowed, but reparse leaves and
+        // directory handles are never accepted as archive data.
+        internal static FileStream OpenArchiveSource(string path)
+        {
+            var stream = OpenPrivateFileForReview(path, false);
+            try
+            {
+                HandleInformation information;
+                if (!GetFileInformationByHandle(stream.SafeFileHandle, out information) ||
+                    (information.Attributes & (uint)(FileAttributes.Directory | FileAttributes.ReparsePoint)) != 0 ||
+                    information.NumberOfLinks == 0)
+                    throw new IOException("Archive source is not an ordinary file.");
+                return stream;
+            }
+            catch { stream.Dispose(); throw; }
+        }
+
         internal static void DeleteVerifiedFileHandle(SafeFileHandle handle)
         {
             // FILE_DISPOSITION_INFO.DeleteFile is a one-byte BOOLEAN.

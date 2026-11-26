@@ -61,8 +61,7 @@ namespace PersonalCloudLibrarySource
                     (File.GetAttributes(normalized) & FileAttributes.ReparsePoint) != 0)
                     return rejected;
 
-                using (var source = new FileStream(normalized, FileMode.Open,
-                    FileAccess.Read, FileShare.Read))
+                using (var source = TransferPartialPathPolicy.OpenArchiveSource(normalized))
                 {
                     var central = ZipCentralDirectoryInspector.Read(source);
                     cancellationToken.ThrowIfCancellationRequested();
@@ -116,10 +115,7 @@ namespace PersonalCloudLibrarySource
                         // Hash the same read-only handle that was inspected.
                         // Revalidated by the approval-bound entrypoint.
                         source.Position = 0;
-                        string digest;
-                        using (var sha = SHA256.Create())
-                            digest = BitConverter.ToString(
-                                sha.ComputeHash(source)).Replace("-", "");
+                        var digest = HashSource(source, cancellationToken);
 
                         return new ZipPackageReview
                         {
@@ -179,24 +175,20 @@ namespace PersonalCloudLibrarySource
                 // open through the extractor's full read. On Windows this
                 // prevents a normal concurrent writer/replacement between
                 // final digest verification and staged extraction.
-                using (var input = new FileStream(archivePath, FileMode.Open,
-                    FileAccess.Read, FileShare.Read))
+                using (var input = TransferPartialPathPolicy.OpenArchiveSource(archivePath))
                 {
-                    string current;
-                    using (var sha = SHA256.Create())
-                        current = BitConverter.ToString(
-                            sha.ComputeHash(input)).Replace("-", "");
+                    var current = HashSource(input, cancellationToken);
                     if (!string.Equals(current, reviewed.ArchiveSha256,
                         StringComparison.Ordinal))
                         return CloudTransferExecutionResult.Failure(
                             "ZIP changed after review; inspect it again.");
                     cancellationToken.ThrowIfCancellationRequested();
-                    // The extractor independently revalidates central metadata,
-                    // lengths and CRC; it opens another read-shared handle while
-                    // the verified source handle is still held.
-                    return new ZipPackageStagingExtractor().ExtractApprovedZip(
+                    // Consume the SAME inspected source stream, not a second
+                    // lookup of an archive path that may have changed.
+                    input.Position = 0;
+                    return new ZipPackageStagingExtractor().ExtractVerifiedZip(
                         archivePath, cacheRoot, destinationDirectory,
-                        jobId, cancellationToken, progress);
+                        jobId, cancellationToken, progress, input);
                 }
             }
             catch (OperationCanceledException)
@@ -209,6 +201,28 @@ namespace PersonalCloudLibrarySource
             {
                 return CloudTransferExecutionResult.Failure(
                     "Approved ZIP is unavailable or could not be verified.");
+            }
+        }
+
+        private static string HashSource(Stream source, CancellationToken token)
+        {
+            var remaining = source.Length - source.Position;
+            if (remaining < 0) throw new IOException("Archive position is invalid.");
+            using (var sha = SHA256.Create())
+            {
+                var buffer = new byte[65536];
+                while (remaining > 0)
+                {
+                    token.ThrowIfCancellationRequested();
+                    var count = source.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                    if (count == 0) throw new IOException("Archive changed during hashing.");
+                    sha.TransformBlock(buffer, 0, count, buffer, 0);
+                    remaining -= count;
+                }
+                token.ThrowIfCancellationRequested();
+                if (source.ReadByte() != -1) throw new IOException("Archive grew during hashing.");
+                sha.TransformFinalBlock(new byte[0], 0, 0);
+                return BitConverter.ToString(sha.Hash).Replace("-", "");
             }
         }
 
