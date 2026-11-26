@@ -55,6 +55,33 @@ namespace PersonalCloudLibrarySource.Tests.Services
             finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
         }
 
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW",
+            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CreateHardLinkNative(string link, string existing, IntPtr reserved);
+
+        [Test]
+        public void SafeWriter_RefusesHardlinkedOutputBeforeStagingOrBackup()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "PCLS-Writer-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            try
+            {
+                var target = Path.Combine(root, "manifest.json");
+                var alias = Path.Combine(root, "alias.json");
+                var backups = Path.Combine(root, "backups");
+                File.WriteAllText(target, "original");
+                Assert.That(CreateHardLinkNative(alias, target, IntPtr.Zero), Is.True);
+                Assert.Throws<IOException>(() => new SafeFileWriteService().WriteAllText(
+                    target, "replacement", backups, true));
+                Assert.That(File.ReadAllText(target), Is.EqualTo("original"));
+                Assert.That(File.ReadAllText(alias), Is.EqualTo("original"));
+                Assert.That(Directory.GetFiles(root, "*.tmp"), Is.Empty);
+                Assert.That(Directory.Exists(backups), Is.False);
+            }
+            finally { Directory.Delete(root, true); }
+        }
+
         [Test]
         public void SafeWriter_RepeatedUpdatesPreserveEveryBackup()
         {
