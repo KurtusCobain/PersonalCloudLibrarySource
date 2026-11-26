@@ -13,13 +13,14 @@ namespace PersonalCloudLibrarySource
             if (zipHostStopping || transferPresentationDisposed) return false;
             try
             {
-                var manager = transferManager;
-                if (manager != null)
-                    foreach (var job in manager.GetReservationSnapshot())
-                        if (TransferRecoveryJournal.ConflictsWithLaunch(job.GameId, job.Destination, job.Id,
-                            gameId, launchPath, installDirectory))
-                            return false;
-                return GetTransferRecoveryJournal().IsClearForGameLaunch(gameId, launchPath, installDirectory);
+                if (HasConflictingLaunchReservation(gameId, launchPath, installDirectory))
+                    return false;
+                if (!GetTransferRecoveryJournal().IsClearForGameLaunch(gameId, launchPath, installDirectory))
+                    return false;
+                // A job may have been queued during the journal scan, before
+                // its durable marker is written. Narrow that interval too.
+                return !zipHostStopping && !transferPresentationDisposed &&
+                    !HasConflictingLaunchReservation(gameId, launchPath, installDirectory);
             }
             catch (Exception ex)
             {
@@ -28,14 +29,25 @@ namespace PersonalCloudLibrarySource
             }
         }
 
+        private bool HasConflictingLaunchReservation(Guid gameId, string launchPath, string installDirectory)
+        {
+            var manager = transferManager;
+            if (manager != null)
+                foreach (var job in manager.GetReservationSnapshot())
+                    if (TransferRecoveryJournal.ConflictsWithLaunch(job.GameId, job.Destination, job.Id,
+                        gameId, launchPath, installDirectory))
+                        return true;
+            return false;
+        }
+
         public override void OnGameStarting(OnGameStartingEventArgs args)
         {
             if (args?.Game == null || args.Game.PluginId != Id)
                 return;
 
-            // Once irreversible cleanup begins, Playnite must not start this
-            // game while file-level deletion is in progress. This complements
-            // the IsRunning/IsLaunching check performed before cleanup.
+            // Refuse stale Play actions during related transfer or managed
+            // package work. These are point-in-time admission checks, not a
+            // transaction with Playnite's eventual process startup.
             if (activeZipCleanups.ContainsKey(args.Game.Id) ||
                 activeZipRecoveries.ContainsKey(args.Game.Id) ||
                 activeZipExtractions.ContainsKey(args.Game.Id) ||

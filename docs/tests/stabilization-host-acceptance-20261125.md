@@ -101,6 +101,9 @@ The following supplement A10–A32. They remain NOT RUN until performed in the d
 | R22 | Ordinary file-only removal during competing reservation admission | Same journal lock excludes cooperating admission during deletion; existing pending evidence or lock contention refuses removal; no new destructive authority | |
 | R23 | Guarded deletion and drive-root path normalization | Ordinary file removal preserves siblings and releases ancestor handles; ambiguous roots refuse, repeated absolute root normalization stays absolute; no volume-root removal | |
 
+| R24 | Cancel or close during ZIP extraction/recovery preflight | No late confirmation or new mutation after cancellation; worker uses registered token, late shutdown dialogs suppressed, uncertain files preserved | |
+| R25 | Stale ordinary or managed Play action with retained transfer reservation | Related game or overlapping absolute launch path refuses; valid unrelated reservation does not block unrelated game; malformed/missing owned evidence fails closed; no automatic marker removal | |
+
 ## Stop rules
 
 Stop on possible source/user-data mutation, unexpected deletion, incorrect cross-source identity, unauthorized launcher execution, unexplained host freeze or unknown process ownership. Preserve logs, journal and staging. Do not automatically remove evidence, rerun a destructive operation, or bypass a refusal to obtain a PASS. Reviewers and owner adjudicate the failure before continuing.
