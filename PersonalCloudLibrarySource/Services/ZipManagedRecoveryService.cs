@@ -89,7 +89,8 @@ namespace PersonalCloudLibrarySource
                 if (!TryLocations(cacheRoot, gameId, out root, out original,
                     out recovery, out journal)) return false;
                 TransferPartialPathPolicy.RequireSafePath(journal);
-                return CacheOwnershipReceiptStore.ExistsOrCannotVerifyAbsence(journal);
+                return CacheOwnershipReceiptStore.ExistsOrCannotVerifyAbsence(journal) ||
+                    HasFinalizationFootprint(journal);
             }
             catch (Exception) { return true; }
         }
@@ -113,10 +114,11 @@ namespace PersonalCloudLibrarySource
                 var recoveryExists = CacheOwnershipReceiptStore.ExistsOrCannotVerifyAbsence(recovery);
                 if (!recordExists)
                 {
-                    result.State = recoveryExists
+                    var orphaned = recoveryExists || HasFinalizationFootprint(journal);
+                    result.State = orphaned
                         ? ZipRecoveryState.Ambiguous : ZipRecoveryState.NoJournal;
-                    result.Reason = recoveryExists
-                        ? "A recovery folder exists without a valid journal; preserve it."
+                    result.Reason = orphaned
+                        ? "Recovery content or finalization evidence exists without a valid journal; preserve it."
                         : "No recovery transaction was recorded.";
                     return result;
                 }
@@ -126,9 +128,11 @@ namespace PersonalCloudLibrarySource
                 result.TransactionId = entry.TransactionId;
                 var purgeFootprint = journal + ".purge.json";
                 var purgedMarker = journal + ".purged";
-                if (File.Exists(purgedMarker) || Directory.Exists(purgedMarker))
+                if (RecordFootprint(purgedMarker))
                 {
-                    if (!TryReadRestoredMarker(purgedMarker, entry.TransactionId) ||
+                    if (!RecordFootprint(purgeFootprint) ||
+                        RecordFootprint(journal + ".restored") ||
+                        !TryReadRestoredMarker(purgedMarker, entry.TransactionId) ||
                         File.Exists(original) || Directory.Exists(original) ||
                         File.Exists(recovery) || Directory.Exists(recovery))
                     {
@@ -139,12 +143,11 @@ namespace PersonalCloudLibrarySource
                     result.Reason = "All recorded managed ZIP files were permanently removed and cleanup finalized.";
                     return result;
                 }
-                if (File.Exists(purgeFootprint) || Directory.Exists(purgeFootprint))
+                if (RecordFootprint(purgeFootprint))
                 {
                     if (File.Exists(original) || Directory.Exists(original) ||
                         File.Exists(recovery) ||
-                        File.Exists(journal + ".restored") ||
-                        Directory.Exists(journal + ".restored"))
+                        RecordFootprint(journal + ".restored"))
                     {
                         result.Reason = "Cleanup journal conflicts with an original or unexpected recovery location. Preserve both paths.";
                         return result;
@@ -154,7 +157,7 @@ namespace PersonalCloudLibrarySource
                     return result;
                 }
                 var marker = journal + ".restored";
-                var markerExists = File.Exists(marker) || Directory.Exists(marker);
+                var markerExists = RecordFootprint(marker);
                 if (markerExists && !TryReadRestoredMarker(marker, entry.TransactionId))
                 {
                     result.Reason = "Recovery finalization marker is invalid; preserve both folders.";
@@ -213,7 +216,7 @@ namespace PersonalCloudLibrarySource
                     string root, original, recovery, journal;
                     if (!TryLocations(cacheRoot, gameId, out root, out original,
                         out recovery, out journal)) return false;
-                    if (File.Exists(journal) || Directory.Exists(journal) ||
+                    if (RecordFootprint(journal) || HasFinalizationFootprint(journal) ||
                         File.Exists(recovery) || Directory.Exists(recovery) ||
                         !Directory.Exists(original) ||
                         approvals.HasApprovalFootprint(gameId, cacheRoot))
@@ -446,11 +449,15 @@ namespace PersonalCloudLibrarySource
         {
             foreach (var suffix in new[] { ".purge.json", ".purged", ".restored" })
             {
-                var path = journal + suffix;
-                TransferPartialPathPolicy.RequireSafePath(path);
-                if (CacheOwnershipReceiptStore.ExistsOrCannotVerifyAbsence(path)) return true;
+                if (RecordFootprint(journal + suffix)) return true;
             }
             return false;
+        }
+
+        private static bool RecordFootprint(string path)
+        {
+            TransferPartialPathPolicy.RequireSafePath(path);
+            return CacheOwnershipReceiptStore.ExistsOrCannotVerifyAbsence(path);
         }
 
         private bool TryReadRestoredMarker(string path, string transactionId)
@@ -501,6 +508,7 @@ namespace PersonalCloudLibrarySource
                     MaxJsonLength = MaxJournalBytes
                 }.Deserialize<ZipRecoveryJournalEntry>(
                     TransferPartialPathPolicy.ReadPrivateRecord(stream, MaxJournalBytes));
+            Guid transaction;
             return entry != null && entry.Version == 1 &&
                 string.Equals(entry.GameId, gameId, StringComparison.Ordinal) &&
                 string.Equals(entry.CacheRoot, root, StringComparison.OrdinalIgnoreCase) &&
@@ -508,10 +516,12 @@ namespace PersonalCloudLibrarySource
                     StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(entry.RecoveryDirectory, recovery,
                     StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(entry.TransactionId) &&
-                entry.TransactionId.Length == 32 &&
+                Guid.TryParseExact(entry.TransactionId, "N", out transaction) &&
+                transaction != Guid.Empty &&
                 !string.IsNullOrWhiteSpace(entry.InventoryFingerprint) &&
-                entry.InventoryFingerprint.Length == 64;
+                entry.InventoryFingerprint.Length == 64 &&
+                System.Linq.Enumerable.All(entry.InventoryFingerprint, x =>
+                    (x >= '0' && x <= '9') || (x >= 'A' && x <= 'F'));
         }
 
         private bool TryLocations(string cacheRoot, string gameId,

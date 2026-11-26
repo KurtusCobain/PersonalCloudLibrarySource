@@ -80,6 +80,26 @@ namespace PersonalCloudLibrarySource.Tests.Services
             return recovery.Inspect(cache, gameId).RecoveryDirectory;
         }
 
+        [TestCase(".purge.json")]
+        [TestCase(".purged")]
+        [TestCase(".restored")]
+        public void OrphanedFinalizationRecordBlocksNewQuarantine(string suffix)
+        {
+            var store = Path.Combine(root, "journals");
+            Directory.CreateDirectory(store);
+            var identity = PathBoundary.Normalize(cache).ToUpperInvariant() + "\n" + gameId.ToUpperInvariant();
+            string name;
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+                name = BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(identity))).Replace("-", "");
+            var footprint = Path.Combine(store, name + ".json" + suffix);
+            File.WriteAllText(footprint, "preserve evidence");
+            Assert.That(recovery.HasJournalFootprint(cache, gameId), Is.True);
+            Assert.That(recovery.Inspect(cache, gameId).State, Is.EqualTo(ZipRecoveryState.Ambiguous));
+            Assert.That(Quarantine(), Is.False);
+            Assert.That(File.ReadAllText(footprint), Is.EqualTo("preserve evidence"));
+            Assert.That(File.ReadAllText(Path.Combine(plan.Destination, "Game.exe")), Is.EqualTo("original game"));
+        }
+
         [Test]
         public void HeldLifecycleLockPreventsCompetingRecoveryMove()
         {
