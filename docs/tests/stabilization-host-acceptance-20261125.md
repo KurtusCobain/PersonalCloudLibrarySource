@@ -94,6 +94,10 @@ The following supplement A10–A32. They remain NOT RUN until performed in the d
 | R17 | Retry of external LocalFile attempt | Direct queue retry refuses, hosted retry requires a fresh controller and affirmative per-operation consent | |
 | R18 | File ancestor cache destination collision and receipt path binding | Refuse inconsistent catalog before publication regardless of item order; ordinary sibling cache files remain valid; receipt names the actual completed destination rather than re-resolving it | |
 
+| R19 | Refresh during an active transfer or retained recovery reservation | Single- and multi-source refresh defer with typed failure; existing library retained, recovery review accessible, no marker/destination changes or new installed-state promotion; clean completion permits refresh again | |
+| R20 | File-only uninstall prepared before recovery becomes uncertain | Existing hosted controller refuses before deletion; unrelated files preserved; no recursive or permanent removal authority | |
+| R21 | Concurrent host transfer-service access and shutdown | One queue/manager per host; late creation refused after shutdown begins, workers remain bounded; no duplicate transfer execution | |
+
 ## Stop rules
 
 Stop on possible source/user-data mutation, unexpected deletion, incorrect cross-source identity, unauthorized launcher execution, unexplained host freeze or unknown process ownership. Preserve logs, journal and staging. Do not automatically remove evidence, rerun a destructive operation, or bypass a refusal to obtain a PASS. Reviewers and owner adjudicate the failure before continuing.

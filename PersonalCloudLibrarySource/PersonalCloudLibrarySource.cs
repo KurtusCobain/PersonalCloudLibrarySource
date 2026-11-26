@@ -123,6 +123,8 @@ namespace PersonalCloudLibrarySource
                 experimentalMultiSourcePlan = prepared;
             logger.Info("PCLS experimental multi-source catalog prepared " +
                 prepared.Games.Count + " entries.");
+            try { importNotificationService.Clear(); }
+            catch (Exception ex) { logger.Warn(ex, "PCLS could not clear the import notification."); }
             return prepared.Games;
         }
 
@@ -133,7 +135,7 @@ namespace PersonalCloudLibrarySource
                 "transfer-recovery", "Library refresh deferred because a transfer is active or recovery evidence needs review. Previous catalog retained; review transfer recovery.");
             // Deferral is not a failed source validation. Preserve existing
             // action routes rather than revoke a running transfer's plan.
-            try { importNotificationService.ShowFailure(failure); }
+            try { importNotificationService.ShowFailure(failure, ReviewTransferRecovery); }
             catch (Exception ex) { logger.Warn(ex, "PCLS could not report deferred catalog refresh."); }
             throw new ImportOutcomeException(failure);
         }

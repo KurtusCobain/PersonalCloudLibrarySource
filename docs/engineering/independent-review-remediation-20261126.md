@@ -218,3 +218,7 @@ A refresh deferred before source validation must not invalidate a running multi-
 ## Thirty-first correction batch: serialize host transfer lifecycle
 
 Lazy transfer manager/executor/queue creation was not synchronized across host calls; shutdown nulled the queue without closing future admission. Serialize host initialization and shutdown state using one lifecycle lock, publish the initialized manager safely, refuse new queue/executor access after shutdown, detach events and capture existing resources under lock, then dispose/wait outside it. Preserve read access to an already-created manager and warn on shutdown timeout. Existing queue references retain their own shutdown contract; no claim that this is a global lock across Playnite instances. Source wiring test guards creation/admission ordering; native host concurrency remains untested. CI pending.
+
+## Thirty-second correction batch: direct recovery notification and operational guidance
+
+The recovery-deferred refresh notification now opens the existing read-only recovery view directly, while other import failure notifications retain their previous settings action. Successful multi-source catalog publication clears persistent import failure notifications. Add behavioral coverage of localized recovery reason, recovery action, clearing and contended journal gate fail-fast behavior. Document global deferral tradeoff and add host cases R19-R21 for refresh, uninstall and host lifecycle. No destructive recovery operation, no native host proof. CI pending.

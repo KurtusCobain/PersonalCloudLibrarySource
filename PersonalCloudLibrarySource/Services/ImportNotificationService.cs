@@ -37,6 +37,9 @@ namespace PersonalCloudLibrarySource
         }
 
         public void ShowFailure(ImportOutcome outcome)
+            => ShowFailure(outcome, null);
+
+        public void ShowFailure(ImportOutcome outcome, Action recoveryOverride)
         {
             if (outcome == null || outcome.Succeeded)
             {
@@ -53,7 +56,7 @@ namespace PersonalCloudLibrarySource
                     NotificationId,
                     text,
                     NotificationType.Error,
-                    () => dispatcher.Invoke(openRecovery)));
+                    () => dispatcher.Invoke(recoveryOverride ?? openRecovery)));
             });
         }
 

@@ -72,6 +72,26 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void CatalogPublicationGateRefusesContendedInProcessJournalWithoutWaiting()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var field = typeof(TransferRecoveryJournal).GetField("syncRoot",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null);
+            var gate = field.GetValue(journal);
+            System.Threading.Tasks.Task<bool> observed;
+            lock (gate)
+            {
+                observed = System.Threading.Tasks.Task.Run(() => journal.IsClearForCatalogPublication());
+                Assert.That(observed.Wait(TimeSpan.FromSeconds(2)), Is.True,
+                    "Read-only gate must not wait for another journal operation.");
+                Assert.That(observed.Result, Is.False);
+            }
+            Assert.That(Directory.Exists(records), Is.False);
+            Assert.That(journal.IsClearForCatalogPublication(), Is.True);
+        }
+
+        [Test]
         public void CatalogPublicationGateRefusesMissingOwnedMarker()
         {
             var journal = new TransferRecoveryJournal(records);

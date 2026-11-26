@@ -104,6 +104,8 @@ Open **Review Transfer Recovery** in the plugin menu. The review shows recorded 
 
 This procedure preserves evidence; it does not clear a reservation. Support-assisted recovery and a validated operator release protocol are still outstanding.
 
+The internal candidate defers a whole-library refresh and hosted file-only uninstall while a transfer is active, a pending journal marker exists, or recovery state cannot be verified. This is intentional even for unrelated games: it preserves the previous catalog rather than promote an uncertain cached destination or allow removal during transfer. Once ordinary active transfers finish and their reservations are cleanly released, retry the refresh or removal. A retained or unreadable reservation requires review; never delete a marker just to unblock the interface. The refresh notification opens the recovery review. These checks are not an interprocess transaction with Playnite or other filesystem writers.
+
 ## Difference between Remove and Uninstall
 
 `Remove cached copy` and Playnite uninstall target eligible local cached files. Recursive folder removal is disabled in the internal candidate; source provider files, manifests and rclone remote content must remain untouched.

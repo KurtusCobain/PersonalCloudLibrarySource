@@ -54,6 +54,28 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void RecoveryPendingNotificationUsesDedicatedReasonAndReviewAction()
+        {
+            var sink = new FakeSink();
+            var dispatcher = new RecordingDispatcher();
+            var settingsOpened = 0;
+            var recoveryOpened = 0;
+            var service = new ImportNotificationService(sink, dispatcher,
+                key => key == "LOCPLSImportFailureNotification" ? "Import deferred: {0}" :
+                    key == "LOCPLSImportFailureRecoveryPending" ? "Review pending transfers" : "wrong reason",
+                () => settingsOpened++);
+            service.ShowFailure(ImportOutcome.Failure(ImportFailureKind.RecoveryPending,
+                "transfer-recovery", "pending"), () => recoveryOpened++);
+            var notification = sink.Messages[ImportNotificationService.NotificationId];
+            Assert.That(notification.Text, Is.EqualTo("Import deferred: Review pending transfers"));
+            notification.ActivationAction();
+            Assert.That(recoveryOpened, Is.EqualTo(1));
+            Assert.That(settingsOpened, Is.Zero);
+            service.Clear();
+            Assert.That(sink.Messages, Is.Empty);
+        }
+
+        [Test]
         public void ClearAfterSuccessfulRecovery_RemovesPersistentNotificationOnDispatcher()
         {
             var sink = new FakeSink();
