@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
@@ -63,7 +65,12 @@ namespace PersonalCloudLibrarySource
             token.ThrowIfCancellationRequested();
             if (StartInfo == null || StartInfo.UseShellExecute)
                 throw new InvalidOperationException("Contained execution requires direct executable launch.");
-            var executable = ResolveExecutable(StartInfo.FileName);
+            // Snapshot the explicit ProcessStartInfo environment once. Resolve
+            // unqualified executable names against the same PATH the child gets.
+            var environment = CaptureEnvironment(StartInfo);
+            string searchPath;
+            environment.TryGetValue("PATH", out searchPath);
+            var executable = ResolveExecutable(StartInfo.FileName, searchPath);
             var arguments = new StringBuilder(RcloneCommandBuilder.QuoteArgument(executable) +
                 (string.IsNullOrWhiteSpace(StartInfo.Arguments) ? "" : " " + StartInfo.Arguments));
             job = CreateJobObject(IntPtr.Zero, null);
@@ -93,12 +100,24 @@ namespace PersonalCloudLibrarySource
 
                 token.ThrowIfCancellationRequested();
                 ProcessInformation info;
-                // EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW | CREATE_SUSPENDED.
-                if (!CreateProcess(executable, arguments, IntPtr.Zero, IntPtr.Zero, true,
-                    0x08080004u, IntPtr.Zero,
-                    string.IsNullOrWhiteSpace(StartInfo.WorkingDirectory) ? null : StartInfo.WorkingDirectory,
-                    ref startup, out info))
-                    throw NativeError("CreateProcess (contained)");
+                // EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW |
+                // CREATE_SUSPENDED | CREATE_UNICODE_ENVIRONMENT.
+                // Never log environment contents (rclone may use credentials).
+                var block = BuildEnvironmentBlock(environment);
+                var pinned = GCHandle.Alloc(block, GCHandleType.Pinned);
+                try
+                {
+                    if (!CreateProcess(executable, arguments, IntPtr.Zero, IntPtr.Zero, true,
+                        0x08080404u, pinned.AddrOfPinnedObject(),
+                        string.IsNullOrWhiteSpace(StartInfo.WorkingDirectory) ? null : StartInfo.WorkingDirectory,
+                        ref startup, out info))
+                        throw NativeError("CreateProcess (contained)");
+                }
+                finally
+                {
+                    Array.Clear(block, 0, block.Length);
+                    pinned.Free();
+                }
                 root = new SafeFileHandle(info.Process, true);
                 using (var thread = new SafeFileHandle(info.Thread, true))
                 {
@@ -125,7 +144,50 @@ namespace PersonalCloudLibrarySource
 
         // Explicit paths or absolute PATH entries only. Do not implicitly
         // search the current working directory for an unqualified executable.
-        private static string ResolveExecutable(string name)
+        private static SortedDictionary<string, string> CaptureEnvironment(ProcessStartInfo info)
+        {
+            var environment = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (DictionaryEntry entry in info.EnvironmentVariables)
+            {
+                var key = (string)entry.Key;
+                var value = (string)entry.Value;
+                // Windows variable names must not contain '=' or NUL. The
+                // per-drive working-directory pseudo-variables are not part
+                // of ProcessStartInfo's supported user environment contract.
+                if (string.IsNullOrEmpty(key) || key.IndexOfAny(new[] { '=', '\0' }) >= 0 ||
+                    (value != null && value.IndexOf('\0') >= 0))
+                    throw new IOException("Contained process environment contains an invalid variable.");
+                if (value != null) environment.Add(key, value);
+            }
+            return environment;
+        }
+
+        private static char[] BuildEnvironmentBlock(SortedDictionary<string, string> environment)
+        {
+            // The Unicode environment is sorted, each entry NUL-terminated,
+            // and the whole block double-NUL-terminated (including empty).
+            const int maxCharacters = 1024 * 1024;
+            long length = environment.Count == 0 ? 2 : 1;
+            foreach (var entry in environment)
+            {
+                length += (long)entry.Key.Length + entry.Value.Length + 2;
+                if (length > maxCharacters)
+                    throw new IOException("Contained process environment exceeds its size limit.");
+            }
+            var result = new char[(int)length];
+            var offset = 0;
+            foreach (var entry in environment)
+            {
+                entry.Key.CopyTo(0, result, offset, entry.Key.Length);
+                offset += entry.Key.Length;
+                result[offset++] = '=';
+                entry.Value.CopyTo(0, result, offset, entry.Value.Length);
+                offset += entry.Value.Length + 1;
+            }
+            return result;
+        }
+
+        private static string ResolveExecutable(string name, string searchPath)
         {
             if (string.IsNullOrWhiteSpace(name)) throw new IOException("Executable path is empty.");
             if (IsAbsolute(name))
@@ -137,7 +199,7 @@ namespace PersonalCloudLibrarySource
             if (name.IndexOfAny(new[] { '\\', '/', ':', '"' }) >= 0)
                 throw new IOException("Executable must be an absolute path or PATH name.");
             var candidateName = Path.HasExtension(name) ? name : name + ".exe";
-            foreach (var entry in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(';'))
+            foreach (var entry in (searchPath ?? "").Split(';'))
             {
                 var directory = entry.Trim().Trim('"');
                 if (!IsAbsolute(directory)) continue;

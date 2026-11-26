@@ -77,6 +77,8 @@ AllowDownloads = true
 
 For Google Drive or OneDrive, use the remote name you created in `rclone config`. The plugin requires a configured named remote; inline backend syntax such as `:local:` is not accepted. Use LocalFolder for ordinary local storage, or an explicitly configured named local remote if you need rclone-specific behavior.
 
+The contained plugin launcher snapshots the process environment, including existing rclone configuration variables, and uses the same PATH snapshot for executable lookup. It does not filter or log environment values; configure the executable and environment as trusted local settings.
+
 Background rclone commands do not prompt for encrypted configuration passwords. Configure non-interactive access outside Playnite first; the plugin passes `--ask-password=false` and does not request or store a configuration password. Provider-specific authentication and real encrypted-configuration behavior still require host qualification.
 
 The provider settings screen maps directly to these rclone values: executable path, remote name, manifest path, optional content root, and timeout.
