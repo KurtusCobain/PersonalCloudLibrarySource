@@ -31,55 +31,47 @@ namespace PersonalCloudLibrarySource
             var root = ValidateStoreDirectory(pluginDataDirectory);
             var primary = Path.Combine(root, FileName);
             RejectLinksAndDirectories(primary);
+            if (File.Exists(primary) && !ReadValidated(primary).Succeeded)
+                throw new InvalidOperationException(
+                    "Existing source profiles are invalid; inspect and recover manually.");
             var json = codec.Serialize(profiles);
             var payload = new UTF8Encoding(false, true).GetBytes(json);
             if (payload.Length > SourceProfilesConfigurationCodec.MaxDocumentCharacters * 4)
                 throw new InvalidOperationException("Source profiles file is too large.");
 
-            var pending = Path.Combine(root, "source-profiles-" +
-                Guid.NewGuid().ToString("N") + ".tmp");
-            try
+            if (!File.Exists(primary))
             {
-                using (var stream = new FileStream(pending, FileMode.CreateNew,
-                    FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
-                {
-                    stream.Write(payload, 0, payload.Length);
-                    stream.Flush(true);
-                }
-                if (File.Exists(primary))
-                {
-                    // A corrupt or unknown current schema is not a license to
-                    // overwrite the user's only copy. Explicit recovery first.
-                    if (!ReadValidated(primary).Succeeded)
-                        throw new InvalidOperationException(
-                            "Existing source profiles are invalid; inspect and recover manually.");
-                    // Backup name is unique: do not overwrite earlier backups or
-                    // anything the user has added to this directory.
-                    var backup = Path.Combine(root, "source-profiles-backup-" +
-                        Guid.NewGuid().ToString("N") + ".json");
-                    RejectLinksAndDirectories(primary);
-                    File.Replace(pending, primary, backup);
-                    return backup;
-                }
-                RejectLinksAndDirectories(primary);
-                File.Move(pending, primary);
+                TransferPartialPathPolicy.WritePrivateRecord(primary, json,
+                    SourceProfilesConfigurationCodec.MaxDocumentCharacters * 4,
+                    System.Threading.CancellationToken.None);
                 return string.Empty;
             }
-            finally
+
+            var pending = Path.Combine(root, "source-profiles-" +
+                Guid.NewGuid().ToString("N") + ".tmp");
+            // Preserve uncertain staging evidence rather than delete by pathname.
+            using (var stream = new FileStream(pending, FileMode.CreateNew,
+                FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
             {
-                // Only a uniquely created, uncommitted temporary file is owned
-                // by this operation. Never remove a preexisting user file.
-                if (File.Exists(pending))
-                {
-                    try
-                    {
-                        if ((File.GetAttributes(pending) & FileAttributes.ReparsePoint) == 0)
-                            File.Delete(pending);
-                    }
-                    catch (IOException) { }
-                    catch (UnauthorizedAccessException) { }
-                }
+                stream.Write(payload, 0, payload.Length);
+                stream.Flush(true);
             }
+            if (File.Exists(primary))
+            {
+                // A corrupt or unknown current schema is not a license to
+                // overwrite the user's only copy. Explicit recovery first.
+                if (!ReadValidated(primary).Succeeded)
+                    throw new InvalidOperationException(
+                        "Existing source profiles are invalid; inspect and recover manually.");
+                // Backup name is unique: do not overwrite earlier backups or
+                // anything the user has added to this directory.
+                var backup = Path.Combine(root, "source-profiles-backup-" +
+                    Guid.NewGuid().ToString("N") + ".json");
+                RejectLinksAndDirectories(primary);
+                File.Replace(pending, primary, backup);
+                return backup;
+            }
+            throw new IOException("Existing profiles disappeared during replacement; preserve staged evidence.");
         }
 
         public SourceProfilesParseResult Load(string pluginDataDirectory)
@@ -141,17 +133,15 @@ namespace PersonalCloudLibrarySource
             RejectLinksAndDirectories(path);
             if (!File.Exists(path))
                 return codec.Parse(string.Empty);
-            var info = new FileInfo(path);
-            if (info.Length > SourceProfilesConfigurationCodec.MaxDocumentCharacters * 4L)
-                return codec.Parse(string.Empty);
-            using (var file = new FileStream(path, FileMode.Open,
-                FileAccess.Read, FileShare.Read))
-            using (var reader = new StreamReader(file,
-                new UTF8Encoding(false, true), false))
+            try
             {
-                var json = reader.ReadToEnd();
-                return codec.Parse(json);
+                using (var file = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
+                    return codec.Parse(TransferPartialPathPolicy.ReadPrivateRecord(file,
+                        SourceProfilesConfigurationCodec.MaxDocumentCharacters * 4));
             }
+            catch (IOException) { return codec.Parse(string.Empty); }
+            catch (UnauthorizedAccessException) { return codec.Parse(string.Empty); }
+            catch (DecoderFallbackException) { return codec.Parse(string.Empty); }
         }
 
         private static string ValidateStoreDirectory(string directory)

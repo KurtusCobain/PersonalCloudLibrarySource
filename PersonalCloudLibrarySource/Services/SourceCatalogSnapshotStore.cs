@@ -48,45 +48,38 @@ namespace PersonalCloudLibrarySource
             if (File.Exists(target) && !ReadFile(target, document.ProfileId).Succeeded)
                 throw new InvalidOperationException("Existing catalog identity snapshot is invalid.");
 
-            var payload = new UTF8Encoding(false, true).GetBytes(Serializer().Serialize(document));
+            var json = Serializer().Serialize(document);
+            var payload = new UTF8Encoding(false, true).GetBytes(json);
             if (payload.Length > MaxFileBytes)
                 throw new InvalidOperationException("Catalog identity snapshot exceeds storage limit.");
 
-            var pending = Path.Combine(root, FilePrefix + Guid.NewGuid().ToString("N") + ".tmp");
-            try
+            if (!File.Exists(target))
             {
-                using (var file = new FileStream(pending, FileMode.CreateNew,
-                    FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
-                {
-                    file.Write(payload, 0, payload.Length);
-                    file.Flush(true);
-                }
-                RejectLinkOrDirectory(target);
-                if (File.Exists(target))
-                {
-                    // Keep the replaced valid record as an independently named
-                    // backup. No automatic rollback or backup garbage collection.
-                    var backup = Path.Combine(root, FilePrefix + "backup-" +
-                        Guid.NewGuid().ToString("N") + ".json");
-                    File.Replace(pending, target, backup);
-                }
-                else
-                    File.Move(pending, target);
+                TransferPartialPathPolicy.WritePrivateRecord(target, json, MaxFileBytes,
+                    System.Threading.CancellationToken.None);
                 return target;
             }
-            finally
+
+            var pending = Path.Combine(root, FilePrefix + Guid.NewGuid().ToString("N") + ".tmp");
+            // Preserve uncertain staging evidence rather than delete by pathname.
+            using (var file = new FileStream(pending, FileMode.CreateNew,
+                FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
             {
-                if (File.Exists(pending))
-                {
-                    try
-                    {
-                        if ((File.GetAttributes(pending) & FileAttributes.ReparsePoint) == 0)
-                            File.Delete(pending);
-                    }
-                    catch (IOException) { }
-                    catch (UnauthorizedAccessException) { }
-                }
+                file.Write(payload, 0, payload.Length);
+                file.Flush(true);
             }
+            RejectLinkOrDirectory(target);
+            if (File.Exists(target))
+            {
+                // Keep the replaced valid record as an independently named
+                // backup. No automatic rollback or backup garbage collection.
+                var backup = Path.Combine(root, FilePrefix + "backup-" +
+                    Guid.NewGuid().ToString("N") + ".json");
+                File.Replace(pending, target, backup);
+            }
+            else
+                throw new IOException("Existing snapshot disappeared during replacement; preserve staged evidence.");
+            return target;
         }
 
         public SourceCatalogSnapshotRead Load(string pluginDataDirectory, string profileId)
@@ -126,14 +119,8 @@ namespace PersonalCloudLibrarySource
             try
             {
                 string json;
-                using (var stream = new FileStream(path, FileMode.Open,
-                    FileAccess.Read, FileShare.Read))
-                using (var reader = new StreamReader(stream, new UTF8Encoding(false, true), false))
-                {
-                    json = reader.ReadToEnd();
-                    if (stream.Length > MaxFileBytes)
-                        return Refuse("Snapshot exceeds the size limit.");
-                }
+                using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
+                    json = TransferPartialPathPolicy.ReadPrivateRecord(stream, MaxFileBytes);
                 var doc = Serializer().Deserialize<SourceCatalogSnapshotDocument>(json);
                 if (doc == null || doc.SchemaVersion != SchemaVersion ||
                     !string.Equals(doc.ProfileId, expectedId, StringComparison.Ordinal) ||
@@ -149,6 +136,8 @@ namespace PersonalCloudLibrarySource
                         doc.ProfileId, doc.BindingFingerprint, doc.GameIds)
                 };
             }
+            catch (IOException) { return Refuse("Snapshot cannot be safely read."); }
+            catch (UnauthorizedAccessException) { return Refuse("Snapshot cannot be safely read."); }
             catch (ArgumentException) { return Refuse("Snapshot cannot be decoded."); }
             catch (InvalidOperationException) { return Refuse("Snapshot cannot be decoded."); }
         }

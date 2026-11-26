@@ -111,43 +111,35 @@ namespace PersonalCloudLibrarySource
             RejectLinkedOrDirectory(target);
             if (File.Exists(target) && !ReadFile(target, doc.ProfileId).Succeeded)
                 throw new InvalidOperationException("Refusing to overwrite invalid display evidence.");
-            var bytes = new UTF8Encoding(false, true).GetBytes(Serializer().Serialize(doc));
+            var json = Serializer().Serialize(doc);
+            var bytes = new UTF8Encoding(false, true).GetBytes(json);
             if (bytes.Length > MaxBytes)
                 throw new InvalidOperationException("Display evidence exceeds the size limit.");
-            var pending = Path.Combine(root, FilePrefix +
-                Guid.NewGuid().ToString("N") + ".tmp");
-            try
+            if (!File.Exists(target))
             {
-                using (var stream = new FileStream(pending, FileMode.CreateNew,
-                    FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
-                {
-                    stream.Write(bytes, 0, bytes.Length);
-                    stream.Flush(true);
-                }
-                RejectLinkedOrDirectory(target);
-                if (File.Exists(target))
-                {
-                    var backup = Path.Combine(root, FilePrefix + "backup-" +
-                        Guid.NewGuid().ToString("N") + ".json");
-                    File.Replace(pending, target, backup);
-                }
-                else
-                    File.Move(pending, target);
+                TransferPartialPathPolicy.WritePrivateRecord(target, json, MaxBytes,
+                    System.Threading.CancellationToken.None);
                 return target;
             }
-            finally
+            var pending = Path.Combine(root, FilePrefix +
+                Guid.NewGuid().ToString("N") + ".tmp");
+            // Preserve uncertain staging evidence rather than delete by pathname.
+            using (var stream = new FileStream(pending, FileMode.CreateNew,
+                FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
             {
-                if (File.Exists(pending))
-                {
-                    try
-                    {
-                        if ((File.GetAttributes(pending) & FileAttributes.ReparsePoint) == 0)
-                            File.Delete(pending);
-                    }
-                    catch (IOException) { }
-                    catch (UnauthorizedAccessException) { }
-                }
+                stream.Write(bytes, 0, bytes.Length);
+                stream.Flush(true);
             }
+            RejectLinkedOrDirectory(target);
+            if (File.Exists(target))
+            {
+                var backup = Path.Combine(root, FilePrefix + "backup-" +
+                    Guid.NewGuid().ToString("N") + ".json");
+                File.Replace(pending, target, backup);
+            }
+            else
+                throw new IOException("Existing display snapshot disappeared during replacement; preserve staged evidence.");
+            return target;
         }
 
         public SourceCatalogDisplayRead Load(string pluginDataDirectory, string profileId)
@@ -193,15 +185,9 @@ namespace PersonalCloudLibrarySource
                 return Refuse("No display snapshot.");
             try
             {
-                using (var stream = new FileStream(path, FileMode.Open,
-                    FileAccess.Read, FileShare.Read))
+                using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
                 {
-                    if (stream.Length == 0 || stream.Length > MaxBytes)
-                        return Refuse("Display snapshot size invalid.");
-                    using (var reader = new StreamReader(stream,
-                        new UTF8Encoding(false, true), false))
-                    {
-                        var json = reader.ReadToEnd();
+                        var json = TransferPartialPathPolicy.ReadPrivateRecord(stream, MaxBytes);
                         var doc = Serializer().Deserialize<SourceCatalogDisplayDocument>(json);
                         if (doc == null || doc.SchemaVersion != SchemaVersion ||
                             !string.Equals(doc.ProfileId, expectedId, StringComparison.Ordinal) ||
@@ -217,9 +203,10 @@ namespace PersonalCloudLibrarySource
                             Snapshot = new SourceCatalogDisplaySnapshot(
                                 doc.ProfileId, doc.BindingFingerprint, doc.Entries)
                         };
-                    }
                 }
             }
+            catch (IOException) { return Refuse("Display snapshot cannot be safely read."); }
+            catch (UnauthorizedAccessException) { return Refuse("Display snapshot cannot be safely read."); }
             catch (ArgumentException) { return Refuse("Display snapshot invalid."); }
             catch (InvalidOperationException) { return Refuse("Display snapshot invalid."); }
         }
