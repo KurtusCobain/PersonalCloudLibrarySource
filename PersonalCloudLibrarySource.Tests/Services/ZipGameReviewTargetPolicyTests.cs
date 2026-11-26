@@ -38,7 +38,8 @@ namespace PersonalCloudLibrarySource.Tests.Services
             {
                 Enabled = true,
                 SourceProviderType = provider,
-                LocalCacheFolder = cache
+                LocalCacheFolder = cache,
+                LocalLibraryRoot = root
             };
 
         private GameCommandTarget Target(string sourcePath = null, string cachedPath = null)
@@ -71,6 +72,21 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(resolved.FromLocalCache, Is.False);
             Assert.That(File.ReadAllText(source), Is.EqualTo("disposable dummy bytes"));
             Assert.That(Directory.GetFiles(cache), Is.Empty);
+        }
+
+        [Test]
+        public void ExternalZipIsOnlyALexicalCandidateBeforeConsent()
+        {
+            var external = Path.Combine(root, "missing-external", "game.zip");
+            var settings = Settings();
+            settings.LocalLibraryRoot = Path.Combine(root, "trusted");
+            var result = new ZipGameReviewTargetPolicy().Resolve(
+                Target(external), settings, pluginId);
+            Assert.That(result.Available, Is.True);
+            Assert.That(result.RequiresExternalSourceConsent, Is.True);
+            Assert.That(result.FromLocalCache, Is.False);
+            Assert.That(result.ArchivePath, Is.EqualTo(external));
+            Assert.That(Directory.Exists(Path.GetDirectoryName(external)), Is.False);
         }
 
         [Test]

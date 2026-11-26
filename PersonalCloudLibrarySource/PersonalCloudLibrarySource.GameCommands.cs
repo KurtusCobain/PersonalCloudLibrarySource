@@ -349,6 +349,16 @@ namespace PersonalCloudLibrarySource
                 navigationService.OpenDashboard));
         }
 
+        private bool ConfirmExternalSourceAccess(string path)
+        {
+            return playniteApi.Dialogs.ShowMessage(
+                PclsResources.Format("LOCPLSExternalSourceConfirmation",
+                    "This manifest references a source outside the configured library location:{0}{0}{1}{0}{0}Only continue if you recognize and trust this path. Accessing a network share may authenticate to that server. Allow access for this operation only?",
+                    Environment.NewLine, path),
+                PclsResources.Get("LOCPLSExternalSourceTitle", "Confirm external library source"),
+                MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+        }
+
         private void ReviewZipGameTarget(GameCommandTarget selected)
         {
             // The menu snapshot is not authority: read the current manifest and
@@ -376,6 +386,10 @@ namespace PersonalCloudLibrarySource
                         title);
                     return;
                 }
+
+                if (candidate.RequiresExternalSourceConsent &&
+                    !ConfirmExternalSourceAccess(candidate.ArchivePath))
+                    return;
 
                 var review = new ZipPackageReviewService().Inspect(
                     candidate.ArchivePath,
@@ -523,7 +537,15 @@ namespace PersonalCloudLibrarySource
 
         private void OpenGameSourceLocation(GameCommandTarget target)
         {
-            var path = target?.ResolvedLocalSourcePath;
+            if (target?.Game == null || target.Game.PluginId != Id) return;
+            var current = settings.GetRuntimeSettingsSnapshot();
+            if (current == null || !current.Enabled || current.EnableMultiSourceProfiles) return;
+            var manifest = LoadValidatedManifest(current);
+            var refreshed = gameCommandService.ResolveTargets(
+                new[] { target.Game }, manifest.Items, current, Id).Single();
+            var path = refreshed.ResolvedLocalSourcePath;
+            if (refreshed.RequiresExternalSourceConsent && !ConfirmExternalSourceAccess(path))
+                return;
             if (File.Exists(path))
             {
                 OpenExplorerFile(path);

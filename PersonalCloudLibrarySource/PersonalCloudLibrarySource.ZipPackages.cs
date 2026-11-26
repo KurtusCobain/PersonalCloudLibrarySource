@@ -51,6 +51,10 @@ namespace PersonalCloudLibrarySource
                     return;
                 }
 
+                if (candidate.RequiresExternalSourceConsent &&
+                    !ConfirmExternalSourceAccess(candidate.ArchivePath))
+                    return;
+
                 // A large archive must never be hashed on Playnite's UI thread.
                 var review = await Task.Run(() => new ZipPackageReviewService()
                     .Inspect(candidate.ArchivePath, current.Item.Title));
@@ -76,6 +80,7 @@ namespace PersonalCloudLibrarySource
                 var refreshedSource = new ZipGameReviewTargetPolicy()
                     .Resolve(current, currentSettings, Id);
                 if (!refreshedSource.Available ||
+                    (refreshedSource.RequiresExternalSourceConsent && !candidate.RequiresExternalSourceConsent) ||
                     !string.Equals(candidate.ArchivePath, refreshedSource.ArchivePath,
                         StringComparison.OrdinalIgnoreCase))
                     return;
@@ -120,6 +125,7 @@ namespace PersonalCloudLibrarySource
                 if (latestTarget.Item == null ||
                     !string.Equals(latestTarget.Item.Id, plan.GameId, StringComparison.Ordinal) ||
                     !latestSource.Available ||
+                    (latestSource.RequiresExternalSourceConsent && !candidate.RequiresExternalSourceConsent) ||
                     !string.Equals(latestSource.ArchivePath, plan.ArchivePath,
                         StringComparison.OrdinalIgnoreCase) ||
                     activeZipRecoveries.ContainsKey(gameId) || activeZipCleanups.ContainsKey(gameId) ||

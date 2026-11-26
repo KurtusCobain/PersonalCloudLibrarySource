@@ -13,6 +13,7 @@ namespace PersonalCloudLibrarySource
         public GameCommandContext PolicyContext { get; set; }
         public string SourceDisplayPath { get; set; }
         public string ResolvedLocalSourcePath { get; set; }
+        public bool RequiresExternalSourceConsent { get; set; }
         public string LaunchPath { get; set; }
         public string InstallDirectory { get; set; }
         public string CacheDisplayPath { get; set; }
@@ -104,6 +105,7 @@ namespace PersonalCloudLibrarySource
             var resolvedLocalSourcePath = string.Empty;
             var sourceDisplayPath = sourcePath ?? string.Empty;
             var canOpenSourceLocation = false;
+            var externalSourceConsent = false;
             if (item != null && !string.IsNullOrWhiteSpace(sourcePath))
             {
                 if (string.Equals(
@@ -120,7 +122,11 @@ namespace PersonalCloudLibrarySource
                 {
                     resolvedLocalSourcePath = PersonalCloudLibrarySource.ResolveLocalFolderSourcePath(settings, sourcePath);
                     sourceDisplayPath = resolvedLocalSourcePath;
-                    canOpenSourceLocation = File.Exists(resolvedLocalSourcePath) || Directory.Exists(resolvedLocalSourcePath);
+                    externalSourceConsent = SourcePathResolver.RequiresExternalLocalSourceConsent(settings, resolvedLocalSourcePath);
+                    // Do not probe an external network or filesystem path
+                    // while building a menu. A click may request consent.
+                    canOpenSourceLocation = externalSourceConsent ||
+                        File.Exists(resolvedLocalSourcePath) || Directory.Exists(resolvedLocalSourcePath);
                 }
             }
 
@@ -138,6 +144,7 @@ namespace PersonalCloudLibrarySource
                 Item = item,
                 SourceDisplayPath = sourceDisplayPath ?? string.Empty,
                 ResolvedLocalSourcePath = resolvedLocalSourcePath ?? string.Empty,
+                RequiresExternalSourceConsent = externalSourceConsent,
                 LaunchPath = launchPath ?? string.Empty,
                 InstallDirectory = installDirectory ?? string.Empty,
                 CacheDisplayPath = cacheDisplayPath ?? string.Empty,

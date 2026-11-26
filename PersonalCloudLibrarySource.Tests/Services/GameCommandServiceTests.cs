@@ -71,6 +71,26 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void ResolveTargets_ExternalLocalFileOffersConsentWithoutPresenceRequirement()
+        {
+            var source = Path.Combine(testRoot, "external", "missing.zip");
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType,
+                LocalLibraryRoot = Path.Combine(testRoot, "trusted"),
+                LocalCacheFolder = Path.Combine(testRoot, "cache"),
+                AllowDownloads = true
+            };
+            var game = new Game("External") { Id = Guid.NewGuid(), GameId = "external", PluginId = pluginId };
+            var item = new PersonalCloudLibraryItem { Id = "external", SourcePath = source, CachePath = "game.zip" };
+            var target = new GameCommandService().ResolveTargets(new[] { game }, new[] { item }, settings, pluginId)[0];
+            Assert.That(target.RequiresExternalSourceConsent, Is.True);
+            Assert.That(target.PolicyContext.CanOpenSourceLocation, Is.True);
+            Assert.That(target.ResolvedLocalSourcePath, Is.EqualTo(source));
+            Assert.That(Directory.Exists(Path.GetDirectoryName(source)), Is.False);
+        }
+
+        [Test]
         public void ResolveTargets_RcloneRemoteOnlyGame_RemainsInstallableWithoutOpenSourceAction()
         {
             var settings = new PersonalCloudLibrarySourceSettingsV3
