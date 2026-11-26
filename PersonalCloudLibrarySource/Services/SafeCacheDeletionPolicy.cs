@@ -177,12 +177,19 @@ namespace PersonalCloudLibrarySource
             // not recursive deletion or a hardlink to a source file. Open
             // the actual leaf without following a link, verify it is an
             // ordinary single-link object, and delete that same handle.
-            using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, true))
+            var parent = Path.GetDirectoryName(Path.GetFullPath(path));
+            using (var ancestors = TransferPartialPathPolicy.PinPublicationAncestors(parent))
             {
-                TransferPartialPathPolicy.CapturePrivateFileIdentity(input.SafeFileHandle);
-                TransferPartialPathPolicy.DeleteVerifiedFileHandle(input.SafeFileHandle);
+                TransferPartialPathPolicy.RequireSafePath(path);
+                using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, true))
+                {
+                    TransferPartialPathPolicy.RequireInspectedFilePath(path, input.SafeFileHandle);
+                    ancestors.Verify();
+                    TransferPartialPathPolicy.DeleteVerifiedFileHandle(input.SafeFileHandle);
+                }
+                ancestors.Verify();
+                TransferPartialPathPolicy.RequireVacant(path);
             }
-            TransferPartialPathPolicy.RequireVacant(path);
         }
 
         // Legacy explicit directory API only. The shipping uninstall controller

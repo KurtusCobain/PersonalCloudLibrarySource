@@ -145,6 +145,49 @@ namespace PersonalCloudLibrarySource.Tests.Services
         private static extern bool CreateHardLinkNative(string link, string existing, IntPtr reserved);
 
         [Test]
+        public void FileOnlyExecutor_OrdinaryNestedFileDeletionPreservesSiblingAndAncestor()
+        {
+            var directory = Path.Combine(cacheRoot, "nested", "game");
+            Directory.CreateDirectory(directory);
+            var target = Path.Combine(directory, "play.exe");
+            var sibling = Path.Combine(directory, "keep.sav");
+            File.WriteAllText(target, "fixture");
+            File.WriteAllText(sibling, "preserve");
+            var result = new SafeCacheDeletionExecutor().DeleteFileOnly(cacheRoot, target, false);
+            Assert.That(result.Allowed, Is.True, result.Reason);
+            Assert.That(File.Exists(target), Is.False);
+            Assert.That(File.ReadAllText(sibling), Is.EqualTo("preserve"));
+            Assert.That(Directory.Exists(directory), Is.True);
+            // The guard must release its directory handles on return.
+            var moved = directory + "-moved";
+            Directory.Move(directory, moved);
+            Assert.That(File.ReadAllText(Path.Combine(moved, "keep.sav")), Is.EqualTo("preserve"));
+        }
+
+        [Test]
+        public void InspectedPathIdentityCheckRefusesDifferentOrdinaryFile()
+        {
+            var first = Path.Combine(cacheRoot, "first.bin");
+            var second = Path.Combine(cacheRoot, "second.bin");
+            File.WriteAllText(first, "first");
+            File.WriteAllText(second, "second");
+            var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+            var open = typeof(TransferPartialPathPolicy).GetMethod("OpenPrivateFileForReview", flags);
+            var verify = typeof(TransferPartialPathPolicy).GetMethod("RequireInspectedFilePath", flags);
+            Assert.That(open, Is.Not.Null);
+            Assert.That(verify, Is.Not.Null);
+            using (var stream = (FileStream)open.Invoke(null, new object[] { first, true }))
+            {
+                Assert.DoesNotThrow(() => verify.Invoke(null, new object[] { first, stream.SafeFileHandle }));
+                var failure = Assert.Throws<System.Reflection.TargetInvocationException>(() =>
+                    verify.Invoke(null, new object[] { second, stream.SafeFileHandle }));
+                Assert.That(failure.InnerException, Is.TypeOf<IOException>());
+            }
+            Assert.That(File.ReadAllText(first), Is.EqualTo("first"));
+            Assert.That(File.ReadAllText(second), Is.EqualTo("second"));
+        }
+
+        [Test]
         public void FileOnlyExecutor_RefusesHardlinkToOriginalSource()
         {
             var original = Path.Combine(testRoot, "original.bin");

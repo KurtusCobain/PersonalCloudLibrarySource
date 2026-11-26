@@ -396,6 +396,13 @@ namespace PersonalCloudLibrarySource
         internal static PublicationAncestors PinPublicationAncestors(string parent)
             => new PublicationAncestors(parent);
 
+        internal static void RequireInspectedFilePath(string path, SafeFileHandle handle)
+        {
+            var expected = CapturePrivateFileIdentity(handle);
+            if (!SameIdentity(ObservePublicationObject(path, false), expected))
+                throw new IOException("File pathname does not identify the inspected handle.");
+        }
+
         private static FileIdentity ObservePublicationObject(string path, bool directory)
         {
             // Metadata-only observation must share all accesses of the
