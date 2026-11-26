@@ -502,18 +502,51 @@ namespace PersonalCloudLibrarySource
             var parent = Path.GetDirectoryName(Path.GetFullPath(path));
             Directory.CreateDirectory(parent);
             RequireSafePath(parent);
-            var temporary = Path.Combine(parent, Guid.NewGuid().ToString("N") + ".tmp");
-            RequireVacant(temporary);
-            var identity = WriteRecordStage(temporary, payload);
-            token.ThrowIfCancellationRequested();
-            using (var input = OpenPrivateFileForReview(temporary, true))
+            using (var ancestors = PinPublicationAncestors(parent))
             {
-                VerifyRecordStage(input, identity, payload, token);
+                RequireVacant(path);
                 token.ThrowIfCancellationRequested();
-                PublishVerifiedHandle(input.SafeFileHandle, temporary, path);
+                var temporary = Path.Combine(parent, Guid.NewGuid().ToString("N") + ".tmp");
+                var identity = WriteRecordStage(temporary, payload);
+                CompletePrivateRecordStage(temporary, path, identity, payload, token);
+                ancestors.Verify();
             }
-            // On uncertainty leave the temporary evidence, never delete by path.
-            RequireVacant(temporary);
+        }
+
+        // This helper is entered only for a stage just created by this
+        // invocation, before any publication attempt. Cancellation alone is
+        // not cleanup authority: verify the exact handle and complete bytes.
+        internal static void CompletePrivateRecordStage(string temporary, string path,
+            FileIdentity identity, byte[] payload, System.Threading.CancellationToken token)
+        {
+            var parent = Path.GetDirectoryName(Path.GetFullPath(path));
+            if (string.IsNullOrWhiteSpace(parent) ||
+                !string.Equals(parent, Path.GetDirectoryName(Path.GetFullPath(temporary)), StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(Path.GetFullPath(temporary), Path.GetFullPath(path), StringComparison.OrdinalIgnoreCase))
+                throw new IOException("Private record stage must be a distinct sibling.");
+            using (var ancestors = PinPublicationAncestors(parent))
+            {
+                var canceledBeforePublish = false;
+                using (var input = OpenPrivateFileForReview(temporary, true))
+                {
+                    // Metadata has already been bounded by the caller. Finish
+                    // verification even on cancellation, so we can distinguish
+                    // a known unpublished scratch file from ambiguous evidence.
+                    VerifyRecordStage(input, identity, payload, System.Threading.CancellationToken.None);
+                    ancestors.Verify();
+                    canceledBeforePublish = token.IsCancellationRequested;
+                    if (canceledBeforePublish)
+                        DeleteVerifiedFileHandle(input.SafeFileHandle);
+                    else
+                        PublishVerifiedHandle(input.SafeFileHandle, temporary, path);
+                }
+                // Any verification/rename/deletion uncertainty remains a
+                // failure; never attempt a second deletion by pathname.
+                RequireVacant(temporary);
+                ancestors.Verify();
+                if (canceledBeforePublish)
+                    token.ThrowIfCancellationRequested();
+            }
         }
 
         // Existing-record replacement retains the store's atomic File.Replace

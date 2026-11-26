@@ -89,6 +89,43 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             finally { Directory.Delete(root, true); }
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void CancellationRemovesOnlyVerifiedUnpublishedPrivateStage(bool changed)
+        {
+            var root = Path.Combine(Path.GetTempPath(), "PCLS-CancelRecord-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            try
+            {
+                var stage = Path.Combine(root, "stage.tmp");
+                var target = Path.Combine(root, "record.json");
+                var unrelated = Path.Combine(root, "keep.txt");
+                File.WriteAllText(target, "existing target");
+                File.WriteAllText(unrelated, "unrelated");
+                var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+                var write = typeof(TransferPartialPathPolicy).GetMethod("WriteRecordStage", flags);
+                var complete = typeof(TransferPartialPathPolicy).GetMethod("CompletePrivateRecordStage", flags);
+                Assert.That(write, Is.Not.Null);
+                Assert.That(complete, Is.Not.Null);
+                var payload = new byte[] { 1, 2, 3, 4 };
+                var identity = write.Invoke(null, new object[] { stage, payload });
+                if (changed) File.WriteAllBytes(stage, new byte[] { 4, 3, 2, 1 });
+                using (var stop = new System.Threading.CancellationTokenSource())
+                {
+                    stop.Cancel();
+                    var failure = Assert.Throws<System.Reflection.TargetInvocationException>(() =>
+                        complete.Invoke(null, new object[] { stage, target, identity, payload, stop.Token }));
+                    Assert.That(failure.InnerException, changed
+                        ? Is.TypeOf<IOException>() : Is.TypeOf<OperationCanceledException>());
+                }
+                Assert.That(File.Exists(stage), Is.EqualTo(changed));
+                if (changed) Assert.That(File.ReadAllBytes(stage), Is.EqualTo(new byte[] { 4, 3, 2, 1 }));
+                Assert.That(File.ReadAllText(target), Is.EqualTo("existing target"));
+                Assert.That(File.ReadAllText(unrelated), Is.EqualTo("unrelated"));
+            }
+            finally { Directory.Delete(root, true); }
+        }
+
         [TestCase("")]
         [TestCase("   ")]
         public void Create_RejectsMissingDestination(string destination)
