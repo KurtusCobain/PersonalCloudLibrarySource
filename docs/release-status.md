@@ -35,6 +35,6 @@ The official Playnite add-on database already has a PCLS listing pointing to thi
 
 ## Isolated development candidate — November 24, 2026
 
-The public release above is unchanged. The latest internal candidate is undergoing stabilization and is **not approved for publication or installation over a real user library**. Its checks are distinct from the historical v0.3.2 acceptance. See [stabilization qualification](engineering/stabilization-qualification-20261124.md) and the [engineering ledger](engineering/stabilization-baseline-20261124.md).
+The public release above is unchanged. The latest internal candidate is undergoing stabilization and is **not approved for publication or installation over a real user library**. Its checks are distinct from the historical v0.3.2 acceptance. The [independent review handoff](engineering/review-handoff-20261125.md) records the proposed frozen candidate, current evidence and remaining gates. See [stabilization qualification](engineering/stabilization-qualification-20261124.md) and the [engineering ledger](engineering/stabilization-baseline-20261124.md).
 
 Do not confuse this v0.3.2 public release with the future 1.0 milestone.
