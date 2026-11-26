@@ -39,6 +39,25 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             Assert.That(navigation, Does.Contain("CancelAllZipExtractions();"));
         }
 
+        [Test]
+        public void HostSerializesTransferCreationAndClosesAdmissionBeforeShutdownWait()
+        {
+            var source = File.ReadAllText(Path.Combine(FindRepositoryRoot(),
+                "PersonalCloudLibrarySource", "PersonalCloudLibrarySource.Transfers.cs"));
+            var start = source.IndexOf("internal TransferQueueService GetTransferQueue()", StringComparison.Ordinal);
+            var end = source.IndexOf("private void ThrowIfTransferHostStopped()", start, StringComparison.Ordinal);
+            var queue = source.Substring(start, end - start);
+            Assert.That(queue, Does.Contain("lock (transferLifecycleSync)"));
+            Assert.That(queue.IndexOf("ThrowIfTransferHostStopped();", StringComparison.Ordinal),
+                Is.LessThan(queue.IndexOf("new TransferQueueService", StringComparison.Ordinal)));
+            start = source.IndexOf("private void DisposeTransferManager()", StringComparison.Ordinal);
+            var shutdown = source.Substring(start);
+            Assert.That(shutdown.IndexOf("transferPresentationDisposed = true;", StringComparison.Ordinal),
+                Is.LessThan(shutdown.IndexOf("queue.Shutdown(", StringComparison.Ordinal)));
+            Assert.That(shutdown, Does.Contain("transferQueue = null;"));
+            Assert.That(source, Does.Not.Contain("transferPresentationDisposed = false"));
+        }
+
         private static string FindRepositoryRoot()
         {
             var current = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);

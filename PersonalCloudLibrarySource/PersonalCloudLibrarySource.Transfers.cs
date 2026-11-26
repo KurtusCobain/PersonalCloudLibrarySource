@@ -4,55 +4,68 @@ namespace PersonalCloudLibrarySource
 {
     public partial class PersonalCloudLibrarySource
     {
-        private CloudTransferManager transferManager;
+        private readonly object transferLifecycleSync = new object();
+        private volatile CloudTransferManager transferManager;
         private CloudTransferExecutor transferExecutor;
         private TransferQueueService transferQueue;
         private TransferRecoveryJournal transferRecoveryJournal;
         private readonly object recoveryJournalSync = new object();
         private DashboardTransferActivityBridge transferActivityBridge;
         private readonly DashboardRefreshPostGate dashboardTransferRefreshGate = new DashboardRefreshPostGate();
-        private bool transferPresentationDisposed;
+        private volatile bool transferPresentationDisposed;
         private bool recoveryReviewInProgress;
         private long lastDashboardTransferRevision = -1;
 
         internal CloudTransferManager GetTransferManager()
         {
-            if (transferManager == null)
+            lock (transferLifecycleSync)
             {
-                var concurrency = settings?.GetRuntimeSettingsSnapshot()?.TransferConcurrency ?? 1;
-                transferManager = new CloudTransferManager(concurrency);
-                transferPresentationDisposed = false;
-                lastDashboardTransferRevision = -1;
-                transferManager.Changed += TransferManager_Changed;
+                if (transferManager == null)
+                {
+                    ThrowIfTransferHostStopped();
+                    var concurrency = settings?.GetRuntimeSettingsSnapshot()?.TransferConcurrency ?? 1;
+                    var manager = new CloudTransferManager(concurrency);
+                    lastDashboardTransferRevision = -1;
+                    manager.Changed += TransferManager_Changed;
+                    transferManager = manager;
+                }
+                return transferManager;
             }
-
-            return transferManager;
         }
 
         internal CloudTransferExecutor GetTransferExecutor()
         {
-            if (transferExecutor == null)
+            lock (transferLifecycleSync)
             {
-                transferExecutor = new CloudTransferExecutor(
-                    GetTransferManager(),
-                    new LocalTransferAdapter());
+                ThrowIfTransferHostStopped();
+                if (transferExecutor == null)
+                    transferExecutor = new CloudTransferExecutor(
+                        GetTransferManager(), new LocalTransferAdapter());
+                return transferExecutor;
             }
-
-            return transferExecutor;
         }
 
         internal TransferQueueService GetTransferQueue()
         {
-            if (transferQueue == null)
+            lock (transferLifecycleSync)
             {
-                transferQueue = new TransferQueueService(GetTransferManager(), GetTransferExecutor(),
-                    GetTransferRecoveryJournal());
-                transferActivityBridge = new DashboardTransferActivityBridge(
-                    transferQueue,
-                    dashboardActivityService);
+                ThrowIfTransferHostStopped();
+                if (transferQueue == null)
+                {
+                    var queue = new TransferQueueService(GetTransferManager(), GetTransferExecutor(),
+                        GetTransferRecoveryJournal());
+                    transferActivityBridge = new DashboardTransferActivityBridge(
+                        queue, dashboardActivityService);
+                    transferQueue = queue;
+                }
+                return transferQueue;
             }
+        }
 
-            return transferQueue;
+        private void ThrowIfTransferHostStopped()
+        {
+            if (transferPresentationDisposed)
+                throw new InvalidOperationException("The transfer host is stopping and cannot accept new work.");
         }
 
         private TransferRecoveryJournal GetTransferRecoveryJournal()
@@ -192,17 +205,19 @@ namespace PersonalCloudLibrarySource
 
         private void SynchronizeTransferManagerSettings()
         {
-            if (transferManager != null)
+            CloudTransferManager manager;
+            TransferQueueService queue;
+            lock (transferLifecycleSync)
+            {
+                if (transferPresentationDisposed) return;
+                manager = transferManager;
+                queue = transferQueue;
+            }
+            if (manager != null)
             {
                 var concurrency = settings?.GetRuntimeSettingsSnapshot()?.TransferConcurrency ?? 1;
-                if (transferQueue != null)
-                {
-                    transferQueue.SetMaxConcurrentTransfers(concurrency);
-                }
-                else
-                {
-                    transferManager.SetMaxConcurrentTransfers(concurrency);
-                }
+                if (queue != null) queue.SetMaxConcurrentTransfers(concurrency);
+                else manager.SetMaxConcurrentTransfers(concurrency);
             }
         }
 
@@ -259,20 +274,27 @@ namespace PersonalCloudLibrarySource
 
         private void DisposeTransferManager()
         {
-            transferPresentationDisposed = true;
-            transferActivityBridge?.Dispose();
-            transferActivityBridge = null;
-
-            if (transferQueue != null)
+            TransferQueueService queue;
+            DashboardTransferActivityBridge bridge;
+            lock (transferLifecycleSync)
             {
-                transferQueue.Shutdown(TimeSpan.FromSeconds(10));
-                transferQueue.Dispose();
+                if (transferPresentationDisposed) return;
+                // Stop new host admission before waiting for workers.
+                transferPresentationDisposed = true;
+                queue = transferQueue;
+                bridge = transferActivityBridge;
                 transferQueue = null;
+                transferActivityBridge = null;
+                if (transferManager != null)
+                    transferManager.Changed -= TransferManager_Changed;
             }
-
-            if (transferManager != null)
+            // Do not hold the lifecycle lock across callbacks or worker waits.
+            bridge?.Dispose();
+            if (queue != null)
             {
-                transferManager.Changed -= TransferManager_Changed;
+                if (!queue.Shutdown(TimeSpan.FromSeconds(10)))
+                    logger.Warn("PCLS transfer workers did not stop within the shutdown timeout; preserve recovery evidence.");
+                queue.Dispose();
             }
         }
     }
