@@ -31,7 +31,8 @@ namespace PersonalCloudLibrarySource
             var root = ValidateStoreDirectory(pluginDataDirectory);
             var primary = Path.Combine(root, FileName);
             RejectLinksAndDirectories(primary);
-            if (File.Exists(primary) && !ReadValidated(primary).Succeeded)
+            var replacing = File.Exists(primary);
+            if (replacing && !ReadValidated(primary).Succeeded)
                 throw new InvalidOperationException(
                     "Existing source profiles are invalid; inspect and recover manually.");
             var json = codec.Serialize(profiles);
@@ -39,7 +40,7 @@ namespace PersonalCloudLibrarySource
             if (payload.Length > SourceProfilesConfigurationCodec.MaxDocumentCharacters * 4)
                 throw new InvalidOperationException("Source profiles file is too large.");
 
-            if (!File.Exists(primary))
+            if (!replacing)
             {
                 TransferPartialPathPolicy.WritePrivateRecord(primary, json,
                     SourceProfilesConfigurationCodec.MaxDocumentCharacters * 4,
@@ -49,29 +50,12 @@ namespace PersonalCloudLibrarySource
 
             var pending = Path.Combine(root, "source-profiles-" +
                 Guid.NewGuid().ToString("N") + ".tmp");
-            // Preserve uncertain staging evidence rather than delete by pathname.
-            using (var stream = new FileStream(pending, FileMode.CreateNew,
-                FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
-            {
-                stream.Write(payload, 0, payload.Length);
-                stream.Flush(true);
-            }
-            if (File.Exists(primary))
-            {
-                // A corrupt or unknown current schema is not a license to
-                // overwrite the user's only copy. Explicit recovery first.
-                if (!ReadValidated(primary).Succeeded)
-                    throw new InvalidOperationException(
-                        "Existing source profiles are invalid; inspect and recover manually.");
-                // Backup name is unique: do not overwrite earlier backups or
-                // anything the user has added to this directory.
-                var backup = Path.Combine(root, "source-profiles-backup-" +
-                    Guid.NewGuid().ToString("N") + ".json");
-                RejectLinksAndDirectories(primary);
-                File.Replace(pending, primary, backup);
-                return backup;
-            }
-            throw new IOException("Existing profiles disappeared during replacement; preserve staged evidence.");
+            var backup = Path.Combine(root, "source-profiles-backup-" +
+                Guid.NewGuid().ToString("N") + ".json");
+            TransferPartialPathPolicy.ReplacePrivateRecord(primary, payload, pending, backup,
+                () => ReadValidated(primary).Succeeded,
+                "Existing source profiles are invalid; inspect and recover manually.");
+            return backup;
         }
 
         public SourceProfilesParseResult Load(string pluginDataDirectory)

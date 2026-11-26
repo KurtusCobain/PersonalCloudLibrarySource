@@ -33,7 +33,7 @@ Qualified source: b090230dea6c9d5832dee3e222b579c7e84dd154. Pre-remediation bran
 
 | ID | Reported finding | Current disposition |
 |---|---|---|
-| G1 | Non-atomic metadata replacement | Open; validate threat model and alternatives without sacrificing backup guarantees |
+| G1 | Non-atomic metadata replacement | Partially narrowed for three metadata stores: verify staged identity/bytes and lock original through validation; final File.Replace pathname race remains open |
 | G2 | Ancestor-relative publication | Open; revisit prior withdrawn 125-failure experiment in isolation |
 | G3 | Cooperative cross-process locking | Open; external nonparticipants cannot be universally serialized by a named mutex |
 | G4 | Crash/power-loss recovery | Open; read-only diagnostics remain, no automatic deletion/release |
@@ -68,3 +68,7 @@ Remove wall-clock sorting from the queue's already ordered live list. Retain the
 ## Fourth correction batch: destination capacity
 
 Replace drive-letter-only capacity query with GetDiskFreeSpaceEx on the nearest existing destination ancestor (including UNC and mounted volumes where supported). Check ZIP's declared total output after read-only preflight but before creating staging. Preserve best-effort behavior when capacity is unavailable; do not claim space reservation or guaranteed protection against disk exhaustion. Add read-only existing-ancestor regression (zero and impossible byte requirements, no destination creation). Rclone lacks a reliable pre-transfer size on this path; do not add an unbounded remote enumeration or silently treat missing metadata as zero. Actual UNC and low-disk behavior remain host acceptance gates. CI pending.
+
+## Fifth correction batch: shared private metadata replacement preflight
+
+Profile, catalog identity and display snapshot stores used three duplicated replacement writers without verified staging identity/content. All now preserve a single create-versus-replace decision and delegate existing-record replacement to TransferPartialPathPolicy. The common helper rejects occupied stage/backup names, holds the original read handle during schema validation and stage creation, captures file identity, verifies bytes and rechecks both identities and original validity before File.Replace. Shared stage creation/byte verification also serve create-only publication. Existing backup names, format and atomic File.Replace semantics remain. Two regression cases exercise invalid-original refusal with a locked original and occupied-backup refusal before staging. Uncertain temporary evidence is intentionally retained; no pathname cleanup. The final closed-handle File.Replace race, backup substitution and nonparticipating writer coordination are still unresolved, not represented as closed. CI pending.

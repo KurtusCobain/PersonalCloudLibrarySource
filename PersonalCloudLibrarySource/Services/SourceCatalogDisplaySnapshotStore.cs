@@ -109,13 +109,14 @@ namespace PersonalCloudLibrarySource
             var doc = ToDocument(snapshot);
             var target = Path.Combine(root, FileName(doc.ProfileId));
             RejectLinkedOrDirectory(target);
-            if (File.Exists(target) && !ReadFile(target, doc.ProfileId).Succeeded)
+            var replacing = File.Exists(target);
+            if (replacing && !ReadFile(target, doc.ProfileId).Succeeded)
                 throw new InvalidOperationException("Refusing to overwrite invalid display evidence.");
             var json = Serializer().Serialize(doc);
             var bytes = new UTF8Encoding(false, true).GetBytes(json);
             if (bytes.Length > MaxBytes)
                 throw new InvalidOperationException("Display evidence exceeds the size limit.");
-            if (!File.Exists(target))
+            if (!replacing)
             {
                 TransferPartialPathPolicy.WritePrivateRecord(target, json, MaxBytes,
                     System.Threading.CancellationToken.None);
@@ -123,22 +124,11 @@ namespace PersonalCloudLibrarySource
             }
             var pending = Path.Combine(root, FilePrefix +
                 Guid.NewGuid().ToString("N") + ".tmp");
-            // Preserve uncertain staging evidence rather than delete by pathname.
-            using (var stream = new FileStream(pending, FileMode.CreateNew,
-                FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
-            {
-                stream.Write(bytes, 0, bytes.Length);
-                stream.Flush(true);
-            }
-            RejectLinkedOrDirectory(target);
-            if (File.Exists(target))
-            {
-                var backup = Path.Combine(root, FilePrefix + "backup-" +
-                    Guid.NewGuid().ToString("N") + ".json");
-                File.Replace(pending, target, backup);
-            }
-            else
-                throw new IOException("Existing display snapshot disappeared during replacement; preserve staged evidence.");
+            var backup = Path.Combine(root, FilePrefix + "backup-" +
+                Guid.NewGuid().ToString("N") + ".json");
+            TransferPartialPathPolicy.ReplacePrivateRecord(target, bytes, pending, backup,
+                () => ReadFile(target, doc.ProfileId).Succeeded,
+                "Refusing to overwrite invalid display evidence.");
             return target;
         }
 

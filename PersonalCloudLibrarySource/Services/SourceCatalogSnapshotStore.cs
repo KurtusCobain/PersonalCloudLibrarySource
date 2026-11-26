@@ -45,7 +45,8 @@ namespace PersonalCloudLibrarySource
             var target = Path.Combine(root, FileName(document.ProfileId));
             RejectLinkOrDirectory(target);
             // Do not silently overwrite corrupt or future-schema records.
-            if (File.Exists(target) && !ReadFile(target, document.ProfileId).Succeeded)
+            var replacing = File.Exists(target);
+            if (replacing && !ReadFile(target, document.ProfileId).Succeeded)
                 throw new InvalidOperationException("Existing catalog identity snapshot is invalid.");
 
             var json = Serializer().Serialize(document);
@@ -53,7 +54,7 @@ namespace PersonalCloudLibrarySource
             if (payload.Length > MaxFileBytes)
                 throw new InvalidOperationException("Catalog identity snapshot exceeds storage limit.");
 
-            if (!File.Exists(target))
+            if (!replacing)
             {
                 TransferPartialPathPolicy.WritePrivateRecord(target, json, MaxFileBytes,
                     System.Threading.CancellationToken.None);
@@ -61,24 +62,11 @@ namespace PersonalCloudLibrarySource
             }
 
             var pending = Path.Combine(root, FilePrefix + Guid.NewGuid().ToString("N") + ".tmp");
-            // Preserve uncertain staging evidence rather than delete by pathname.
-            using (var file = new FileStream(pending, FileMode.CreateNew,
-                FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
-            {
-                file.Write(payload, 0, payload.Length);
-                file.Flush(true);
-            }
-            RejectLinkOrDirectory(target);
-            if (File.Exists(target))
-            {
-                // Keep the replaced valid record as an independently named
-                // backup. No automatic rollback or backup garbage collection.
-                var backup = Path.Combine(root, FilePrefix + "backup-" +
-                    Guid.NewGuid().ToString("N") + ".json");
-                File.Replace(pending, target, backup);
-            }
-            else
-                throw new IOException("Existing snapshot disappeared during replacement; preserve staged evidence.");
+            var backup = Path.Combine(root, FilePrefix + "backup-" +
+                Guid.NewGuid().ToString("N") + ".json");
+            TransferPartialPathPolicy.ReplacePrivateRecord(target, payload, pending, backup,
+                () => ReadFile(target, document.ProfileId).Succeeded,
+                "Existing catalog identity snapshot is invalid.");
             return target;
         }
 

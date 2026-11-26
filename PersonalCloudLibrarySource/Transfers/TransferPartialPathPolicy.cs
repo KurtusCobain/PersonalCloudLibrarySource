@@ -361,36 +361,86 @@ namespace PersonalCloudLibrarySource
             RequireSafePath(parent);
             var temporary = Path.Combine(parent, Guid.NewGuid().ToString("N") + ".tmp");
             RequireVacant(temporary);
-            FileIdentity identity;
-            using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
-            {
-                identity = CapturePrivateFileIdentity(output.SafeFileHandle);
-                output.Write(payload, 0, payload.Length);
-                output.Flush(true);
-            }
+            var identity = WriteRecordStage(temporary, payload);
             token.ThrowIfCancellationRequested();
             using (var input = OpenPrivateFileForReview(temporary, true))
             {
-                if (!MatchesPrivateFileIdentity(input.SafeFileHandle, identity) || input.Length != payload.Length)
-                    throw new IOException("Private record staging identity or length changed.");
-                var buffer = new byte[Math.Min(65536, payload.Length)];
-                var offset = 0;
-                while (offset < payload.Length)
-                {
-                    token.ThrowIfCancellationRequested();
-                    var count = input.Read(buffer, 0, Math.Min(buffer.Length, payload.Length - offset));
-                    if (count == 0) throw new IOException("Private record staging was truncated.");
-                    for (var i = 0; i < count; i++)
-                        if (buffer[i] != payload[offset + i])
-                            throw new IOException("Private record staging contents changed.");
-                    offset += count;
-                }
-                if (input.ReadByte() != -1) throw new IOException("Private record staging grew.");
+                VerifyRecordStage(input, identity, payload, token);
                 token.ThrowIfCancellationRequested();
                 PublishVerifiedHandle(input.SafeFileHandle, temporary, path);
             }
             // On uncertainty leave the temporary evidence, never delete by path.
             RequireVacant(temporary);
+        }
+
+        // Existing-record replacement retains the store's atomic File.Replace
+        // and unique backup contract. The original is locked against ordinary
+        // writes/deletion during validation and staging; both file identities
+        // and staged bytes are rechecked immediately before replacement.
+        // This narrows but does NOT eliminate the final pathname race after
+        // the handles must close for File.Replace. Preserve ambiguous evidence.
+        internal static void ReplacePrivateRecord(string path, byte[] payload,
+            string temporary, string backup, Func<bool> validateOriginal, string invalidMessage)
+        {
+            if (payload == null || payload.Length == 0)
+                throw new IOException("Private record replacement payload is empty.");
+            if (validateOriginal == null) throw new ArgumentNullException(nameof(validateOriginal));
+            RequireVacant(temporary);
+            RequireVacant(backup);
+            FileIdentity original;
+            FileIdentity staged;
+            using (var input = OpenPrivateFileForReview(path, false))
+            {
+                if (!validateOriginal()) throw new InvalidOperationException(invalidMessage);
+                original = CapturePrivateFileIdentity(input.SafeFileHandle);
+                staged = WriteRecordStage(temporary, payload);
+                using (var check = OpenPrivateFileForReview(temporary, false))
+                    VerifyRecordStage(check, staged, payload, System.Threading.CancellationToken.None);
+            }
+
+            RequireVacant(backup);
+            using (var check = OpenPrivateFileForReview(temporary, false))
+                VerifyRecordStage(check, staged, payload, System.Threading.CancellationToken.None);
+            using (var check = OpenPrivateFileForReview(path, false))
+            {
+                if (!MatchesPrivateFileIdentity(check.SafeFileHandle, original))
+                    throw new IOException("Private record target identity changed before replacement.");
+                if (!validateOriginal()) throw new InvalidOperationException(invalidMessage);
+            }
+            File.Replace(temporary, path, backup);
+        }
+
+        private static FileIdentity WriteRecordStage(string temporary, byte[] payload)
+        {
+            RequireVacant(temporary);
+            using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+            {
+                var identity = CapturePrivateFileIdentity(output.SafeFileHandle);
+                output.Write(payload, 0, payload.Length);
+                output.Flush(true);
+                return identity;
+            }
+        }
+
+        private static void VerifyRecordStage(FileStream input, FileIdentity identity,
+            byte[] payload, System.Threading.CancellationToken token)
+        {
+            if (!MatchesPrivateFileIdentity(input.SafeFileHandle, identity) || input.Length != payload.Length)
+                throw new IOException("Private record staging identity or length changed.");
+            var buffer = new byte[Math.Min(65536, payload.Length)];
+            var offset = 0;
+            while (offset < payload.Length)
+            {
+                token.ThrowIfCancellationRequested();
+                var count = input.Read(buffer, 0, Math.Min(buffer.Length, payload.Length - offset));
+                if (count == 0) throw new IOException("Private record staging was truncated.");
+                for (var i = 0; i < count; i++)
+                    if (buffer[i] != payload[offset + i])
+                        throw new IOException("Private record staging contents changed.");
+                offset += count;
+            }
+            if (input.ReadByte() != -1)
+                throw new IOException("Private record staging grew.");
         }
 
         public static string Create(string destinationPath, Guid jobId)
