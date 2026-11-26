@@ -28,7 +28,8 @@ namespace PersonalCloudLibrarySource
                 if (selected?.Game == null || selected.Game.PluginId != Id)
                     return;
                 var gameId = selected.Game.Id;
-                if (activeZipExtractions.ContainsKey(gameId))
+                if (activeZipExtractions.ContainsKey(gameId) ||
+                    activeZipRecoveries.ContainsKey(gameId) || activeZipCleanups.ContainsKey(gameId))
                     return;
 
                 var currentSettings = settings.GetRuntimeSettingsSnapshot();
@@ -103,6 +104,8 @@ namespace PersonalCloudLibrarySource
                 if (decision != MessageBoxResult.Yes)
                     return;
 
+                if (activeZipRecoveries.ContainsKey(gameId) || activeZipCleanups.ContainsKey(gameId))
+                    return;
                 cancellation = new CancellationTokenSource();
                 if (!activeZipExtractions.TryAdd(gameId, cancellation))
                     return;

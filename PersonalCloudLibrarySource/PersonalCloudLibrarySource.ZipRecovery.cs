@@ -16,6 +16,9 @@ namespace PersonalCloudLibrarySource
         // but do not expose it through the Playnite host until qualified.
         private static readonly bool PermanentZipCleanupHostEnabled = false;
 
+        private readonly ConcurrentDictionary<Guid, CancellationTokenSource> activeZipRecoveries =
+            new ConcurrentDictionary<Guid, CancellationTokenSource>();
+
         private readonly ConcurrentDictionary<Guid, CancellationTokenSource> activeZipCleanups =
             new ConcurrentDictionary<Guid, CancellationTokenSource>();
 
@@ -25,6 +28,8 @@ namespace PersonalCloudLibrarySource
         {
             var title = PclsResources.Get("LOCPLSZipRecoveryTitle",
                 "Manage ZIP Recovery");
+            CancellationTokenSource cancellation = null;
+            var registered = false;
             try
             {
                 if (selected?.Game == null || selected.Game.PluginId != Id)
@@ -39,7 +44,10 @@ namespace PersonalCloudLibrarySource
                     !string.Equals(target.Item.Id, selected.Game.GameId,
                         StringComparison.Ordinal))
                     return;
-                if (activeZipCleanups.ContainsKey(selected.Game.Id) ||
+                if (selected.Game.IsRunning || selected.Game.IsLaunching ||
+                    selected.Game.IsInstalling || selected.Game.IsUninstalling ||
+                    activeZipRecoveries.ContainsKey(selected.Game.Id) ||
+                    activeZipCleanups.ContainsKey(selected.Game.Id) ||
                     activeZipExtractions.ContainsKey(selected.Game.Id) ||
                     GetTransferManager().GetActiveJobForGame(selected.Game.Id) != null)
                 {
@@ -132,22 +140,30 @@ namespace PersonalCloudLibrarySource
                 if (current.Item == null ||
                     !string.Equals(current.Item.Id, gameId, StringComparison.Ordinal))
                     return;
-                if (activeZipCleanups.ContainsKey(selected.Game.Id) ||
+                if (selected.Game.IsRunning || selected.Game.IsLaunching ||
+                    selected.Game.IsInstalling || selected.Game.IsUninstalling ||
+                    activeZipRecoveries.ContainsKey(selected.Game.Id) ||
+                    activeZipCleanups.ContainsKey(selected.Game.Id) ||
                     activeZipExtractions.ContainsKey(selected.Game.Id) ||
                     GetTransferManager().GetActiveJobForGame(selected.Game.Id) != null)
                     return;
 
+                cancellation = new CancellationTokenSource();
+                if (!activeZipRecoveries.TryAdd(selected.Game.Id, cancellation))
+                    return;
+                registered = true;
+                var token = cancellation.Token;
                 string reason = string.Empty;
                 var result = await Task.Run(() =>
                 {
                     if (state.State == ZipRecoveryState.NoJournal)
                         return recovery.TryQuarantine(root, gameId,
-                            receipts, approvals, true, CancellationToken.None, out reason);
+                            receipts, approvals, true, token, out reason);
                     if (state.State == ZipRecoveryState.Quarantined)
                         return recovery.TryRestore(root, gameId,
-                            receipts, approvals, true, CancellationToken.None, out reason);
+                            receipts, approvals, true, token, out reason);
                     return recovery.TryResumePrepared(root, gameId,
-                        receipts, approvals, true, CancellationToken.None, out reason);
+                        receipts, approvals, true, token, out reason);
                 });
                 playniteApi.Dialogs.ShowMessage(
                     result
@@ -166,6 +182,15 @@ namespace PersonalCloudLibrarySource
                     PclsResources.Get("LOCPLSZipRecoveryFailed",
                         "Managed ZIP recovery was not completed. Preserve the journal, original ZIP, and both cache folders; review their status before retrying. No recursive deletion was attempted."),
                     title);
+            }
+            finally
+            {
+                if (registered && selected?.Game != null)
+                {
+                    CancellationTokenSource removed;
+                    activeZipRecoveries.TryRemove(selected.Game.Id, out removed);
+                }
+                cancellation?.Dispose();
             }
         }
 
@@ -195,6 +220,7 @@ namespace PersonalCloudLibrarySource
                     return;
                 if (selected.Game.IsRunning || selected.Game.IsLaunching ||
                     selected.Game.IsInstalling || selected.Game.IsUninstalling ||
+                    activeZipRecoveries.ContainsKey(selected.Game.Id) ||
                     activeZipExtractions.ContainsKey(selected.Game.Id) ||
                     activeZipCleanups.ContainsKey(selected.Game.Id) ||
                     GetTransferManager().GetActiveJobForGame(selected.Game.Id) != null)
@@ -264,6 +290,7 @@ namespace PersonalCloudLibrarySource
                     return;
                 if (selected.Game.IsRunning || selected.Game.IsLaunching ||
                     selected.Game.IsInstalling || selected.Game.IsUninstalling ||
+                    activeZipRecoveries.ContainsKey(selected.Game.Id) ||
                     activeZipExtractions.ContainsKey(selected.Game.Id) ||
                     GetTransferManager().GetActiveJobForGame(selected.Game.Id) != null)
                     return;
@@ -318,6 +345,11 @@ namespace PersonalCloudLibrarySource
         {
             foreach (var pending in activeZipCleanups)
                 CancelZipCleanup(pending.Key);
+            foreach (var pending in activeZipRecoveries)
+            {
+                try { pending.Value.Cancel(); }
+                catch (ObjectDisposedException) { }
+            }
         }
     }
 }

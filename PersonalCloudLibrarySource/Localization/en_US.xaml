@@ -465,4 +465,5 @@
     <sys:String x:Key="LOCPLSCommittedGenerationRequired">Save a valid local-folder configuration and close the settings editor before generating a catalog.</sys:String>
     <sys:String x:Key="LOCPLSCommittedGenerationCompleted">Generated and saved {0} catalog entries. Run Update Game Library to import them.</sys:String>
     <sys:String x:Key="LOCPLSSettingsEditAlreadyActive">Finish or cancel the open settings edit before starting the setup wizard.</sys:String>
+    <sys:String x:Key="LOCPLSZipLifecycleLaunchBusy">This game cannot start while its managed ZIP recovery or cleanup is in progress.</sys:String>
 </ResourceDictionary>
