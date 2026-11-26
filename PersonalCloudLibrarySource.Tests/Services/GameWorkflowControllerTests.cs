@@ -640,6 +640,28 @@ namespace PersonalCloudLibrarySource.Tests.Services
             }
         }
 
+        [Test]
+        public void Uninstall_RechecksAuthorizationImmediatelyBeforeDeletion()
+        {
+            var launch = CreateFile(Path.Combine(cache, "recovery-guard", "play.exe"));
+            var game = Game("recovery-guard");
+            game.IsInstalled = true;
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = game.GameId, Title = "Guard fixture", CachePath = "recovery-guard/play.exe"
+            };
+            var sink = new RecordingSink();
+            var calls = 0;
+            var controller = new PersonalCloudLibraryUninstallController(null, game, item,
+                FileOnlySettings(), new GameWorkflowNotificationService(sink),
+                executionAuthorized: () => Interlocked.Increment(ref calls) == 1);
+            Assert.Throws<InvalidOperationException>(() => controller.Uninstall(new UninstallActionArgs()));
+            Assert.That(calls, Is.EqualTo(2));
+            Assert.That(File.Exists(launch), Is.True);
+            Assert.That(game.IsInstalled, Is.True);
+            controller.Dispose();
+        }
+
         [TestCase(false)]
         [TestCase(true)]
         public void RecoveryRequiredOutcomeDoesNotPromoteInstallOrIssueReceipt(bool directory)

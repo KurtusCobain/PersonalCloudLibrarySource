@@ -117,6 +117,11 @@ namespace PersonalCloudLibrarySource
 
             try
             {
+                // A hosted controller may have been retained while a transfer
+                // or settings change occurred during the preceding checks.
+                if (executionAuthorized != null && !executionAuthorized())
+                    throw new InvalidOperationException(
+                        "Uninstall authorization expired before deletion; review transfer recovery and refresh the library.");
                 var deletion = deletionExecutor.DeleteFileOnly(
                     settings.LocalCacheFolder,
                     targetPath,

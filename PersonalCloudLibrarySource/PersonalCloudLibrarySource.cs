@@ -129,11 +129,12 @@ namespace PersonalCloudLibrarySource
         private void RequireRecoveryClearForCatalogPublication(PersonalCloudLibrarySourceSettings pluginSettings)
         {
             if (IsRecoveryClearForCatalogPublication()) return;
-            lock (multiSourcePlanSync)
-                experimentalMultiSourcePlan = null;
             var failure = ImportOutcome.Failure(ImportFailureKind.RecoveryPending,
-                "transfer-recovery", "Library refresh deferred because a transfer is active or recovery evidence cannot be cleared. Previous catalog retained; review transfer recovery.");
-            PublishImportOutcome(failure, pluginSettings);
+                "transfer-recovery", "Library refresh deferred because a transfer is active or recovery evidence needs review. Previous catalog retained; review transfer recovery.");
+            // Deferral is not a failed source validation. Preserve existing
+            // action routes rather than revoke a running transfer's plan.
+            try { importNotificationService.ShowFailure(failure); }
+            catch (Exception ex) { logger.Warn(ex, "PCLS could not report deferred catalog refresh."); }
             throw new ImportOutcomeException(failure);
         }
 
@@ -356,6 +357,12 @@ namespace PersonalCloudLibrarySource
                     return uninstallActions;
                 }
 
+                if (!IsRecoveryClearForCatalogPublication())
+                {
+                    logger.Warn("PCLS uninstall withheld while transfer recovery is unresolved.");
+                    return uninstallActions;
+                }
+
                 if (pluginSettings.EnableMultiSourceProfiles)
                 {
                     var plan = GetCurrentExperimentalActionPlan(pluginSettings);
@@ -364,7 +371,7 @@ namespace PersonalCloudLibrarySource
                         playniteApi, args.Game, Id, plan, out scopedController,
                         new CacheOwnershipReceiptStore(Path.Combine(
                             GetPluginDataDirectory(), "ownership-receipts")),
-                        () => IsCurrentExperimentalActionPlan(plan)))
+                        () => IsRecoveryClearForCatalogPublication() && IsCurrentExperimentalActionPlan(plan)))
                         uninstallActions.Add(scopedController);
                     return uninstallActions;
                 }
@@ -452,7 +459,8 @@ namespace PersonalCloudLibrarySource
                             settings.GetRuntimeSettingsSnapshot(), item, latest))
                         return false;
                     var workflow = new GameWorkflowPolicyService().Evaluate(latest, current);
-                    return install ? workflow.CanInstall : workflow.CanUninstall;
+                    return install ? workflow.CanInstall :
+                        workflow.CanUninstall && IsRecoveryClearForCatalogPublication();
                 }
                 catch (Exception) { return false; }
             };
