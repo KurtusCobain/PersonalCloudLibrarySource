@@ -32,7 +32,7 @@ namespace PersonalCloudLibrarySource
             var registered = false;
             try
             {
-                if (selected?.Game == null || selected.Game.PluginId != Id)
+                if (zipHostStopping || selected?.Game == null || selected.Game.PluginId != Id)
                     return;
                 var snapshot = settings.GetRuntimeSettingsSnapshot();
                 if (snapshot == null || !snapshot.Enabled)
@@ -57,6 +57,13 @@ namespace PersonalCloudLibrarySource
                         title);
                     return;
                 }
+
+                cancellation = new CancellationTokenSource();
+                if (!activeZipRecoveries.TryAdd(selected.Game.Id, cancellation))
+                    return;
+                registered = true;
+                var token = cancellation.Token;
+                if (zipHostStopping || token.IsCancellationRequested) return;
 
                 var gameId = target.Item.Id;
                 var root = snapshot.LocalCacheFolder;
@@ -97,7 +104,8 @@ namespace PersonalCloudLibrarySource
                 {
                     var maintenance = await Task.Run(() =>
                         new ZipManagedMaintenanceService().Assess(
-                            root, gameId, receipts, approvals));
+                            root, gameId, receipts, approvals, token));
+                    if (zipHostStopping || token.IsCancellationRequested) return;
                     if (maintenance.Status != ZipManagedMaintenanceStatus.CleanNeedsManualRemoval)
                     {
                         playniteApi.Dialogs.ShowMessage(
@@ -122,7 +130,8 @@ namespace PersonalCloudLibrarySource
                             "A ZIP recovery journal exists and the original directory is present. Retry the prepared reversible move? Yes retries after full verification; No leaves all files unchanged. No automatic deletion is performed.");
 
                 if (playniteApi.Dialogs.ShowMessage(prompt, title,
-                    MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes ||
+                    zipHostStopping || token.IsCancellationRequested)
                     return;
 
                 // Revalidate config and the manifest following user input.
@@ -142,17 +151,13 @@ namespace PersonalCloudLibrarySource
                     return;
                 if (selected.Game.IsRunning || selected.Game.IsLaunching ||
                     selected.Game.IsInstalling || selected.Game.IsUninstalling ||
-                    activeZipRecoveries.ContainsKey(selected.Game.Id) ||
                     activeZipCleanups.ContainsKey(selected.Game.Id) ||
                     activeZipExtractions.ContainsKey(selected.Game.Id) ||
-                    GetTransferManager().GetActiveJobForGame(selected.Game.Id) != null)
+                    GetTransferManager().GetActiveJobForGame(selected.Game.Id) != null ||
+                    !IsRecoveryClearForCatalogPublication())
                     return;
 
-                cancellation = new CancellationTokenSource();
-                if (!activeZipRecoveries.TryAdd(selected.Game.Id, cancellation))
-                    return;
-                registered = true;
-                var token = cancellation.Token;
+                if (zipHostStopping || token.IsCancellationRequested) return;
                 string reason = string.Empty;
                 var result = await Task.Run(() =>
                 {
@@ -165,6 +170,7 @@ namespace PersonalCloudLibrarySource
                     return recovery.TryResumePrepared(root, gameId,
                         receipts, approvals, true, token, out reason);
                 });
+                if (zipHostStopping || transferPresentationDisposed) return;
                 playniteApi.Dialogs.ShowMessage(
                     result
                         ? PclsResources.Get("LOCPLSZipRecoverySuccess",
@@ -178,6 +184,8 @@ namespace PersonalCloudLibrarySource
             catch (Exception ex)
             {
                 logger.Warn(ex, "PCLS managed ZIP recovery failed.");
+                if (zipHostStopping || transferPresentationDisposed || (cancellation?.IsCancellationRequested ?? false))
+                    return;
                 playniteApi.Dialogs.ShowMessage(
                     PclsResources.Get("LOCPLSZipRecoveryFailed",
                         "Managed ZIP recovery was not completed. Preserve the journal, original ZIP, and both cache folders; review their status before retrying. No recursive deletion was attempted."),

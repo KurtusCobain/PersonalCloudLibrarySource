@@ -244,6 +244,7 @@ namespace PersonalCloudLibrarySource
         {
             // Cancel active package work before the host disposes its UI.
             // The extractor owns cleanup of only its private staging files.
+            zipHostStopping = true;
             CancelAllZipExtractions();
             CancelAllZipCleanups();
             if (!startupActionService.Stop(TimeSpan.FromSeconds(10)))

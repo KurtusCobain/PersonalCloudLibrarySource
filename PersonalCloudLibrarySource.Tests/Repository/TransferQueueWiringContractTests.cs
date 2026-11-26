@@ -58,6 +58,25 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             Assert.That(source, Does.Not.Contain("transferPresentationDisposed = false"));
         }
 
+        [Test]
+        public void ZipMutationPreflightIsRegisteredBeforeWorkerAndShutdownClosesAdmission()
+        {
+            var root = Path.Combine(FindRepositoryRoot(), "PersonalCloudLibrarySource");
+            var packages = File.ReadAllText(Path.Combine(root, "PersonalCloudLibrarySource.ZipPackages.cs"));
+            var recovery = File.ReadAllText(Path.Combine(root, "PersonalCloudLibrarySource.ZipRecovery.cs"));
+            var navigation = File.ReadAllText(Path.Combine(root, "PersonalCloudLibrarySource.Navigation.cs"));
+            var extraction = packages.Substring(packages.IndexOf("private async void ExtractZipGameTargetAsync", StringComparison.Ordinal));
+            Assert.That(extraction.IndexOf("activeZipExtractions.TryAdd", StringComparison.Ordinal),
+                Is.LessThan(extraction.IndexOf("await Task.Run", StringComparison.Ordinal)));
+            Assert.That(extraction, Does.Contain(".Inspect(candidate.ArchivePath, current.Item.Title, token)"));
+            Assert.That(recovery.IndexOf("activeZipRecoveries.TryAdd", StringComparison.Ordinal),
+                Is.LessThan(recovery.IndexOf("await Task.Run", StringComparison.Ordinal)));
+            Assert.That(recovery, Does.Contain("root, gameId, receipts, approvals, token"));
+            Assert.That(navigation.IndexOf("zipHostStopping = true;", StringComparison.Ordinal),
+                Is.LessThan(navigation.IndexOf("CancelAllZipExtractions();", StringComparison.Ordinal)));
+            Assert.That(extraction, Does.Contain("zipHostStopping || token.IsCancellationRequested"));
+        }
+
         private static string FindRepositoryRoot()
         {
             var current = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);

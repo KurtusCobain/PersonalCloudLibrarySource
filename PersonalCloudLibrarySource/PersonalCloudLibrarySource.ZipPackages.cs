@@ -18,10 +18,11 @@ namespace PersonalCloudLibrarySource
         // One bounded read-only review per plugin host, separate from
         // transfer/extraction jobs. Cancellation is requested on shutdown.
         private CancellationTokenSource activeZipReview;
+        private volatile bool zipHostStopping;
 
         private async void ReviewZipGameTarget(GameCommandTarget selected)
         {
-            if (transferPresentationDisposed) return;
+            if (zipHostStopping || transferPresentationDisposed) return;
             var cancellation = new CancellationTokenSource();
             if (Interlocked.CompareExchange(ref activeZipReview, cancellation, null) != null)
             {
@@ -35,7 +36,7 @@ namespace PersonalCloudLibrarySource
             try
             {
                 if (selected?.Game == null || selected.Game.PluginId != Id ||
-                    cancellation.IsCancellationRequested)
+                    cancellation.IsCancellationRequested || zipHostStopping)
                     return;
                 var currentSettings = settings.GetRuntimeSettingsSnapshot();
                 if (currentSettings == null || !currentSettings.Enabled || currentSettings.EnableMultiSourceProfiles)
@@ -59,9 +60,10 @@ namespace PersonalCloudLibrarySource
                     !ConfirmExternalSourceAccess(candidate.ArchivePath))
                     return;
 
+                if (zipHostStopping || cancellation.IsCancellationRequested) return;
                 var review = await Task.Run(() => new ZipPackageReviewService().Inspect(
                     candidate.ArchivePath, refreshed.Item.Title, cancellation.Token));
-                if (cancellation.IsCancellationRequested || transferPresentationDisposed)
+                if (cancellation.IsCancellationRequested || transferPresentationDisposed || zipHostStopping)
                     return;
                 // The result is advisory for this inspected snapshot only;
                 // never present a stale result after a source configuration
@@ -113,7 +115,7 @@ namespace PersonalCloudLibrarySource
             catch (Exception ex)
             {
                 logger.Warn(ex, "PCLS could not inspect the selected ZIP.");
-                if (!cancellation.IsCancellationRequested && !transferPresentationDisposed)
+                if (!cancellation.IsCancellationRequested && !transferPresentationDisposed && !zipHostStopping)
                     playniteApi.Dialogs.ShowMessage(
                         PclsResources.Get("LOCPLSZipReviewFailed",
                             "ZIP review could not be completed. No files were changed."),
@@ -136,12 +138,19 @@ namespace PersonalCloudLibrarySource
             var registered = false;
             try
             {
-                if (selected?.Game == null || selected.Game.PluginId != Id)
+                if (zipHostStopping || selected?.Game == null || selected.Game.PluginId != Id)
                     return;
                 var gameId = selected.Game.Id;
                 if (activeZipExtractions.ContainsKey(gameId) ||
                     activeZipRecoveries.ContainsKey(gameId) || activeZipCleanups.ContainsKey(gameId))
                     return;
+
+                cancellation = new CancellationTokenSource();
+                if (!activeZipExtractions.TryAdd(gameId, cancellation))
+                    return;
+                registered = true;
+                var token = cancellation.Token;
+                if (zipHostStopping || token.IsCancellationRequested) return;
 
                 var currentSettings = settings.GetRuntimeSettingsSnapshot();
                 if (currentSettings == null || !currentSettings.Enabled ||
@@ -166,9 +175,11 @@ namespace PersonalCloudLibrarySource
                     !ConfirmExternalSourceAccess(candidate.ArchivePath))
                     return;
 
+                if (zipHostStopping || token.IsCancellationRequested) return;
                 // A large archive must never be hashed on Playnite's UI thread.
                 var review = await Task.Run(() => new ZipPackageReviewService()
-                    .Inspect(candidate.ArchivePath, current.Item.Title));
+                    .Inspect(candidate.ArchivePath, current.Item.Title, token));
+                if (zipHostStopping || token.IsCancellationRequested) return;
                 if (!review.PassedPreflight)
                 {
                     playniteApi.Dialogs.ShowMessage(
@@ -217,7 +228,7 @@ namespace PersonalCloudLibrarySource
                         "Keep the current ZIP (No), or extract its verified contents to this new folder (Yes)?{0}{0}{1}{0}{0}No existing files will be overwritten. No executable or installer will run. Playnite installed state and game launch settings will NOT change. The result is a separate managed-cache extraction.",
                         Environment.NewLine, plan.Destination),
                     title, MessageBoxButton.YesNo, MessageBoxImage.Question);
-                if (decision != MessageBoxResult.Yes)
+                if (decision != MessageBoxResult.Yes || zipHostStopping || token.IsCancellationRequested)
                     return;
 
                 // The modal confirmation can outlive the approved manifest
@@ -242,16 +253,12 @@ namespace PersonalCloudLibrarySource
                     activeZipRecoveries.ContainsKey(gameId) || activeZipCleanups.ContainsKey(gameId) ||
                     GetTransferManager().GetActiveJobForGame(gameId) != null)
                     return;
-                cancellation = new CancellationTokenSource();
-                if (!activeZipExtractions.TryAdd(gameId, cancellation))
-                    return;
-                registered = true;
+                if (zipHostStopping || token.IsCancellationRequested) return;
 
                 // The extraction, archive hash, inventory scan and receipt
                 // issuance may be expensive; keep them off the UI thread.
                 var receiptStore = receipts;
                 var approvedPlan = plan;
-                var token = cancellation.Token;
                 var mutableBaseline = new ZipMutableDataBaselineStore(Path.Combine(
                     GetPluginDataDirectory(), "zip-mutable-data-baselines"));
                 var recovery = new ZipManagedRecoveryService(Path.Combine(
@@ -260,6 +267,7 @@ namespace PersonalCloudLibrarySource
                 var result = await Task.Run(() => extractor.ExecuteApproved(
                     approvedPlan, true, receiptStore, token, null, mutableBaseline, recovery, journal, gameId));
 
+                if (zipHostStopping || transferPresentationDisposed) return;
                 if (result.NeedsManualAttention && (!result.Succeeded || result.ReceiptRecorded))
                 {
                     playniteApi.Dialogs.ShowMessage(
@@ -308,6 +316,8 @@ namespace PersonalCloudLibrarySource
             catch (Exception ex)
             {
                 logger.Warn(ex, "PCLS ZIP extraction flow failed.");
+                if (zipHostStopping || transferPresentationDisposed || (cancellation?.IsCancellationRequested ?? false))
+                    return;
                 playniteApi.Dialogs.ShowMessage(
                     PclsResources.Get("LOCPLSZipExtractFailed",
                         "ZIP extraction was refused or failed. Inspect the archive and cache settings. Existing files were not overwritten."),
