@@ -89,6 +89,11 @@ The following supplement A10–A32. They remain NOT RUN until performed in the d
 | R13 | Private metadata writer contention and late cancellation | Competing save refuses before stage, stale profile edit refuses; verified unpublished canceled scratch may be removed, altered or uncertain stage and unrelated files remain | |
 | R14 | Contained launcher environment and concurrent host activity | Configured environment honored; no secrets logged, no unlisted inheritable fixture handle visible; unrelated host operations preserved | |
 
+| R15 | Settings revoked or cancellation requested during reservation creation | No provider execution, no destination mutation; release only verified unused originating reservation, otherwise preserve and quarantine | |
+| R16 | Missing or mismatched final destination after publication | Retain journal and block overlap/retry; no receipts or installed-state promotion, no ready-to-play notification; subsequent library update behavior recorded separately | |
+| R17 | Retry of external LocalFile attempt | Direct queue retry refuses, hosted retry requires a fresh controller and affirmative per-operation consent | |
+| R18 | File ancestor cache destination collision and receipt path binding | Refuse inconsistent catalog before publication regardless of item order; ordinary sibling cache files remain valid; receipt names the actual completed destination rather than re-resolving it | |
+
 ## Stop rules
 
 Stop on possible source/user-data mutation, unexpected deletion, incorrect cross-source identity, unauthorized launcher execution, unexplained host freeze or unknown process ownership. Preserve logs, journal and staging. Do not automatically remove evidence, rerun a destructive operation, or bypass a refusal to obtain a PASS. Reviewers and owner adjudicate the failure before continuing.
