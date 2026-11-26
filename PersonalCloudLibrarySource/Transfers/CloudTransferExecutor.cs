@@ -145,32 +145,39 @@ namespace PersonalCloudLibrarySource
                 return result;
             }
 
-            if (job.IsTerminal)
+            // A successful adapter result means publication already occurred.
+            // Any subsequent uncertainty must retain the recovery reservation;
+            // staging vacancy alone is not proof of a valid destination.
+            try
             {
-                return job.State == CloudTransferState.Cancelled
-                    ? CloudTransferExecutionResult.CancelledResult()
-                    : CloudTransferExecutionResult.Failure(job.ErrorSummary);
-            }
+                if (job.IsTerminal)
+                    return PublishedButUnverified(job, "Transfer state changed after publication.");
 
-            if (!VerifyDestination(job.Destination, isDirectory, result.TotalBytes))
+                if (!VerifyDestination(job.Destination, isDirectory, result.TotalBytes))
+                    return PublishedButUnverified(job, "Transferred data did not pass destination verification.");
+
+                if (job.State == CloudTransferState.Transferring)
+                    manager.Transition(job.Id, CloudTransferState.Verifying);
+
+                if (job.State == CloudTransferState.Verifying)
+                    manager.Transition(job.Id, CloudTransferState.Finalizing);
+
+                manager.Transition(job.Id, CloudTransferState.Completed);
+                return result;
+            }
+            catch (Exception ex)
             {
-                var message = "Transferred data did not pass destination verification.";
-                manager.Transition(job.Id, CloudTransferState.Failed, message);
-                return CloudTransferExecutionResult.Failure(message);
+                return PublishedButUnverified(job,
+                    "Transfer publication could not be confirmed; preserve destination and recovery evidence.", ex);
             }
+        }
 
-            if (job.State == CloudTransferState.Transferring)
-            {
-                manager.Transition(job.Id, CloudTransferState.Verifying);
-            }
-
-            if (job.State == CloudTransferState.Verifying)
-            {
-                manager.Transition(job.Id, CloudTransferState.Finalizing);
-            }
-
-            manager.Transition(job.Id, CloudTransferState.Completed);
-            return result;
+        private CloudTransferExecutionResult PublishedButUnverified(CloudTransferJob job, string message,
+            Exception exception = null)
+        {
+            manager.MarkRequiresManualRecovery(job.Id);
+            TransitionToFailedIfNeeded(job, message);
+            return CloudTransferExecutionResult.Failure(message, exception, requiresManualRecovery: true);
         }
 
         private static bool CanExecute(CloudTransferJob job)

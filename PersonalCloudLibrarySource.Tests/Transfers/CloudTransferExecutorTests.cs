@@ -117,6 +117,66 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(runner.RunCount, Is.EqualTo(1));
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void SuccessfulPublicationWithMissingOrChangedDestinationRetainsRecoveryReservation(bool exists)
+        {
+            var destination = Path.Combine(testRoot, "game.bin");
+            if (exists) File.WriteAllText(destination, "unexpected");
+            var manager = new CloudTransferManager(1);
+            var journalPath = Path.Combine(testRoot, "journal");
+            var journal = new TransferRecoveryJournal(journalPath);
+            var executor = new CloudTransferExecutor(manager, new LocalTransferAdapter());
+            var completion = typeof(CloudTransferExecutor).GetMethod("CompleteTransfer",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.That(completion, Is.Not.Null);
+            using (var queue = new TransferQueueService(manager,
+                new PublishedResultExecutor(manager, executor, completion), journal))
+            {
+                var job = queue.EnqueueLocal(Guid.NewGuid(), "Post-publication verification",
+                    Path.Combine(testRoot, "source"), destination, "LocalFolder", false);
+                var observed = queue.GetCompletion(job.Id);
+                Assert.That(observed.Wait(TimeSpan.FromSeconds(3)), Is.True);
+                Assert.That(job.State, Is.EqualTo(CloudTransferState.Failed));
+                Assert.That(observed.Result.Succeeded, Is.False);
+                Assert.That(observed.Result.RequiresManualRecovery, Is.True);
+                Assert.That(job.CanRetry, Is.False);
+                Assert.That(journal.Inspect().Records.Count, Is.EqualTo(1));
+                Assert.That(File.Exists(destination), Is.EqualTo(exists));
+                if (exists) Assert.That(File.ReadAllText(destination), Is.EqualTo("unexpected"));
+                Assert.Throws<TransferRetryRefusedException>(() => queue.EnqueueLocal(
+                    Guid.NewGuid(), "Conflicting", "source", destination, "LocalFolder", false));
+            }
+        }
+
+        // Deterministically exercise the real post-publication executor path
+        // without relying on a racing thread to replace a genuine transfer.
+        private sealed class PublishedResultExecutor : ICloudTransferExecutor
+        {
+            private readonly CloudTransferManager manager;
+            private readonly CloudTransferExecutor executor;
+            private readonly System.Reflection.MethodInfo completion;
+
+            public PublishedResultExecutor(CloudTransferManager manager, CloudTransferExecutor executor,
+                System.Reflection.MethodInfo completion)
+            {
+                this.manager = manager;
+                this.executor = executor;
+                this.completion = completion;
+            }
+
+            public CloudTransferExecutionResult ExecuteLocal(Guid jobId, bool directory)
+            {
+                manager.Transition(jobId, CloudTransferState.Transferring);
+                manager.Transition(jobId, CloudTransferState.Finalizing);
+                return (CloudTransferExecutionResult)completion.Invoke(executor, new object[] {
+                    manager.GetJob(jobId), CloudTransferExecutionResult.Success(1, 1), directory });
+            }
+
+            public CloudTransferExecutionResult ExecuteRclone(Guid jobId, PersonalCloudLibrarySourceSettings settings)
+                => ExecuteLocal(jobId, false);
+        }
+
         private sealed class FakeRcloneProcessRunner : IRcloneProcessRunner
         {
             private readonly Func<RcloneTransferRequest, RcloneProcessResult> handler;
