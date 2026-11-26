@@ -21,6 +21,17 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(partial, Does.StartWith(Path.GetFullPath(destination) + ".pcls-partial-"));
         }
 
+        [TestCase(@"C:\fixture.zip")]
+        [TestCase(@"\\fixture-host\fixture-share\fixture.zip")]
+        public void Create_RootChildRetainsCanonicalParentWithoutFilesystemAccess(string destination)
+        {
+            var id = Guid.NewGuid();
+            var partial = TransferPartialPathPolicy.Create(destination, id);
+            Assert.That(partial, Is.EqualTo(destination + ".pcls-partial-" + id.ToString("N")));
+            Assert.That(PathBoundary.Normalize(Path.GetDirectoryName(partial)),
+                Is.EqualTo(PathBoundary.Normalize(Path.GetDirectoryName(destination))));
+        }
+
         [Test]
         public void PublicationAncestorGuardRefusesOrdinaryDirectoryRenamesUntilReleased()
         {

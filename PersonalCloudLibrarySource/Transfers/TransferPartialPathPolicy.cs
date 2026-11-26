@@ -718,8 +718,8 @@ namespace PersonalCloudLibrarySource
 
             var partial = destination + ".pcls-partial-" + jobId.ToString("N");
             if (!string.Equals(
-                Path.GetDirectoryName(Path.GetFullPath(partial)),
-                Path.GetFullPath(parent).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                PathBoundary.Normalize(Path.GetDirectoryName(Path.GetFullPath(partial))),
+                PathBoundary.Normalize(parent),
                 StringComparison.OrdinalIgnoreCase))
             {
                 throw new InvalidOperationException("Transfer partial path escaped the verified destination parent.");
