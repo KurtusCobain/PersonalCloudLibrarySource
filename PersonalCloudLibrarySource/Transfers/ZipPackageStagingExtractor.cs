@@ -123,6 +123,11 @@ namespace PersonalCloudLibrarySource
                         return CloudTransferExecutionResult.Failure(
                             "Archive preflight rejected ZIP: " + inspected.Reason);
 
+                    var spaceError = LocalTransferAdapter.CheckDiskSpace(
+                        destination, inspected.TotalUncompressedBytes);
+                    if (!string.IsNullOrWhiteSpace(spaceError))
+                        return CloudTransferExecutionResult.Failure(spaceError);
+
                     // No filesystem mutation has occurred until ALL ZIP metadata
                     // passes bounded, Windows-aware path validation.
                     cancellationToken.ThrowIfCancellationRequested();

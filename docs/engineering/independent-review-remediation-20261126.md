@@ -10,7 +10,7 @@ Qualified source: b090230dea6c9d5832dee3e222b579c7e84dd154. Pre-remediation bran
 |---|---|---|
 | P1 | Candidate version/identity collision | Open: distinct candidate package and Toolbox check, preserve public artifacts and migration |
 | P2 | Narrow CodeQL gate | Baseline artifact downloaded and digest verified; zero results across full C# SARIF scan. All-result CI gate added; qualified at 39dc6f3 (zero reported findings) |
-| P3 | Free-space checks for UNC/ZIP/rclone | Open; distinguish unknown capacity from known insufficiency |
+| P3 | Free-space checks for UNC/ZIP/rclone | Local and ZIP now query actual destination ancestor capacity via Win32; Windows CI pending. Unknown capacity remains best effort; rclone without reliable expected size still needs separate design/host test |
 | P4 | ZIP32 limits vs advisory policy | Open; align shipping ZIP parser and documentation without narrowing unrelated archive advisory contracts unnecessarily |
 | P5 | Temporary files retained on failures | Open; only remove verified owned files, preserve uncertain evidence |
 | P6 | rclone :local: production configuration | Open; assess supported provider semantics and tests before change |
@@ -64,3 +64,7 @@ The central inspector verified local offsets precede the central directory, but 
 Both preceding correction commits passed all three workflows. Exact checkpoint 39dc6f3afa470a83e4163e72ef949bda0d29e04a: 972 standard tests and two separately executed real-rclone tests passed, zero warnings, zero full CodeQL results and archive compatibility passed. Evidence: https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45770962482 and https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45770962455 and https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45770962465.
 
 Remove wall-clock sorting from the queue's already ordered live list. Retain the tested invalid-concurrency fallback. Quote Explorer directory arguments in both entry points, leaving existing file selection syntax unchanged. Preserve exception class and HRESULT in rclone failures without emitting raw exception text, and strengthen existing launch-failure tests. Repeated executor exceptions are already caught inside ExecuteObserved; add a twelve-failure regression exceeding the worker count rather than rewrite terminal/recovery logic without a concrete defect. New batch CI pending; Explorer behavior requires Windows host acceptance. No release or CH-Rm changes.
+
+## Fourth correction batch: destination capacity
+
+Replace drive-letter-only capacity query with GetDiskFreeSpaceEx on the nearest existing destination ancestor (including UNC and mounted volumes where supported). Check ZIP's declared total output after read-only preflight but before creating staging. Preserve best-effort behavior when capacity is unavailable; do not claim space reservation or guaranteed protection against disk exhaustion. Add read-only existing-ancestor regression (zero and impossible byte requirements, no destination creation). Rclone lacks a reliable pre-transfer size on this path; do not add an unbounded remote enumeration or silently treat missing metadata as zero. Actual UNC and low-disk behavior remain host acceptance gates. CI pending.

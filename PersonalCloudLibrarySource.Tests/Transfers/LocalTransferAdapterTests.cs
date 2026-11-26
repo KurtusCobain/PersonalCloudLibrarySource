@@ -42,6 +42,19 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void DiskSpacePreflight_QueriesExistingAncestorBeforeCreatingDestination()
+        {
+            var destination = Path.Combine(testRoot, "not-created", "game.bin");
+            var method = typeof(LocalTransferAdapter).GetMethod("CheckDiskSpace",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            Assert.That(method, Is.Not.Null);
+            Assert.That((string)method.Invoke(null, new object[] { destination, 0L }), Is.Empty);
+            Assert.That((string)method.Invoke(null, new object[] { destination, long.MaxValue }),
+                Does.Contain("Not enough free space"));
+            Assert.That(Directory.Exists(Path.GetDirectoryName(destination)), Is.False);
+        }
+
+        [Test]
         public void CopyDirectory_ManySmallFilesQualifiesDigestAndInventoryPasses()
         {
             const int count = 256;

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Threading;
 
@@ -375,19 +376,32 @@ namespace PersonalCloudLibrarySource
             return (attributes & FileAttributes.ReparsePoint) == 0;
         }
 
-        // Best-effort local destination preflight. When Windows cannot report free
-        // space (some UNC providers), copy still follows normal IO failure/cleanup.
-        private static string CheckDiskSpace(string destinationPath, long requiredBytes)
+        // Best-effort capacity preflight. Query the nearest existing destination
+        // ancestor, not just the drive letter: UNC shares and mounted volumes
+        // may have their own capacity and caller-specific quotas. An unknown
+        // capacity is not a promise of free space; normal IO and rollback still
+        // handle exhaustion and changes after this non-reserving observation.
+        internal static string CheckDiskSpace(string destinationPath, long requiredBytes)
         {
             try
             {
-                var root = Path.GetPathRoot(Path.GetFullPath(destinationPath));
-                if (string.IsNullOrWhiteSpace(root))
+                if (requiredBytes < 0) return "Invalid required cache size.";
+                var directory = Path.GetDirectoryName(Path.GetFullPath(destinationPath));
+                while (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                    directory = Path.GetDirectoryName(directory);
+                if (string.IsNullOrEmpty(directory))
                     return string.Empty;
-                var drive = new DriveInfo(root);
-                if (!drive.IsReady)
+                // The Win32 API requires a trailing separator on a UNC share.
+                if (!directory.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal))
+                    directory += Path.DirectorySeparatorChar;
+                ulong available;
+                ulong total;
+                ulong free;
+                if (!GetDiskFreeSpaceEx(directory, out available, out total, out free))
                     return string.Empty;
-                if (!HasRequiredSpace(drive.AvailableFreeSpace, requiredBytes))
+                var boundedAvailable = available > (ulong)long.MaxValue
+                    ? long.MaxValue : (long)available;
+                if (!HasRequiredSpace(boundedAvailable, requiredBytes))
                     return "Not enough free space on the cache drive. Free space or select another cache folder.";
             }
             catch (ArgumentException) { }
@@ -396,6 +410,11 @@ namespace PersonalCloudLibrarySource
             catch (UnauthorizedAccessException) { }
             return string.Empty;
         }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetDiskFreeSpaceEx(string directoryName,
+            out ulong freeBytesAvailable, out ulong totalBytes, out ulong totalFreeBytes);
 
         internal static bool HasRequiredSpace(long available, long required)
         {
