@@ -351,12 +351,19 @@ namespace PersonalCloudLibrarySource
 
         private bool ConfirmExternalSourceAccess(string path)
         {
-            return playniteApi.Dialogs.ShowMessage(
-                PclsResources.Format("LOCPLSExternalSourceConfirmation",
-                    "This manifest references a source outside the configured library location:{0}{0}{1}{0}{0}Only continue if you recognize and trust this path. Accessing a network share may authenticate to that server. Allow access for this operation only?",
-                    Environment.NewLine, path),
-                PclsResources.Get("LOCPLSExternalSourceTitle", "Confirm external library source"),
-                MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+            var approved = false;
+            if (transferPresentationDisposed) return false;
+            new PlayniteImportUiDispatcher(playniteApi).Invoke(() =>
+            {
+                if (transferPresentationDisposed) return;
+                approved = playniteApi.Dialogs.ShowMessage(
+                    PclsResources.Format("LOCPLSExternalSourceConfirmation",
+                        "This manifest references a source outside the configured library location:{0}{0}{1}{0}{0}Only continue if you recognize and trust this path. Accessing a network share may authenticate to that server. Allow access for this operation only?",
+                        Environment.NewLine, path),
+                    PclsResources.Get("LOCPLSExternalSourceTitle", "Confirm external library source"),
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes;
+            });
+            return approved && !transferPresentationDisposed;
         }
 
         private void ReviewZipGameTarget(GameCommandTarget selected)

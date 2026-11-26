@@ -4,7 +4,6 @@ using Playnite.SDK.Plugins;
 using System;
 using System.Threading.Tasks;
 using System.Threading;
-using System.Windows;
 
 namespace PersonalCloudLibrarySource
 {
@@ -35,21 +34,33 @@ namespace PersonalCloudLibrarySource
             GameWorkflowNotificationService workflowNotifications = null,
             CacheOwnershipReceiptStore ownershipReceipts = null,
             string ownershipReceiptKey = null,
-            Func<bool> executionAuthorized = null,
-            Func<string, bool> confirmExternalSource = null) : base(game)
+            Func<bool> executionAuthorized = null)
+            : this(playniteApi, game, item, settings, transferQueue, null,
+                workflowNotifications, ownershipReceipts, ownershipReceiptKey, executionAuthorized)
+        {
+        }
+
+        public RcloneInstallController(
+            IPlayniteAPI playniteApi,
+            Game game,
+            PersonalCloudLibraryItem item,
+            PersonalCloudLibrarySourceSettings settings,
+            TransferQueueService transferQueue,
+            Func<string, bool> confirmExternalSource,
+            GameWorkflowNotificationService workflowNotifications = null,
+            CacheOwnershipReceiptStore ownershipReceipts = null,
+            string ownershipReceiptKey = null,
+            Func<bool> executionAuthorized = null) : base(game)
         {
             this.item = item;
             this.settings = settings;
             this.transferQueue = transferQueue ?? throw new ArgumentNullException(nameof(transferQueue));
             this.ownershipReceipts = ownershipReceipts;
             this.executionAuthorized = executionAuthorized;
-            this.confirmExternalSource = confirmExternalSource ?? (path =>
-                playniteApi != null && playniteApi.Dialogs.ShowMessage(
-                    PclsResources.Format("LOCPLSExternalSourceConfirmation",
-                        "This manifest references a source outside the configured library location:{0}{0}{1}{0}{0}Only continue if you recognize and trust this path. Accessing a network share may authenticate to that server. Allow access for this operation only?",
-                        Environment.NewLine, path),
-                    PclsResources.Get("LOCPLSExternalSourceTitle", "Confirm external library source"),
-                    MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes);
+            // The Playnite host may provide a consent callback. The
+            // standard controller remains independent of dialog/navigation
+            // APIs and fails closed without an explicit affirmative decision.
+            this.confirmExternalSource = confirmExternalSource ?? (_ => false);
             // Existing calls retain the original manifest item key. A new-profile
             // caller must supply its namespaced Playnite game ID explicitly.
             if (string.IsNullOrWhiteSpace(item?.Id))

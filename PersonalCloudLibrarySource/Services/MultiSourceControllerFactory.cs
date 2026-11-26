@@ -14,6 +14,13 @@ namespace PersonalCloudLibrarySource
             MultiSourceRuntimePlan plan, TransferQueueService queue,
             CacheOwnershipReceiptStore receipts, out InstallController controller,
             Func<bool> planStillCurrent = null)
+            => TryPrepareInstall(api, game, expectedPluginId, plan, queue, receipts,
+                out controller, planStillCurrent, null);
+
+        public bool TryPrepareInstall(IPlayniteAPI api, Game game, Guid expectedPluginId,
+            MultiSourceRuntimePlan plan, TransferQueueService queue,
+            CacheOwnershipReceiptStore receipts, out InstallController controller,
+            Func<bool> planStillCurrent, Func<string, bool> confirmExternalSource)
         {
             controller = null;
             SourceScopedGameAction route;
@@ -34,7 +41,8 @@ namespace PersonalCloudLibrarySource
                 StringComparison.Ordinal) ? null : route.OwnershipReceiptKey;
 
             controller = new RcloneInstallController(api, game, item,
-                sourceSettings, queue, ownershipReceipts: receipts,
+                sourceSettings, queue, confirmExternalSource: confirmExternalSource,
+                ownershipReceipts: receipts,
                 ownershipReceiptKey: explicitReceiptKey,
                 executionAuthorized: BindExecutionGuard(game, expectedPluginId, route.GameId, planStillCurrent));
             return true;

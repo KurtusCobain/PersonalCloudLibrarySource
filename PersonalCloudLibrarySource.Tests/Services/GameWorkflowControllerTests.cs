@@ -252,13 +252,13 @@ namespace PersonalCloudLibrarySource.Tests.Services
             using (var queue = new TransferQueueService(manager,
                 new CloudTransferExecutor(manager, new LocalTransferAdapter())))
             using (var controller = new RcloneInstallController(null, game, item, settings, queue,
-                new GameWorkflowNotificationService(sink), confirmExternalSource: path =>
+                confirmExternalSource: path =>
                 {
                     prompts++;
                     Assert.That(path, Is.EqualTo(source));
                     Assert.That(manager.Jobs, Is.Empty);
                     return approve;
-                }))
+                }, workflowNotifications: new GameWorkflowNotificationService(sink)))
             {
                 controller.Install(new InstallActionArgs());
                 Assert.That(prompts, Is.EqualTo(1));

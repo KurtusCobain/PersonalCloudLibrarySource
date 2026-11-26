@@ -266,7 +266,8 @@ namespace PersonalCloudLibrarySource
                         playniteApi, args.Game, Id, plan, GetTransferQueue(),
                         new CacheOwnershipReceiptStore(Path.Combine(
                             GetPluginDataDirectory(), "ownership-receipts")),
-                        out scopedController, () => IsCurrentExperimentalActionPlan(plan)))
+                        out scopedController, () => IsCurrentExperimentalActionPlan(plan),
+                        ConfirmExternalSourceAccess))
                         installActions.Add(scopedController);
                     return installActions;
                 }
@@ -294,6 +295,7 @@ namespace PersonalCloudLibrarySource
                         item,
                         pluginSettings,
                         GetTransferQueue(),
+                        confirmExternalSource: ConfirmExternalSourceAccess,
                         ownershipReceipts: new CacheOwnershipReceiptStore(
                             Path.Combine(GetPluginDataDirectory(), "ownership-receipts")),
                         executionAuthorized: CreateLegacyActionGuard(args.Game, item, pluginSettings, true)));
