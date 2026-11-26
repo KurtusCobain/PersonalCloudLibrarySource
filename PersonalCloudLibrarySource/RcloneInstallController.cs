@@ -4,6 +4,7 @@ using Playnite.SDK.Plugins;
 using System;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Windows;
 
 namespace PersonalCloudLibrarySource
 {
@@ -19,6 +20,7 @@ namespace PersonalCloudLibrarySource
         private readonly CacheOwnershipReceiptStore ownershipReceipts;
         private readonly string ownershipReceiptKey;
         private readonly Func<bool> executionAuthorized;
+        private readonly Func<string, bool> confirmExternalSource;
         private readonly CancellationTokenSource inventoryCancellation = new CancellationTokenSource();
         private Guid activeJobId;
         private volatile bool disposed;
@@ -33,13 +35,21 @@ namespace PersonalCloudLibrarySource
             GameWorkflowNotificationService workflowNotifications = null,
             CacheOwnershipReceiptStore ownershipReceipts = null,
             string ownershipReceiptKey = null,
-            Func<bool> executionAuthorized = null) : base(game)
+            Func<bool> executionAuthorized = null,
+            Func<string, bool> confirmExternalSource = null) : base(game)
         {
             this.item = item;
             this.settings = settings;
             this.transferQueue = transferQueue ?? throw new ArgumentNullException(nameof(transferQueue));
             this.ownershipReceipts = ownershipReceipts;
             this.executionAuthorized = executionAuthorized;
+            this.confirmExternalSource = confirmExternalSource ?? (path =>
+                playniteApi != null && playniteApi.Dialogs.ShowMessage(
+                    PclsResources.Format("LOCPLSExternalSourceConfirmation",
+                        "This manifest references a source outside the configured library location:{0}{0}{1}{0}{0}Only continue if you recognize and trust this path. Accessing a network share may authenticate to that server. Allow access for this operation only?",
+                        Environment.NewLine, path),
+                    PclsResources.Get("LOCPLSExternalSourceTitle", "Confirm external library source"),
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning) == MessageBoxResult.Yes);
             // Existing calls retain the original manifest item key. A new-profile
             // caller must supply its namespaced Playnite game ID explicitly.
             if (string.IsNullOrWhiteSpace(item?.Id))
@@ -93,21 +103,47 @@ namespace PersonalCloudLibrarySource
                     return;
                 }
 
-                logger.Info($"Personal Cloud Library Source queueing item {item.Id} as {sourceType}.");
                 var providerType = PersonalCloudLibrarySource.GetProviderType(settings);
+                var remote = string.Equals(providerType,
+                    PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType, StringComparison.OrdinalIgnoreCase);
+                var resolvedSource = remote
+                    ? PersonalCloudLibrarySource.ResolveRcloneSourcePath(settings, sourcePath)
+                    : PersonalCloudLibrarySource.ResolveLocalFolderSourcePath(settings, sourcePath);
+                if (string.IsNullOrWhiteSpace(resolvedSource))
+                {
+                    workflowNotifications.Failure("install", Game.GameId, "Download blocked: the source path is unavailable.");
+                    SignalCancelledIfHosted();
+                    return;
+                }
+                if (!remote && SourcePathResolver.RequiresExternalLocalSourceConsent(settings, resolvedSource) &&
+                    !confirmExternalSource(resolvedSource))
+                {
+                    workflowNotifications.Warning("install", Game.GameId,
+                        "Download cancelled: external source access was not approved.");
+                    SignalCancelledIfHosted();
+                    return;
+                }
+                // A modal decision cannot renew a stale manifest/settings
+                // authorization. The worker also checks the existing guard.
+                if (disposed || (executionAuthorized != null && !executionAuthorized()))
+                {
+                    workflowNotifications.Failure("install", Game.GameId,
+                        "Download authorization expired; refresh the library before retrying.");
+                    SignalCancelledIfHosted();
+                    return;
+                }
+                logger.Info($"Personal Cloud Library Source queueing item {item.Id} as {sourceType}.");
                 var destinationPath = sourceType == "directory"
                     ? destinationFolderPath
                     : destinationFilePath;
-                var job = string.Equals(providerType,
-                    PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
-                    StringComparison.OrdinalIgnoreCase)
+                var job = remote
                     ? transferQueue.EnqueueRclone(
                         Game.Id, string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
-                        PersonalCloudLibrarySource.ResolveRcloneSourcePath(settings, sourcePath),
+                        resolvedSource,
                         destinationPath, providerType, sourceType == "directory", settings, executionAuthorized)
                     : transferQueue.EnqueueLocal(
                         Game.Id, string.IsNullOrWhiteSpace(item.Title) ? Game.Name : item.Title,
-                        PersonalCloudLibrarySource.ResolveLocalFolderSourcePath(settings, sourcePath),
+                        resolvedSource,
                         destinationPath, providerType, sourceType == "directory", settings, executionAuthorized);
                 activeJobId = job.Id;
                 ObserveCompletionAsync(job.Id, sourceType, launchPath, installDirectory);

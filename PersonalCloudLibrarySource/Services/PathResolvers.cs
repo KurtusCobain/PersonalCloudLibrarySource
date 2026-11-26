@@ -71,6 +71,32 @@ namespace PersonalCloudLibrarySource
             }
         }
 
+        // Lexical classification only: do not probe a manifest-supplied
+        // external path (especially UNC) before the user has chosen to access it.
+        // The configured library root, or manifest directory when no root is
+        // configured, is the explicitly selected source boundary.
+        public static bool RequiresExternalLocalSourceConsent(
+            PersonalCloudLibrarySourceSettings settings, string resolvedSource)
+        {
+            if (settings == null || string.IsNullOrWhiteSpace(resolvedSource) ||
+                !string.Equals(PersonalCloudLibrarySource.GetProviderType(settings),
+                    PersonalCloudLibrarySourceSettings.LocalFileProviderType, StringComparison.OrdinalIgnoreCase))
+                return false;
+            try
+            {
+                var root = settings.LocalLibraryRoot;
+                if (string.IsNullOrWhiteSpace(root) &&
+                    !string.IsNullOrWhiteSpace(settings.LocalManifestPath) &&
+                    SafeCacheDeletionPolicy.IsFullyRooted(settings.LocalManifestPath) &&
+                    !SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(settings.LocalManifestPath))
+                    root = Path.GetDirectoryName(settings.LocalManifestPath);
+                return string.IsNullOrWhiteSpace(root) ||
+                    !SafeCacheDeletionPolicy.IsFullyRooted(root) ||
+                    !PathBoundary.IsContained(root, resolvedSource);
+            }
+            catch (Exception) { return true; }
+        }
+
         public string ResolveRclone(PersonalCloudLibrarySourceSettings settings, string sourcePath)
         {
             if (string.IsNullOrWhiteSpace(sourcePath)) return string.Empty;

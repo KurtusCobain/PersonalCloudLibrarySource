@@ -231,6 +231,43 @@ namespace PersonalCloudLibrarySource.Tests.Services
             }
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Install_ExternalSourceRequiresExplicitConsentBeforeQueueing(bool approve)
+        {
+            var game = Game("external-consent");
+            game.IsInstalled = false;
+            var settings = FileOnlySettings();
+            settings.SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType;
+            settings.LocalLibraryRoot = Path.Combine(root, "trusted");
+            var source = Path.Combine(root, "other-source", "play.exe");
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = game.GameId, Title = "External", SourcePath = source,
+                CachePath = Path.Combine("external-consent", "play.exe")
+            };
+            var sink = new RecordingSink();
+            var manager = new CloudTransferManager(1);
+            var prompts = 0;
+            using (var queue = new TransferQueueService(manager,
+                new CloudTransferExecutor(manager, new LocalTransferAdapter())))
+            using (var controller = new RcloneInstallController(null, game, item, settings, queue,
+                new GameWorkflowNotificationService(sink), confirmExternalSource: path =>
+                {
+                    prompts++;
+                    Assert.That(path, Is.EqualTo(source));
+                    Assert.That(manager.Jobs, Is.Empty);
+                    return approve;
+                }))
+            {
+                controller.Install(new InstallActionArgs());
+                Assert.That(prompts, Is.EqualTo(1));
+                Assert.That(manager.Jobs.Count, Is.EqualTo(approve ? 1 : 0));
+                if (approve) Assert.That(queue.GetCompletion(manager.Jobs[0].Id).Wait(5000), Is.True);
+                Assert.That(game.IsInstalled, Is.False);
+            }
+        }
+
         [Test]
         public void Install_TransferFailure_NotifiesWithoutPlayniteApiOrDesktopDialog()
         {
@@ -660,6 +697,7 @@ namespace PersonalCloudLibrarySource.Tests.Services
             {
                 Enabled = true,
                 LocalCacheFolder = cache,
+                LocalLibraryRoot = root,
                 UninstallBehavior = PersonalCloudLibrarySourceSettings.RemoveCachedFileOnlyUninstallBehavior,
                 TreatMissingFilesAsUninstalled = true
             };

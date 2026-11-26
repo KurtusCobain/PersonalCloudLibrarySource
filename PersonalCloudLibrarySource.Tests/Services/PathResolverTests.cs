@@ -87,6 +87,27 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void ExternalLocalFileConsentClassificationIsLexicalAndRootScoped()
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType,
+                LocalManifestPath = Path.Combine(testRoot, "library", "catalog.json")
+            };
+            Assert.That(SourcePathResolver.RequiresExternalLocalSourceConsent(settings,
+                Path.Combine(testRoot, "library", "game.zip")), Is.False);
+            Assert.That(SourcePathResolver.RequiresExternalLocalSourceConsent(settings,
+                Path.Combine(testRoot, "library-sibling", "game.zip")), Is.True);
+            Assert.That(SourcePathResolver.RequiresExternalLocalSourceConsent(settings,
+                @"\\fixture-server\share\game.zip"), Is.True);
+            settings.LocalLibraryRoot = @"\\fixture-server\share";
+            Assert.That(SourcePathResolver.RequiresExternalLocalSourceConsent(settings,
+                @"\\fixture-server\share\game.zip"), Is.False);
+            Assert.That(SourcePathResolver.RequiresExternalLocalSourceConsent(settings,
+                @"\\fixture-server\other\game.zip"), Is.True);
+        }
+
+        [Test]
         public void SourceResolver_LocalFileKeepsOrdinaryUncPathWithoutAccessingShare()
         {
             var settings = new PersonalCloudLibrarySourceSettingsV3

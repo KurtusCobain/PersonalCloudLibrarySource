@@ -281,6 +281,8 @@
     <sys:String x:Key="LOCPLSSetupSaveFailedReason">Setup could not be saved: {0}</sys:String>
     <sys:String x:Key="LOCPLSSetupReminderSaveFailed">The setup reminder state could not be saved: {0}</sys:String>
     <sys:String x:Key="LOCPLSInstallControllerName">Download to local cache</sys:String>
+    <sys:String x:Key="LOCPLSExternalSourceTitle">Confirm external library source</sys:String>
+    <sys:String x:Key="LOCPLSExternalSourceConfirmation">This manifest references a source outside the configured library location:{0}{0}{1}{0}{0}Only continue if you recognize and trust this path. Accessing a network share may authenticate to that server. Allow access for this operation only?</sys:String>
     <sys:String x:Key="LOCPLSInstallCancelledNotification">Download to local cache was cancelled.{0}{0}Item: {1}{0}Partial files were removed and the game remains uninstalled.</sys:String>
     <sys:String x:Key="LOCPLSInstallFailedNotification">Download to local cache failed.{0}{0}Item: {1}{0}Source type: {2}{0}Result: {3}{0}{0}Next: review the manifest source path and cache settings, then try again.</sys:String>
     <sys:String x:Key="LOCPLSUnknownFailure">Unknown failure.</sys:String>
