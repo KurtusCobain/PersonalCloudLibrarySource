@@ -61,6 +61,9 @@ namespace PersonalCloudLibrarySource
                 }
 
                 if (string.IsNullOrWhiteSpace(path)) return ManifestLoadResult.Failure(path, "Manifest path is empty or could not be resolved.");
+                if (SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(path) ||
+                    (Path.IsPathRooted(path) && !SafeCacheDeletionPolicy.IsFullyRooted(path)))
+                    return ManifestLoadResult.Failure(path, "Manifest path uses an unsupported Windows namespace or name.");
                 if (!File.Exists(path)) return ManifestLoadResult.Failure(path, "Manifest was not found: " + path);
                 return ManifestLoadResult.Success(ReadBoundedManifest(path), path);
             }
@@ -107,7 +110,13 @@ namespace PersonalCloudLibrarySource
             if (settings == null) return Failure("Settings are unavailable.");
             if (!string.IsNullOrWhiteSpace(settings.LocalManifestPath))
             {
-                try { return Success(PathBoundary.Normalize(settings.LocalManifestPath)); }
+                try
+                {
+                    if (SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(settings.LocalManifestPath) ||
+                        (Path.IsPathRooted(settings.LocalManifestPath) && !SafeCacheDeletionPolicy.IsFullyRooted(settings.LocalManifestPath)))
+                        return Failure("Manifest path uses an unsupported Windows namespace or name.");
+                    return Success(PathBoundary.Normalize(settings.LocalManifestPath));
+                }
                 catch (Exception ex) { return Failure("Manifest path could not be resolved: " + ex.Message); }
             }
             if (string.IsNullOrWhiteSpace(settings.LocalLibraryRoot) || string.IsNullOrWhiteSpace(settings.ManifestRelativePath))
@@ -116,6 +125,9 @@ namespace PersonalCloudLibrarySource
                 return Failure("ManifestRelativePath must be relative to LocalLibraryRoot.");
             try
             {
+                if (SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(settings.LocalLibraryRoot) ||
+                    SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(settings.ManifestRelativePath))
+                    return Failure("Manifest path uses an unsupported Windows namespace or name.");
                 var combined = Path.GetFullPath(Path.Combine(settings.LocalLibraryRoot, settings.ManifestRelativePath));
                 return PathBoundary.IsContained(settings.LocalLibraryRoot, combined)
                     ? Success(combined)

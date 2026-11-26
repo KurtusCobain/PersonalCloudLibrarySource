@@ -165,7 +165,7 @@ namespace PersonalCloudLibrarySource
 
         private static bool IsReservedWindowsDevice(string segment)
         {
-            var name = segment.Split('.')[0];
+            var name = segment.Split('.')[0].TrimEnd(' ');
             if (name.Equals("CON", StringComparison.OrdinalIgnoreCase) ||
                 name.Equals("PRN", StringComparison.OrdinalIgnoreCase) ||
                 name.Equals("AUX", StringComparison.OrdinalIgnoreCase) ||

@@ -48,6 +48,8 @@ namespace PersonalCloudLibrarySource.Tests.Services
         [TestCase("game//double.exe")]
         [TestCase("game/./dot.exe")]
         [TestCase("game/CON.txt")]
+        [TestCase("game/CON .txt")]
+        [TestCase("game/LPT1 .txt")]
         [TestCase("LPT1/file.exe")]
         [TestCase("game/COM\u00B9.txt")]
         [TestCase("game/com\u00B2")]

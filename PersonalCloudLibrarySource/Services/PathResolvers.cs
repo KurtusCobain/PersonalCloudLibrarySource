@@ -10,6 +10,8 @@ namespace PersonalCloudLibrarySource
             if (string.IsNullOrWhiteSpace(root) || string.IsNullOrWhiteSpace(candidate)) return false;
             try
             {
+                if (SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(root) ||
+                    SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(candidate)) return false;
                 var normalizedRoot = Normalize(root);
                 var normalizedCandidate = Normalize(candidate);
                 if (string.Equals(normalizedRoot, normalizedCandidate, StringComparison.OrdinalIgnoreCase)) return true;
@@ -36,28 +38,29 @@ namespace PersonalCloudLibrarySource
         public PathResolutionResult ResolveLocal(PersonalCloudLibrarySourceSettings settings, string sourcePath)
         {
             if (settings == null || string.IsNullOrWhiteSpace(sourcePath)) return Failure("Source path is empty.");
-            if (Path.IsPathRooted(sourcePath))
-            {
-                if (string.Equals(
-                    PersonalCloudLibrarySource.GetProviderType(settings),
-                    PersonalCloudLibrarySourceSettings.LocalFileProviderType,
-                    StringComparison.OrdinalIgnoreCase))
-                {
-                    try { return Success(PathBoundary.Normalize(sourcePath)); }
-                    catch (Exception ex) { return Failure("Source path could not be resolved: " + ex.Message); }
-                }
-                return Failure("Rooted source paths are not allowed for LocalFolder items.");
-            }
-
-            var root = settings.LocalLibraryRoot;
-            if (string.IsNullOrWhiteSpace(root) && !string.IsNullOrWhiteSpace(settings.LocalManifestPath))
-            {
-                root = Path.GetDirectoryName(settings.LocalManifestPath);
-            }
-            if (string.IsNullOrWhiteSpace(root)) return Failure("Local source root is unavailable.");
-
             try
             {
+                // Check raw input before Path APIs can normalize ambiguous
+                // Windows device, stream or trailing-name aliases.
+                if (SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(sourcePath))
+                    return Failure("Source path uses an unsupported Windows namespace or name.");
+                if (Path.IsPathRooted(sourcePath))
+                {
+                    if (!SafeCacheDeletionPolicy.IsFullyRooted(sourcePath))
+                        return Failure("Source path must be fully rooted, not drive-relative.");
+                    if (string.Equals(PersonalCloudLibrarySource.GetProviderType(settings),
+                        PersonalCloudLibrarySourceSettings.LocalFileProviderType,
+                        StringComparison.OrdinalIgnoreCase))
+                        return Success(PathBoundary.Normalize(sourcePath));
+                    return Failure("Rooted source paths are not allowed for LocalFolder items.");
+                }
+
+                var root = settings.LocalLibraryRoot;
+                if (string.IsNullOrWhiteSpace(root) && !string.IsNullOrWhiteSpace(settings.LocalManifestPath))
+                    root = Path.GetDirectoryName(settings.LocalManifestPath);
+                if (string.IsNullOrWhiteSpace(root)) return Failure("Local source root is unavailable.");
+                if (SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(root))
+                    return Failure("Local source root uses an unsupported Windows namespace or name.");
                 var resolved = Path.GetFullPath(Path.Combine(root, sourcePath));
                 if (!PathBoundary.IsContained(root, resolved)) return Failure("Source path escapes the local source root.");
                 return Success(resolved);
@@ -103,6 +106,9 @@ namespace PersonalCloudLibrarySource
 
             try
             {
+                if (!string.IsNullOrWhiteSpace(settings.LocalCacheFolder) &&
+                    SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(settings.LocalCacheFolder))
+                    throw new InvalidOperationException("Cache root uses an unsupported Windows namespace or name.");
                 result.LaunchPath = ResolveCandidate(First(item.CachePath, item.LocalPath), settings.LocalCacheFolder);
                 if (string.IsNullOrWhiteSpace(result.LaunchPath) && !string.IsNullOrWhiteSpace(item.InstallDirectory) && !string.IsNullOrWhiteSpace(item.LaunchFile))
                 {
@@ -166,13 +172,7 @@ namespace PersonalCloudLibrarySource
                 itemId.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
                 throw new InvalidOperationException("Manifest item id is not a safe cache folder name.");
 
-            // Windows reserves these device names, even when followed by an extension.
-            var stem = itemId.Split('.')[0].ToUpperInvariant();
-            if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL" ||
-                (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.Ordinal) ||
-                                      stem.StartsWith("LPT", StringComparison.Ordinal)) &&
-                 ((stem[3] >= '1' && stem[3] <= '9') ||
-                  stem[3] == '\u00B9' || stem[3] == '\u00B2' || stem[3] == '\u00B3')))
+            if (SafeCacheDeletionPolicy.IsReservedDeviceName(itemId))
                 throw new InvalidOperationException("Manifest item id is a reserved Windows folder name.");
 
             var resolved = Path.GetFullPath(Path.Combine(cacheRoot, itemId));
@@ -186,6 +186,9 @@ namespace PersonalCloudLibrarySource
         {
             if (string.IsNullOrWhiteSpace(candidate)) return string.Empty;
             if (string.IsNullOrWhiteSpace(cacheRoot)) throw new InvalidOperationException("LocalCacheFolder is required for cache paths.");
+            if (SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(candidate) ||
+                (Path.IsPathRooted(candidate) && !SafeCacheDeletionPolicy.IsFullyRooted(candidate)))
+                throw new InvalidOperationException("Cache path uses an unsupported Windows namespace or name.");
             // Legacy manifests may contain absolute paths *inside* the cache,
             // but a user-provided absolute path must never escape it.
             var resolved = Path.IsPathRooted(candidate)
@@ -198,6 +201,8 @@ namespace PersonalCloudLibrarySource
         private static string ResolveRelativeChild(string parent, string child)
         {
             if (string.IsNullOrWhiteSpace(parent) || string.IsNullOrWhiteSpace(child)) return string.Empty;
+            if (SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(child))
+                throw new InvalidOperationException("Launch file uses an unsupported Windows namespace or name.");
             if (Path.IsPathRooted(child)) throw new InvalidOperationException("Launch file must be relative to the install directory.");
             var resolved = Path.GetFullPath(Path.Combine(parent, child));
             if (!PathBoundary.IsContained(parent, resolved)) throw new InvalidOperationException("Launch file escapes the install directory.");

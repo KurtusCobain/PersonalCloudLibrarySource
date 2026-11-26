@@ -82,7 +82,7 @@ namespace PersonalCloudLibrarySource
 
         // Selective adaptation of the path-hardening review in CH-Rm's MIT
         // fork (ce15ba47); keep upstream policy and avoid device/ADS aliases.
-        private static bool IsUnsupportedWindowsPath(string path)
+        internal static bool IsUnsupportedWindowsPath(string path)
         {
             var value = path.Replace('/', '\\');
             if (value.StartsWith(@"\\?\", StringComparison.Ordinal) ||
@@ -100,26 +100,45 @@ namespace PersonalCloudLibrarySource
                 if (segment.EndsWith(" ", StringComparison.Ordinal) ||
                     segment.EndsWith(".", StringComparison.Ordinal))
                     return true;
-                var name = segment.Split('.')[0].TrimEnd(' ');
-                if (System.Text.RegularExpressions.Regex.IsMatch(name,
-                    @"^(?:CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])$",
-                    System.Text.RegularExpressions.RegexOptions.IgnoreCase |
-                    System.Text.RegularExpressions.RegexOptions.CultureInvariant))
+                if (segment.IndexOfAny(new[] { '<', '>', '"', '|', '?', '*' }) >= 0)
                     return true;
+                foreach (var character in segment)
+                    if (char.IsControl(character)) return true;
+                if (IsReservedDeviceName(segment)) return true;
             }
             return false;
         }
 
-        private static bool IsFullyRooted(string path)
+        internal static bool IsReservedDeviceName(string segment)
+        {
+            var name = segment.Split('.')[0].TrimEnd(' ');
+            if (name.Equals("CON", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("PRN", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("AUX", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("NUL", StringComparison.OrdinalIgnoreCase))
+                return true;
+            return name.Length == 4 &&
+                (name.StartsWith("COM", StringComparison.OrdinalIgnoreCase) ||
+                 name.StartsWith("LPT", StringComparison.OrdinalIgnoreCase)) &&
+                ((name[3] >= '1' && name[3] <= '9') ||
+                 name[3] == '\u00B9' || name[3] == '\u00B2' || name[3] == '\u00B3');
+        }
+
+        internal static bool IsFullyRooted(string path)
         {
             if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path)) return false;
-            if (path.StartsWith(@"\\", StringComparison.Ordinal))
+            var value = path.Replace('/', '\\');
+            if (value.StartsWith(@"\\", StringComparison.Ordinal))
             {
-                var root = Path.GetPathRoot(path);
-                return !string.IsNullOrWhiteSpace(root) && root.StartsWith(@"\\", StringComparison.Ordinal);
+                var root = Path.GetPathRoot(value);
+                if (string.IsNullOrWhiteSpace(root) ||
+                    !root.StartsWith(@"\\", StringComparison.Ordinal)) return false;
+                // UNC requires both server and share, not just a server name.
+                return root.Split(new[] { '\\' }, StringSplitOptions.RemoveEmptyEntries).Length == 2;
             }
-            return path.Length >= 3 && path[1] == ':' &&
-                (path[2] == Path.DirectorySeparatorChar || path[2] == Path.AltDirectorySeparatorChar);
+            return value.Length >= 3 &&
+                ((value[0] >= 'A' && value[0] <= 'Z') || (value[0] >= 'a' && value[0] <= 'z')) &&
+                value[1] == ':' && value[2] == '\\';
         }
 
         private static CacheDeletionAuthorization Refuse(string reason) => new CacheDeletionAuthorization { Reason = reason };

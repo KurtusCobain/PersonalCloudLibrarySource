@@ -20,14 +20,14 @@ Qualified source: b090230dea6c9d5832dee3e222b579c7e84dd154. Pre-remediation bran
 | P10 | Worker fault containment | Executor and subscriber exceptions already handled/tested; repeated-failure test added. Unexpected internal bookkeeping fault remains investigation target |
 | P11 | Legacy process code | Open; reachability/test audit |
 | P12 | Old release workflow | Open; do not change main or public release controls without separate approval |
-| P13 | Absolute/UNC LocalFile source paths | Confirmed explicitly supported by existing test; design consent/trust boundary and migration before restricting |
+| P13 | Absolute/UNC LocalFile source paths | Ordinary absolute/UNC compatibility retained; ambiguous device/drive-relative/stream names rejected lexically. Consent/trust boundary for valid external paths remains open |
 | P14 | Process environment contract | Open |
 | H1 | Handle inheritance | Open; adversarial host test |
 | H2 | Long paths | Open; fail safely and document/measure |
 | H3 | Overlapping ZIP member ranges | Confirmed missing range check; sorted local header/data interval validation and two regression cases added; Windows CI passed at 39dc6f3 |
 | H4 | Superscript Windows device names | Confirmed in two inspected policies; corrected with 12 additional parameterized cases; Windows CI passed at 39dc6f3 |
 | H5 | Encrypted rclone config | Explicit no-password-prompt flag for plugin copy/cat/listremotes and standalone listing; encrypted-config host behavior still unqualified |
-| H6 | Extended Windows path roots | Open; inspect native path contracts |
+| H6 | Extended Windows path roots | Raw namespace/name checks at local source, cache resolver, manifest loader and containment; tests added, CI pending |
 
 ## Grok register
 
@@ -86,3 +86,7 @@ Candidate CI 45773386451 failed one repository contract (976 standard passed, on
 ## Eighth correction batch: rclone named remotes and noninteractive behavior
 
 Remove the test-only inline :local: exception from the plugin operand builder. Configured named local remotes remain available; no claim that named remotes are a sandbox. Both opt-in binary fixtures create unique named local configs inside their disposable roots, set/restore RCLONE_CONFIG, and one checks exact listremotes output to verify isolation. Add builder and manifest-reader rejection cases. Explicit --ask-password=false is supported by the documented rclone config flag; plugin copy/cat/listremotes and standalone lsjson use it. The CLI also closes redirected stdin. Reference: https://rclone.org/commands/rclone/. Real binary and encrypted-config behavior need qualification; no credential access or remote writes. Legacy inline users must configure a named remote or choose LocalFolder. CI pending.
+
+## Ninth correction batch: raw Windows path aliases
+
+Apply existing Windows namespace policy before normalization in source, cache and manifest paths, including the containment predicate. Reject drive-relative/root-relative source/cache paths, alternate streams, control/invalid characters, reserved device stems with spaces and device namespaces. Replace per-segment regex with ordinal device-name checks shared by cache fallback IDs and filesystem policy; the isolated archive policy retains its independent equivalent check. Ordinary fully rooted drive and UNC LocalFile sources are still supported; lexical UNC fixture makes no network access. This does not establish trust for valid external paths: P13 remains open for explicit consent/migration design. Added source/cache/containment and archive cases; CI pending.

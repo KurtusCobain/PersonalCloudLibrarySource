@@ -68,6 +68,55 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(result.Path, Is.EqualTo(path));
         }
 
+        [TestCase(@"\\?\C:\Games\one.exe")]
+        [TestCase(@"\\.\C:\Games\one.exe")]
+        [TestCase(@"C:relative.exe")]
+        [TestCase(@"\relative.exe")]
+        [TestCase(@"C:\Games\file.exe:stream")]
+        [TestCase(@"C:\Games\CON .txt")]
+        [TestCase("games\\COM\u00B9.txt")]
+        [TestCase(@"games\trailing.\one.exe")]
+        public void SourceResolver_LocalFileRefusesAmbiguousWindowsPaths(string path)
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType,
+                LocalManifestPath = Path.Combine(testRoot, "manifest.json")
+            };
+            Assert.That(new SourcePathResolver().ResolveLocal(settings, path).Succeeded, Is.False);
+        }
+
+        [Test]
+        public void SourceResolver_LocalFileKeepsOrdinaryUncPathWithoutAccessingShare()
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType
+            };
+            var result = new SourcePathResolver().ResolveLocal(settings, @"\\fixture-server\fixture-share\game.exe");
+            Assert.That(result.Succeeded, Is.True, result.Error);
+            Assert.That(result.Path, Is.EqualTo(@"\\fixture-server\fixture-share\game.exe"));
+        }
+
+        [TestCase(@"game\file.exe:stream")]
+        [TestCase(@"game\NUL .txt")]
+        [TestCase(@"game\trailing.\play.exe")]
+        [TestCase(@"C:relative.exe")]
+        public void CacheResolver_RefusesAmbiguousRawPathsBeforeNormalization(string path)
+        {
+            var result = new CachePathResolver().Resolve(
+                new PersonalCloudLibraryItem { CachePath = path },
+                new PersonalCloudLibrarySourceSettingsV3 { LocalCacheFolder = Path.Combine(testRoot, "cache") });
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.LaunchPath, Is.Empty);
+        }
+
+        [Test]
+        public void ContainmentRefusesExtendedNamespacesEvenWithMatchingLexicalPrefixes()
+        {
+            Assert.That(PathBoundary.IsContained(@"\\?\C:\cache", @"\\?\C:\cache\..\outside"), Is.False);
+        }
+
         [Test]
         public void CacheResolver_SiblingPrefix_IsNotInsideCache()
         {
