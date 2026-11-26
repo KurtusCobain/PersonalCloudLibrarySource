@@ -10,12 +10,12 @@ Qualified source: b090230dea6c9d5832dee3e222b579c7e84dd154. Pre-remediation bran
 |---|---|---|
 | P1 | Candidate version/identity collision | Internal candidate 0.3.2.1 (manifest and assembly), public feed unchanged; CI guard and validator fixture added. Official Toolbox and actual migration pending |
 | P2 | Narrow CodeQL gate | Baseline artifact downloaded and digest verified; zero results across full C# SARIF scan. All-result CI gate added; qualified at 39dc6f3 (zero reported findings) |
-| P3 | Free-space checks for UNC/ZIP/rclone | Local and ZIP now query actual destination ancestor capacity via Win32; Windows CI pending. Unknown capacity remains best effort; rclone without reliable expected size still needs separate design/host test |
-| P4 | ZIP32 limits vs advisory policy | Open; align shipping ZIP parser and documentation without narrowing unrelated archive advisory contracts unnecessarily |
+| P3 | Free-space checks for UNC/ZIP/rclone | Local and ZIP now query actual destination ancestor capacity via Win32; Windows regression passed at 362d5d3. Unknown capacity remains best effort; rclone without reliable expected size still needs separate design/host test |
+| P4 | ZIP32 limits vs advisory policy | Documented effective ZIP32 limits separately from format-neutral ceilings; ZIP64 remains unsupported; no expansion of supported formats |
 | P5 | Temporary files retained on failures | Open; only remove verified owned files, preserve uncertain evidence |
-| P6 | rclone :local: production configuration | Inline backend removed from plugin; opt-in real-rclone tests now create uniquely named isolated local config; CI pending |
+| P6 | rclone :local: production configuration | Inline backend removed from plugin; opt-in real-rclone tests now create uniquely named isolated local config; both real-binary cases passed at ae0c9fa1 |
 | P7 | Explorer argument quoting | Confirmed two raw directory arguments; now use existing Windows argument quoting. File selection already quoted; host behavior pending |
-| P8 | Process diagnostics | Added exception type/HRESULT only, with regression assertions against message disclosure; qualification pending |
+| P8 | Process diagnostics | Added exception type/HRESULT only, with regression assertions against message disclosure; Windows qualification passed at 362d5d3 |
 | P9 | Queue ordering/concurrency settings | Dispatch uses registration order; clock regression added. Invalid concurrency fallback to one is an explicit tested conservative contract, retained |
 | P10 | Worker fault containment | Executor and subscriber exceptions already handled/tested; repeated-failure test added. Unexpected internal bookkeeping fault remains investigation target |
 | P11 | Legacy process code | Open; reachability/test audit |
@@ -34,7 +34,7 @@ Qualified source: b090230dea6c9d5832dee3e222b579c7e84dd154. Pre-remediation bran
 | ID | Reported finding | Current disposition |
 |---|---|---|
 | G1 | Non-atomic metadata replacement | Partially narrowed for three metadata stores: verify staged identity/bytes and lock original through validation; final File.Replace pathname race remains open |
-| G2 | Ancestor-relative publication | Separate guard experiment retains qualified absolute native rename; below-root ancestor data-read handles deny delete sharing, identities checked before/after. CI pending; root mapping/reparse/SMB limitations remain |
+| G2 | Ancestor-relative publication | Separate guard experiment retains qualified absolute native rename; below-root ancestor data-read handles deny delete sharing, identities checked before/after. All three workflows passed at 38c076c5; root mapping/reparse/SMB limitations remain |
 | G3 | Cooperative cross-process locking | Open; external nonparticipants cannot be universally serialized by a named mutex |
 | G4 | Crash/power-loss recovery | Open; read-only diagnostics remain, no automatic deletion/release |
 | G5 | Legacy recursive deletion | Open; disabled shipping behavior remains |
@@ -90,3 +90,14 @@ Remove the test-only inline :local: exception from the plugin operand builder. C
 ## Ninth correction batch: raw Windows path aliases
 
 Apply existing Windows namespace policy before normalization in source, cache and manifest paths, including the containment predicate. Reject drive-relative/root-relative source/cache paths, alternate streams, control/invalid characters, reserved device stems with spaces and device namespaces. Replace per-segment regex with ordinal device-name checks shared by cache fallback IDs and filesystem policy; the isolated archive policy retains its independent equivalent check. Ordinary fully rooted drive and UNC LocalFile sources are still supported; lexical UNC fixture makes no network access. This does not establish trust for valid external paths: P13 remains open for explicit consent/migration design. Added source/cache/containment and archive cases; CI pending.
+
+## Qualification evidence — post-review continuation
+
+| Exact source | Windows standard + real-rclone passed | Archive | Full CodeQL | Evidence |
+|---|---:|---|---|---|
+| `0ee6f7dfa2486acc1de70df8a54e014b3ebb2f31` | 977 + 2 | PASS | PASS | [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45773115113), [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45773115024), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45773115046) |
+| `38c076c5c27f24a7ece2a58fc237cbbef8747338` | 978 + 2 | PASS | PASS, 0 findings | [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45773707857), [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45773707882), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45773708014) |
+| `ae0c9fa1c16c7c760b300406e47563b2065b78b6` | 980 + 2 | PASS | Not yet verified at entry | [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45773877825), [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45773877765), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45773877849) |
+| `e51e15b6f2833b1ca20fc65919bb92709a738fcd` | Pending at entry | PASS | Pending at entry | [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45774073827), [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45774075185), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45774073844) |
+
+The two opt-in rclone cases are skipped in each standard run and executed separately; do not count the skips as passes. Windows builds at 38c076c5 and ae0c9fa1 both reported zero errors/warnings and zero failed tests. Candidate SHA-256 at 38c076c5: `A3BC3E9760F12CE5C50A8CB53510EE1A8CF07246420D80CD029B561EB08410DE`; at ae0c9fa1: `D5F43CA92AE6DFB0ADF5B0C2158A307B8321BA3090F00FCA63541EF0E9C2C950`. These digests belong to those exact artifacts only. The intermediate 1cd1ad23 Windows run also failed the same missing Get-FileHash contract before the correction; it did not qualify. Latest full pass verified at entry: 38c076c5. Do not infer Toolbox, real SMB, native Playnite, independent-review closure or release readiness from hosted workflows.

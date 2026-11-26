@@ -67,6 +67,21 @@ Record PASS, FAIL, BLOCKED or NOT RUN in the result column. Evidence should name
 | A31 | Reports/support screenshots/privacy | Bounded diagnostic details; redact paths, accounts, configuration and library content | |
 | A32 | Final package/Toolbox/provenance | Exact commit, digest, allowlist, version/ID, official verification and unchanged stable feed recorded | |
 
+### Additional post-review observations
+
+The following supplement A10–A32. They remain NOT RUN until performed in the disposable Windows host; CI evidence does not replace them.
+
+| ID | Scenario | Required observed behavior | Result / evidence |
+|---|---|---|---|
+| R01 | Ancestor rename during transfer publication | On supported local filesystem, ordinary guarded ancestor rename refuses; no unexpected destination or overwrite; rename works after handles release | |
+| R02 | Limited directory permissions and disposable SMB | Supported publication or explicit safe refusal; record ACL and provider conditions without modifying personal data | |
+| R03 | Encrypted disposable rclone config without supplied password | Copy, manifest read and listing cannot prompt or hang indefinitely; bounded failure, no password/config contents in logs | |
+| R04 | Configured named local rclone versus rejected inline backend | Named isolated fixture operates; inline backend refused without execution | |
+| R05 | Ambiguous source, cache and manifest path spellings | Device namespaces, streams, drive-relative operands and reserved aliases fail closed; ordinary explicitly selected UNC sources tested separately | |
+| R06 | ZIP32 format boundaries and long output path | Unsupported ZIP64 or invalid metadata refused without stage or destination; long path failure safe and clear; never claim ZIP64 compatibility | |
+| R07 | Actual low-capacity destination (disposable volume only) | Local/ZIP preflight fails safely if measured insufficient; unknown capacity not presented as a guarantee; source retained | |
+| R08 | Concurrent private metadata replacement | Locked/changed records and occupied backup names refuse when detected; preserve ambiguous evidence, record remaining pathname race as a limitation | |
+
 ## Stop rules
 
 Stop on possible source/user-data mutation, unexpected deletion, incorrect cross-source identity, unauthorized launcher execution, unexplained host freeze or unknown process ownership. Preserve logs, journal and staging. Do not automatically remove evidence, rerun a destructive operation, or bypass a refusal to obtain a PASS. Reviewers and owner adjudicate the failure before continuing.

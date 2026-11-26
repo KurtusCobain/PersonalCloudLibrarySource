@@ -2,6 +2,10 @@
 
 **Status: draft development code, not a shipped or enabled Playnite install mode.** This is a coding-first candidate on [PR #21](https://github.com/KurtusCobain/PersonalCloudLibrarySource/pull/21). The public v0.3.2 extension remains unchanged.
 
+## Effective format limits (post-review clarification)
+
+`ArchiveInspectionPolicy` is a format-neutral, read-only advisory ceiling (100,000 entries, 8 GiB per entry, 32 GiB total uncompressed bytes, 240 characters per member path, 1000:1 expansion ratio). These numbers are **not a promise that the shipping ZIP parser can accept an archive at every ceiling**. `ZipCentralDirectoryInspector` supports only single-disk ZIP32 with stored/deflate members; it refuses ZIP64 sentinel fields, so the effective central entry-count maximum is 65,534, and each non-sentinel 32-bit size/offset field is at most 4,294,967,294 bytes. Its central-directory cap is 32 MiB; all structural, path, expansion, and publication checks still apply. The archive's total file length is not defined by a single per-entry 32-bit field. ZIP64, encrypted archives, and ambiguous legacy name encodings remain unsupported. No change to format support or unrelated archive advisory limits is implied. Actual host behavior remains subject to acceptance.
+
 ## Implemented
 
 - `PackageDiscoveryPolicy` classifies archives, direct-file types and executables conservatively. ZIP is ambiguous: some emulators load ZIP ROMs directly, so no format triggers unattended extraction or execution.
