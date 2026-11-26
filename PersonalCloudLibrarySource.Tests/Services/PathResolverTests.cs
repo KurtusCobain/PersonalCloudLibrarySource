@@ -139,6 +139,40 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void DriveRootNormalizationPreservesAbsoluteRootAndIsIdempotent()
+        {
+            var drive = Path.GetPathRoot(testRoot);
+            var normalized = PathBoundary.Normalize(drive);
+            Assert.That(normalized, Is.EqualTo(drive));
+            Assert.That(PathBoundary.Normalize(normalized), Is.EqualTo(normalized));
+            Assert.That(PathBoundary.IsContained(normalized, testRoot), Is.True);
+            Assert.That(PathBoundary.IsContained(normalized, normalized), Is.True);
+        }
+
+        [TestCase(@"C:")]
+        [TestCase(@"C:relative")]
+        [TestCase(@"\relative")]
+        public void AmbiguousRootedPathsAreNotContainmentOrConfiguredRoots(string path)
+        {
+            Assert.That(PathBoundary.IsContained(path, path), Is.False);
+            var settings = LocalSettings();
+            settings.LocalLibraryRoot = path;
+            Assert.That(new SourcePathResolver().ResolveLocal(settings, "game.exe").Succeeded, Is.False);
+            settings.LocalCacheFolder = path;
+            Assert.That(new CachePathResolver().Resolve(
+                new PersonalCloudLibraryItem { CachePath = "game.exe" }, settings).Succeeded, Is.False);
+        }
+
+        [Test]
+        public void UncShareContainmentDoesNotConfuseSiblingShares()
+        {
+            var share = @"\\fixture-host\fixture-share";
+            Assert.That(PathBoundary.Normalize(share + @"\"), Is.EqualTo(PathBoundary.Normalize(share)));
+            Assert.That(PathBoundary.IsContained(share, share + @"\game.exe"), Is.True);
+            Assert.That(PathBoundary.IsContained(share, share + @"-other\game.exe"), Is.False);
+        }
+
+        [Test]
         public void CacheResolver_SiblingPrefix_IsNotInsideCache()
         {
             var cache = Path.Combine(testRoot, "cache");

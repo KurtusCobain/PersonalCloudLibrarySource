@@ -11,11 +11,15 @@ namespace PersonalCloudLibrarySource
             try
             {
                 if (SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(root) ||
-                    SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(candidate)) return false;
+                    SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(candidate) ||
+                    (Path.IsPathRooted(root) && !SafeCacheDeletionPolicy.IsFullyRooted(root)) ||
+                    (Path.IsPathRooted(candidate) && !SafeCacheDeletionPolicy.IsFullyRooted(candidate))) return false;
                 var normalizedRoot = Normalize(root);
                 var normalizedCandidate = Normalize(candidate);
                 if (string.Equals(normalizedRoot, normalizedCandidate, StringComparison.OrdinalIgnoreCase)) return true;
-                return normalizedCandidate.StartsWith(normalizedRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+                var prefix = normalizedRoot.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal)
+                    ? normalizedRoot : normalizedRoot + Path.DirectorySeparatorChar;
+                return normalizedCandidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
             }
             catch
             {
@@ -23,7 +27,16 @@ namespace PersonalCloudLibrarySource
             }
         }
 
-        public static string Normalize(string path) => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        public static string Normalize(string path)
+        {
+            var full = Path.GetFullPath(path);
+            var trimmed = full.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            // On Windows C: is drive-relative, not the root C:\. Retain the
+            // drive separator so a normalized root can be safely reused.
+            if (trimmed.Length == 2 && trimmed[1] == ':')
+                return trimmed + Path.DirectorySeparatorChar;
+            return trimmed;
+        }
     }
 
     public sealed class PathResolutionResult
@@ -59,7 +72,8 @@ namespace PersonalCloudLibrarySource
                 if (string.IsNullOrWhiteSpace(root) && !string.IsNullOrWhiteSpace(settings.LocalManifestPath))
                     root = Path.GetDirectoryName(settings.LocalManifestPath);
                 if (string.IsNullOrWhiteSpace(root)) return Failure("Local source root is unavailable.");
-                if (SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(root))
+                if (SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(root) ||
+                    (Path.IsPathRooted(root) && !SafeCacheDeletionPolicy.IsFullyRooted(root)))
                     return Failure("Local source root uses an unsupported Windows namespace or name.");
                 var resolved = Path.GetFullPath(Path.Combine(root, sourcePath));
                 if (!PathBoundary.IsContained(root, resolved)) return Failure("Source path escapes the local source root.");
@@ -133,7 +147,8 @@ namespace PersonalCloudLibrarySource
             try
             {
                 if (!string.IsNullOrWhiteSpace(settings.LocalCacheFolder) &&
-                    SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(settings.LocalCacheFolder))
+                    (SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(settings.LocalCacheFolder) ||
+                     (Path.IsPathRooted(settings.LocalCacheFolder) && !SafeCacheDeletionPolicy.IsFullyRooted(settings.LocalCacheFolder))))
                     throw new InvalidOperationException("Cache root uses an unsupported Windows namespace or name.");
                 result.LaunchPath = ResolveCandidate(First(item.CachePath, item.LocalPath), settings.LocalCacheFolder);
                 if (string.IsNullOrWhiteSpace(result.LaunchPath) && !string.IsNullOrWhiteSpace(item.InstallDirectory) && !string.IsNullOrWhiteSpace(item.LaunchFile))
