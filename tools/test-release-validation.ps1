@@ -222,6 +222,29 @@ try {
         }
     }
 
+    Test-Case 'Package inspection rejects empty required payloads and invalid UTF-8 metadata' {
+        $root = Join-Path $testRoot 'invalid-payload'
+        New-TestRepository $root
+        $extension = Join-Path $root 'PersonalCloudLibrarySource\extension.yaml'
+        foreach ($fixture in @(
+            @{ Name = 'PersonalCloudLibrarySource.dll'; Bytes = [byte[]]@(); Pattern = 'required file is empty' },
+            @{ Name = 'extension.yaml'; Bytes = [byte[]]@(255, 255, 255); Pattern = 'decode|Unicode|byte|fallback' }
+        )) {
+            $path = Join-Path $root ('case-' + [guid]::NewGuid().ToString('N') + '\PersonalCloudLibrarySource-0.3.2.pext')
+            New-Item (Split-Path $path) -ItemType Directory -Force | Out-Null
+            New-TestPackage $root $path
+            $archive = [IO.Compression.ZipFile]::Open($path, [IO.Compression.ZipArchiveMode]::Update)
+            try {
+                $archive.GetEntry($fixture.Name).Delete()
+                $stream = $archive.CreateEntry($fixture.Name).Open()
+                try { $stream.Write($fixture.Bytes, 0, $fixture.Bytes.Length) }
+                finally { $stream.Dispose() }
+            }
+            finally { $archive.Dispose() }
+            Assert-ThrowsLike { Test-ReleasePackage -PackagePath $path -ExtensionPath $extension } $fixture.Pattern
+        }
+    }
+
     Test-Case 'Official Toolbox output must use the Toolbox identity and version filename' {
         $root = Join-Path $testRoot 'official-name'
         New-TestRepository $root

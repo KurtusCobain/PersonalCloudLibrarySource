@@ -238,10 +238,19 @@ function Assert-ReleaseSurfaces {
 function Open-PclsPackageArchive {
     param([Parameter(Mandatory)][string]$Path)
     $resolved = (Resolve-Path -LiteralPath $Path).Path
-    if ((Get-Item -LiteralPath $resolved).Length -gt 67108864) { throw 'Package exceeds inspection byte budget.' }
+    $item = Get-Item -LiteralPath $resolved
+    if ($item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw 'Package must be an ordinary file.'
+    }
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [IO.Compression.ZipFile]::OpenRead($resolved)
+    $stream = [IO.FileStream]::new($resolved, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+    try {
+        if ($stream.Length -gt 67108864) { throw 'Package exceeds inspection byte budget.' }
+        # Archive owns the same length-checked stream; no second path open.
+        return [IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Read, $false)
+    }
+    catch { $stream.Dispose(); throw }
 }
 
 function Get-PclsPackageIndex {
@@ -307,7 +316,7 @@ function Read-PclsPackageMetadata {
                 $data.Write($buffer, 0, $read)
             }
             if ($data.Length -ne $Entry.Length) { throw 'Package metadata size mismatch.' }
-            return [System.Text.Encoding]::UTF8.GetString($data.ToArray()).TrimStart([char]0xFEFF)
+            return ([System.Text.UTF8Encoding]::new($false, $true)).GetString($data.ToArray()).TrimStart([char]0xFEFF)
         }
         finally { $data.Dispose() }
     }
@@ -321,6 +330,11 @@ function Test-ReleasePackage {
     $version = Get-RequiredYamlScalar $extension 'Version'
     $expectedName = "PersonalCloudLibrarySource-$version.pext"
     if ([IO.Path]::GetFileName($PackagePath) -ne $expectedName) { throw "Package filename must be derived from extension.yaml: $expectedName" }
+    Test-PclsPackageContent -PackagePath $PackagePath -Extension $extension -Version $version -ExpectedName $expectedName
+}
+
+function Test-PclsPackageContent {
+    param([string]$PackagePath, $Extension, [string]$Version, [string]$ExpectedName)
     $archive = Open-PclsPackageArchive -Path $PackagePath
     try {
         $required = @('PersonalCloudLibrarySource.dll','extension.yaml','LICENSE','icon.png','Localization/en_US.xaml','Assets/pcls-logo-wide.png')
@@ -329,6 +343,24 @@ function Test-ReleasePackage {
         foreach ($path in $required) { if (-not $files.ContainsKey($path)) { throw "Package is missing required file: $path" } }
         $extra = @($actual | Where-Object { $required -notcontains $_ })
         if ($extra.Count) { throw "Package contains unexpected file(s): $($extra -join ', ')" }
+        # Validate actual decompressed lengths of every required payload,
+        # not only the two metadata entries. No files are extracted.
+        $buffer = [byte[]]::new(65536)
+        foreach ($path in $required) {
+            $entry = $files[$path]
+            if ($entry.Length -le 0) { throw "Package required file is empty: $path" }
+            $stream = $entry.Open()
+            try {
+                $remaining = [long]$entry.Length
+                while ($remaining -gt 0) {
+                    $read = $stream.Read($buffer, 0, [int][Math]::Min([long]$buffer.Length, $remaining))
+                    if ($read -le 0) { throw "Package payload is truncated: $path" }
+                    $remaining -= $read
+                }
+                if ($stream.ReadByte() -ne -1) { throw "Package payload exceeds declared size: $path" }
+            }
+            finally { $stream.Dispose() }
+        }
         $packed = Read-DistributionYamlText -Text (Read-PclsPackageMetadata $files['extension.yaml']) -Path 'package:extension.yaml'
         $license = Read-PclsPackageMetadata $files['LICENSE']
         if (-not $license.Contains('MIT License') -or -not $license.Contains('The Bearclaw & ztwslayer')) {
@@ -355,19 +387,8 @@ function Test-OfficialToolboxOutput {
         throw "Official Toolbox output filename must be '$expectedName', found '$($packages[0].Name)'."
     }
 
-    # Toolbox has its own ID/version filename convention. Validate that exact name
-    # first, then use the distribution filename only as an adapter for the shared
-    # package content and manifest inspection.
-    $inspectionRoot = Join-Path ([IO.Path]::GetTempPath()) ('pcls-toolbox-inspect-' + [guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $inspectionRoot -Force | Out-Null
-    try {
-        $inspectionPath = Join-Path $inspectionRoot "PersonalCloudLibrarySource-$version.pext"
-        Copy-Item -LiteralPath $packages[0].FullName -Destination $inspectionPath
-        Test-ReleasePackage -PackagePath $inspectionPath -ExtensionPath $ExtensionPath
-    }
-    finally {
-        Remove-Item -LiteralPath $inspectionRoot -Recurse -Force -ErrorAction SilentlyContinue
-    }
+    # Inspect the actual official artifact without creating a temporary copy.
+    Test-PclsPackageContent -PackagePath $packages[0].FullName -Extension $extension -Version $version -ExpectedName "PersonalCloudLibrarySource-$version.pext"
 }
 
 Export-ModuleMember -Function Find-PlayniteToolbox, Read-DistributionYaml, Assert-ReleaseSurfaces, Test-ReleasePackage, Test-OfficialToolboxOutput, Open-PclsPackageArchive, Get-PclsPackageIndex, Read-PclsPackageMetadata
