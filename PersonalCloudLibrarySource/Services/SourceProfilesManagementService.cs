@@ -96,7 +96,8 @@ namespace PersonalCloudLibrarySource
                 projector.Project(profile, shared);
 
             var path = Path.Combine(pluginDataDirectory, SourceProfilesFileStore.FileName);
-            if (File.Exists(path) || Directory.Exists(path))
+            var requireExisting = File.Exists(path) || Directory.Exists(path);
+            if (requireExisting)
             {
                 var current = store.Load(pluginDataDirectory);
                 if (!current.Succeeded)
@@ -110,7 +111,7 @@ namespace PersonalCloudLibrarySource
             }
             // This only saves the independent JSON file. Never enable
             // EnableMultiSourceProfiles here, even when valid.
-            return store.Save(pluginDataDirectory, proposed);
+            return store.SaveAgainstBaseline(pluginDataDirectory, proposed, baseline, requireExisting);
         }
 
         // A backup is previewed and checked against the current set of

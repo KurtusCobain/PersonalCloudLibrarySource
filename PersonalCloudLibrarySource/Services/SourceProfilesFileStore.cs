@@ -27,6 +27,20 @@ namespace PersonalCloudLibrarySource
         // No implicit directory creation, symlink following or auto-recovery.
         public string Save(string pluginDataDirectory,
             IReadOnlyList<PclsSourceProfileDefinition> profiles)
+            => SaveCore(pluginDataDirectory, profiles, null, false);
+
+        // Compare the editor's canonical baseline inside the same write lock
+        // that covers staging and replacement, not only in the UI service.
+        internal string SaveAgainstBaseline(string pluginDataDirectory,
+            IReadOnlyList<PclsSourceProfileDefinition> profiles,
+            IReadOnlyList<PclsSourceProfileDefinition> baseline, bool requireExisting)
+        {
+            if (baseline == null) throw new ArgumentNullException(nameof(baseline));
+            return SaveCore(pluginDataDirectory, profiles, codec.Serialize(baseline), requireExisting);
+        }
+
+        private string SaveCore(string pluginDataDirectory,
+            IReadOnlyList<PclsSourceProfileDefinition> profiles, string baseline, bool requireExisting)
         {
             var root = ValidateStoreDirectory(pluginDataDirectory);
             var primary = Path.Combine(root, FileName);
@@ -39,10 +53,12 @@ namespace PersonalCloudLibrarySource
             {
                 RejectLinksAndDirectories(primary);
                 var replacing = File.Exists(primary);
-                if (replacing && !ReadValidated(primary).Succeeded)
+                if (replacing && !MatchesBaseline(primary, baseline))
                     throw new InvalidOperationException(
-                        "Existing source profiles are invalid; inspect and recover manually.");
-    
+                        "Existing source profiles are invalid or changed; reload before saving.");
+                if (!replacing && requireExisting)
+                    throw new InvalidOperationException("Source profiles disappeared; reload before saving.");
+
                 if (!replacing)
                 {
                     TransferPartialPathPolicy.WritePrivateRecord(primary, json,
@@ -56,10 +72,18 @@ namespace PersonalCloudLibrarySource
                 var backup = Path.Combine(root, "source-profiles-backup-" +
                     Guid.NewGuid().ToString("N") + ".json");
                 TransferPartialPathPolicy.ReplacePrivateRecord(primary, payload, pending, backup,
-                    () => ReadValidated(primary).Succeeded,
-                    "Existing source profiles are invalid; inspect and recover manually.");
+                    () => MatchesBaseline(primary, baseline),
+                    "Existing source profiles are invalid or changed; reload before saving.",
+                    SourceProfilesConfigurationCodec.MaxDocumentCharacters * 4);
                 return backup;
             }
+        }
+
+        private bool MatchesBaseline(string path, string baseline)
+        {
+            var active = ReadValidated(path);
+            return active.Succeeded && (baseline == null ||
+                string.Equals(codec.Serialize(active.Profiles), baseline, StringComparison.Ordinal));
         }
 
         public SourceProfilesParseResult Load(string pluginDataDirectory)

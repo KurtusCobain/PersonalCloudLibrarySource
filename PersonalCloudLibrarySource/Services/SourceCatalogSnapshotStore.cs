@@ -55,7 +55,7 @@ namespace PersonalCloudLibrarySource
                 var replacing = File.Exists(target);
                 if (replacing && !ReadFile(target, document.ProfileId).Succeeded)
                     throw new InvalidOperationException("Existing catalog identity snapshot is invalid.");
-    
+
                 if (!replacing)
                 {
                     TransferPartialPathPolicy.WritePrivateRecord(target, json, MaxFileBytes,
@@ -68,7 +68,7 @@ namespace PersonalCloudLibrarySource
                     Guid.NewGuid().ToString("N") + ".json");
                 TransferPartialPathPolicy.ReplacePrivateRecord(target, payload, pending, backup,
                     () => ReadFile(target, document.ProfileId).Succeeded,
-                    "Existing catalog identity snapshot is invalid.");
+                    "Existing catalog identity snapshot is invalid.", MaxFileBytes);
                 return target;
             }
         }

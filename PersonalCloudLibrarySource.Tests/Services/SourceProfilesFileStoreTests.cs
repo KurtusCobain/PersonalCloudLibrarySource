@@ -80,6 +80,33 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void ConditionalStoreSaveRejectsStaleOrDisappearedBaselineBeforeStaging()
+        {
+            var store = new SourceProfilesFileStore();
+            var baseline = new[] { Profile(LegacyId, "Original") };
+            store.Save(root, baseline);
+            store.Save(root, new[] { Profile(LegacyId, "Other editor") });
+            var method = typeof(SourceProfilesFileStore).GetMethod("SaveAgainstBaseline",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.That(method, Is.Not.Null);
+            var proposed = new[] { Profile(LegacyId, "Stale editor") };
+            var failure = Assert.Throws<System.Reflection.TargetInvocationException>(() =>
+                method.Invoke(store, new object[] { root, proposed, baseline, true }));
+            Assert.That(failure.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(store.Load(root).Profiles.Single().DisplayName, Is.EqualTo("Other editor"));
+            Assert.That(store.ListBackupNames(root).Count, Is.EqualTo(1));
+            Assert.That(Directory.GetFiles(root, "*.tmp"), Is.Empty);
+
+            File.Delete(Path.Combine(root, SourceProfilesFileStore.FileName));
+            failure = Assert.Throws<System.Reflection.TargetInvocationException>(() =>
+                method.Invoke(store, new object[] { root, proposed, baseline, true }));
+            Assert.That(failure.InnerException, Is.TypeOf<InvalidOperationException>());
+            Assert.That(File.Exists(Path.Combine(root, SourceProfilesFileStore.FileName)), Is.False);
+            Assert.That(store.ListBackupNames(root).Count, Is.EqualTo(1));
+            Assert.That(Directory.GetFiles(root, "*.tmp"), Is.Empty);
+        }
+
+        [Test]
         public void HardlinkedWriteLockRefusesWithoutModifyingEitherFile()
         {
             var primary = Path.Combine(root, SourceProfilesFileStore.FileName);

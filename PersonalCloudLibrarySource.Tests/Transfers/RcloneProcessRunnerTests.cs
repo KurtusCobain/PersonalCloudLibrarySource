@@ -90,8 +90,10 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(Environment.GetEnvironmentVariable(variable), Is.Null);
             using (var process = CreateContainedHandle())
             {
-                var script = "[Console]::WriteLine([Environment]::GetEnvironmentVariable('" + variable + "')); " +
-                    "[Console]::WriteLine([Environment]::GetEnvironmentVariable('PCLS_REMOVED_FIXTURE') -eq $null)";
+                // Use ASCII output for the Unicode value so the test does
+                // not depend on the child console's default code page.
+                var script = "[Console]::WriteLine([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([Environment]::GetEnvironmentVariable('" +
+                    variable + "')))); [Console]::WriteLine([Environment]::GetEnvironmentVariable('PCLS_REMOVED_FIXTURE') -eq $null)";
                 process.StartInfo = new ProcessStartInfo
                 {
                     FileName = executable,
@@ -106,12 +108,6 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
                 process.StartInfo.EnvironmentVariables["PCLS_REMOVED_FIXTURE"] = "must-not-be-visible";
                 process.StartInfo.EnvironmentVariables.Remove("PCLS_REMOVED_FIXTURE");
                 process.StartInfo.StandardOutputEncoding = System.Text.Encoding.UTF8;
-                // PowerShell Console encoding varies with host settings; emit
-                // a UTF-8-safe ASCII representation instead of assuming ACP.
-                script = "[Console]::WriteLine([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([Environment]::GetEnvironmentVariable('" +
-                    variable + "')))); [Console]::WriteLine([Environment]::GetEnvironmentVariable('PCLS_REMOVED_FIXTURE') -eq $null)";
-                process.StartInfo.Arguments = "-NoProfile -NonInteractive -EncodedCommand " +
-                    Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script));
                 Assert.That(process.Start(), Is.True);
                 Assert.That(process.WaitForExit(10000), Is.True);
                 var reader = (TextReader)process.GetType().GetProperty("StandardOutput",

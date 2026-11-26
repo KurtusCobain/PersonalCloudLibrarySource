@@ -214,9 +214,41 @@ namespace PersonalCloudLibrarySource
         // may already have opened it. Contention fails fast without staging.
         // Nonparticipating processes and stale read-modify-write callers are
         // outside this serialization contract.
-        internal static FileStream OpenPrivateRecordWriteLock(string recordPath)
+        internal static IDisposable OpenPrivateRecordWriteLock(string recordPath)
         {
-            return OpenJournalLock(recordPath + ".write-lock");
+            var parent = Path.GetDirectoryName(Path.GetFullPath(recordPath));
+            var ancestors = PinPublicationAncestors(parent);
+            FileStream stream = null;
+            try
+            {
+                stream = OpenJournalLock(recordPath + ".write-lock");
+                ancestors.Verify();
+                return new PrivateRecordWriteLock(stream, ancestors);
+            }
+            catch
+            {
+                try { stream?.Dispose(); }
+                finally { ancestors.Dispose(); }
+                throw;
+            }
+        }
+
+        private sealed class PrivateRecordWriteLock : IDisposable
+        {
+            private readonly FileStream stream;
+            private readonly PublicationAncestors ancestors;
+
+            public PrivateRecordWriteLock(FileStream stream, PublicationAncestors ancestors)
+            {
+                this.stream = stream;
+                this.ancestors = ancestors;
+            }
+
+            public void Dispose()
+            {
+                try { stream.Dispose(); }
+                finally { ancestors.Dispose(); }
+            }
         }
 
         internal static FileStream OpenPrivateFileForReview(string path, bool deleteAccess)
@@ -488,10 +520,11 @@ namespace PersonalCloudLibrarySource
         // This narrows but does NOT eliminate the final pathname race after
         // the handles must close for File.Replace. Preserve ambiguous evidence.
         internal static void ReplacePrivateRecord(string path, byte[] payload,
-            string temporary, string backup, Func<bool> validateOriginal, string invalidMessage)
+            string temporary, string backup, Func<bool> validateOriginal, string invalidMessage,
+            int maxRecordBytes)
         {
-            if (payload == null || payload.Length == 0)
-                throw new IOException("Private record replacement payload is empty.");
+            if (payload == null || payload.Length == 0 || payload.Length > maxRecordBytes)
+                throw new IOException("Private record replacement payload exceeds its size limit or is empty.");
             if (validateOriginal == null) throw new ArgumentNullException(nameof(validateOriginal));
             var parent = Path.GetDirectoryName(Path.GetFullPath(path));
             var temporaryParent = Path.GetDirectoryName(Path.GetFullPath(temporary));
@@ -511,8 +544,7 @@ namespace PersonalCloudLibrarySource
                 {
                     if (!validateOriginal()) throw new InvalidOperationException(invalidMessage);
                     original = CapturePrivateFileIdentity(input.SafeFileHandle);
-                    using (var sha = System.Security.Cryptography.SHA256.Create())
-                        originalDigest = sha.ComputeHash(input);
+                    originalDigest = ComputeRecordDigest(input, maxRecordBytes);
                     staged = WriteRecordStage(temporary, payload);
                     using (var check = OpenPrivateFileForReview(temporary, false))
                         VerifyRecordStage(check, staged, payload, System.Threading.CancellationToken.None);
@@ -525,7 +557,7 @@ namespace PersonalCloudLibrarySource
                     if (!MatchesPrivateFileIdentity(check.SafeFileHandle, original))
                         throw new IOException("Private record target identity changed before replacement.");
                     if (!validateOriginal()) throw new InvalidOperationException(invalidMessage);
-                    RequireRecordDigest(check, originalDigest);
+                    RequireRecordDigest(check, originalDigest, maxRecordBytes);
                     ancestors.Verify();
                     RequireVacant(backup);
                 }
@@ -542,16 +574,24 @@ namespace PersonalCloudLibrarySource
                 using (var check = OpenPrivateFileForReview(backup, false))
                 {
                     CapturePrivateFileIdentity(check.SafeFileHandle);
-                    RequireRecordDigest(check, originalDigest);
+                    RequireRecordDigest(check, originalDigest, maxRecordBytes);
                 }
             }
         }
 
-        private static void RequireRecordDigest(FileStream stream, byte[] expected)
+        private static byte[] ComputeRecordDigest(FileStream stream, int maxRecordBytes)
         {
-            byte[] actual;
+            if (stream.Length <= 0 || stream.Length > maxRecordBytes)
+                throw new IOException("Private record exceeds its digest size limit.");
+            // The read handle excludes ordinary writers. Bound the read to
+            // the validated record budget rather than hashing arbitrary data.
             using (var sha = System.Security.Cryptography.SHA256.Create())
-                actual = sha.ComputeHash(stream);
+                return sha.ComputeHash(stream);
+        }
+
+        private static void RequireRecordDigest(FileStream stream, byte[] expected, int maxRecordBytes)
+        {
+            var actual = ComputeRecordDigest(stream, maxRecordBytes);
             if (actual.Length != expected.Length)
                 throw new IOException("Private record digest changed.");
             for (var i = 0; i < actual.Length; i++)

@@ -78,7 +78,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
                 };
                 var failure = Assert.Throws<System.Reflection.TargetInvocationException>(() =>
                     method.Invoke(null, new object[] { primary, new byte[] { 42 }, stage,
-                        backup, validate, "invalid original" }));
+                        backup, validate, "invalid original", 1024 }));
                 Assert.That(failure.InnerException, occupiedBackup
                     ? Is.TypeOf<IOException>() : Is.TypeOf<InvalidOperationException>());
                 Assert.That(File.ReadAllText(primary), Is.EqualTo("original"));

@@ -119,7 +119,7 @@ namespace PersonalCloudLibrarySource
                 var replacing = File.Exists(target);
                 if (replacing && !ReadFile(target, doc.ProfileId).Succeeded)
                     throw new InvalidOperationException("Refusing to overwrite invalid display evidence.");
-    
+
                 if (!replacing)
                 {
                     TransferPartialPathPolicy.WritePrivateRecord(target, json, MaxBytes,
@@ -132,7 +132,7 @@ namespace PersonalCloudLibrarySource
                     Guid.NewGuid().ToString("N") + ".json");
                 TransferPartialPathPolicy.ReplacePrivateRecord(target, bytes, pending, backup,
                     () => ReadFile(target, doc.ProfileId).Succeeded,
-                    "Refusing to overwrite invalid display evidence.");
+                    "Refusing to overwrite invalid display evidence.", MaxBytes);
                 return target;
             }
         }
