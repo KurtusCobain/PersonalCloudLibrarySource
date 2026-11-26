@@ -82,6 +82,66 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        [NonParallelizable]
+        public void ProductionContainedLauncherDoesNotInheritUnlistedFileHandle()
+        {
+            var path = Path.Combine(Path.GetTempPath(), "PCLS-Inheritance-" + Guid.NewGuid().ToString("N") + ".bin");
+            try
+            {
+                using (var sentinel = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+                {
+                    sentinel.WriteByte(42);
+                    sentinel.Flush(true);
+                    var handle = sentinel.SafeFileHandle;
+                    InheritanceFixture.HandleInformation identity;
+                    Assert.That(InheritanceFixture.GetFileInformationByHandle(handle.DangerousGetHandle(), out identity), Is.True);
+                    uint flags;
+                    Assert.That(InheritanceFixture.GetHandleInformation(handle, out flags), Is.True);
+                    var previousInherit = flags & 1u;
+                    Assert.That(InheritanceFixture.SetHandleInformation(handle, 1u, 1u), Is.True);
+                    try
+                    {
+                        Assert.That(InheritanceFixture.GetHandleInformation(handle, out flags), Is.True);
+                        Assert.That(flags & 1u, Is.EqualTo(1u), "Fixture handle must be inheritable.");
+                        var invariant = System.Globalization.CultureInfo.InvariantCulture;
+                        var args = new[] {
+                            InheritanceFixture.ProbeArgument,
+                            handle.DangerousGetHandle().ToInt64().ToString(invariant),
+                            identity.VolumeSerial.ToString(invariant),
+                            identity.FileIndexHigh.ToString(invariant),
+                            identity.FileIndexLow.ToString(invariant)
+                        };
+                        // Positive control in this process verifies the probe.
+                        Assert.That(InheritanceFixture.Probe(args), Is.EqualTo(InheritanceFixture.Match));
+                        using (var process = CreateContainedHandle())
+                        {
+                            process.StartInfo = new ProcessStartInfo
+                            {
+                                FileName = typeof(Program).Assembly.Location,
+                                Arguments = string.Join(" ", args),
+                                UseShellExecute = false,
+                                RedirectStandardOutput = true,
+                                RedirectStandardError = true,
+                                CreateNoWindow = true
+                            };
+                            Assert.That(process.Start(), Is.True);
+                            Assert.That(process.WaitForExit(10000), Is.True);
+                            Assert.That(process.ExitCode, Is.EqualTo(InheritanceFixture.NoMatch),
+                                "A handle outside the explicit stdio list must not identify the parent file.");
+                        }
+                    }
+                    finally
+                    {
+                        Assert.That(InheritanceFixture.SetHandleInformation(handle, 1u, previousInherit), Is.True);
+                    }
+                    sentinel.Position = 0;
+                    Assert.That(sentinel.ReadByte(), Is.EqualTo(42));
+                }
+            }
+            finally { if (File.Exists(path)) File.Delete(path); }
+        }
+
+        [Test]
         public void ProductionContainedLauncherHonorsExplicitEnvironmentWithoutChangingHost()
         {
             var system = Environment.GetFolderPath(Environment.SpecialFolder.System);
