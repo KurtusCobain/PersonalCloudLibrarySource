@@ -143,7 +143,7 @@ namespace PersonalCloudLibrarySource
                 var result = await Task.Run(() => extractor.ExecuteApproved(
                     approvedPlan, true, receiptStore, token, null, mutableBaseline, recovery, journal, gameId));
 
-                if (result.NeedsManualAttention && result.ReceiptRecorded)
+                if (result.NeedsManualAttention && (!result.Succeeded || result.ReceiptRecorded))
                 {
                     playniteApi.Dialogs.ShowMessage(
                         PclsResources.Get("LOCPLSTransferRecoveryDetail",

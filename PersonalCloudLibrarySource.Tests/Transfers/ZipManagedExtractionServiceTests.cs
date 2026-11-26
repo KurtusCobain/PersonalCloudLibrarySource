@@ -205,12 +205,33 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
                     Assert.That(snapshot.Records[0].GameId, Is.EqualTo(hostId));
                     Assert.That(snapshot.Records[0].StagingPath,
                         Is.EqualTo(Directory.GetDirectories(cache, "*.pcls-partial-*")[0]));
+                    var other = new CloudTransferManager(1).Enqueue(Guid.NewGuid(), "fixture",
+                        "source", Path.Combine(plan.Destination, "overlap.bin"), "LocalFolder");
+                    Assert.Throws<TransferRetryRefusedException>(() =>
+                        new TransferRecoveryJournal(Path.Combine(root, "transfer-journal")).Begin(other));
                     observed = true;
                 }, null, null, journal, hostId);
             Assert.That(observed, Is.True);
             Assert.That(result.Succeeded && result.ReceiptRecorded, Is.True, result.Reason);
             Assert.That(result.NeedsManualAttention, Is.False, result.Reason);
             Assert.That(journal.Inspect().Records, Is.Empty);
+        }
+
+        [Test]
+        public void HostedExtractionRefusesExistingReservationBeforeWritingStaging()
+        {
+            var plan = Plan();
+            var journalPath = Path.Combine(root, "transfer-journal");
+            var prior = new CloudTransferManager(1).Enqueue(Guid.NewGuid(), "fixture",
+                "source", plan.Destination, "LocalFolder", true);
+            new TransferRecoveryJournal(journalPath).Begin(prior);
+            var journal = new TransferRecoveryJournal(journalPath);
+            var result = new ZipManagedExtractionService().ExecuteApproved(plan, true, receipts,
+                CancellationToken.None, null, null, null, journal, Guid.NewGuid());
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(Directory.GetFileSystemEntries(cache), Is.Empty);
+            Assert.That(journal.Inspect().Records, Has.Count.EqualTo(1));
+            Assert.That(journal.Inspect().Records[0].JobId, Is.EqualTo(prior.Id));
         }
 
         [Test]
