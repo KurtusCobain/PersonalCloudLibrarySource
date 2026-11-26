@@ -94,6 +94,24 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(File.Exists(path), Is.True);
         }
 
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW",
+            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CreateHardLinkNative(string link, string existing, IntPtr reserved);
+
+        [Test]
+        public void HardlinkedIdentitySnapshotCannotBeLoadedOrReplaced()
+        {
+            var store = new SourceCatalogSnapshotStore();
+            var path = store.Save(root, Snapshot());
+            var alias = Path.Combine(root, "alias.json");
+            Assert.That(CreateHardLinkNative(alias, path, IntPtr.Zero), Is.True);
+            Assert.That(store.Load(root, ProfileId).Succeeded, Is.False);
+            Assert.Throws<InvalidOperationException>(() => store.Save(root, Snapshot(true)));
+            Assert.That(File.ReadAllBytes(path), Is.EqualTo(File.ReadAllBytes(alias)));
+            Assert.That(Directory.GetFiles(root, "*.tmp"), Is.Empty);
+        }
+
         [Test]
         public void TamperedFileIsRejectedAndNeverOverwritten()
         {

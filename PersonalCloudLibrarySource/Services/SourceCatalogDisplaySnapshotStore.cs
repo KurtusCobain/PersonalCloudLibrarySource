@@ -156,9 +156,15 @@ namespace PersonalCloudLibrarySource
                     StringComparison.OrdinalIgnoreCase) &&
                 string.Equals(display.BindingFingerprint, identities.BindingFingerprint,
                     StringComparison.Ordinal) &&
-                new HashSet<string>(display.Entries.Select(e => e.GameId),
-                    StringComparer.OrdinalIgnoreCase).SetEquals(identities.GameIds) &&
-                display.Entries.Count == identities.GameCount;
+                MatchesEntryIds(display.Entries, identities);
+        }
+
+        private static bool MatchesEntryIds(IReadOnlyList<SourceCatalogDisplayEntry> entries,
+            SourceCatalogIdentitySnapshot identities)
+        {
+            return entries.Count == identities.GameCount &&
+                new HashSet<string>(entries.Select(e => e.GameId),
+                    StringComparer.OrdinalIgnoreCase).SetEquals(identities.GameIds);
         }
 
         private static SourceCatalogDisplayDocument ToDocument(SourceCatalogDisplaySnapshot snapshot)

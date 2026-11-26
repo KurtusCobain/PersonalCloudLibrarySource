@@ -160,6 +160,27 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(Directory.GetFiles(root, "*.tmp"), Is.Empty);
         }
 
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW",
+            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CreateHardLinkNative(string link, string existing, IntPtr reserved);
+
+        [Test]
+        public void HardlinkedDisplaySnapshotCannotBeLoadedOrReplaced()
+        {
+            var p = Profile();
+            var shared = Shared();
+            var store = new SourceCatalogDisplaySnapshotStore();
+            var snapshot = store.CaptureSuccessful(p, shared, Import(p, shared));
+            var path = store.Save(root, snapshot);
+            var alias = Path.Combine(root, "alias.json");
+            Assert.That(CreateHardLinkNative(alias, path, IntPtr.Zero), Is.True);
+            Assert.That(store.Load(root, LegacyId).Succeeded, Is.False);
+            Assert.Throws<InvalidOperationException>(() => store.Save(root, snapshot));
+            Assert.That(File.ReadAllBytes(path), Is.EqualTo(File.ReadAllBytes(alias)));
+            Assert.That(Directory.GetFiles(root, "*.tmp"), Is.Empty);
+        }
+
         [Test]
         public void UnsupportedSchemaAndMalformedJsonAreNeverAdopted()
         {

@@ -78,6 +78,27 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(Directory.GetFiles(root, "*.tmp"), Is.Empty);
         }
 
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW",
+            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CreateHardLinkNative(string link, string existing, IntPtr reserved);
+
+        [Test]
+        public void HardlinkedProfileRecordCannotBeLoadedOrReplaced()
+        {
+            var store = new SourceProfilesFileStore();
+            store.Save(root, new[] { Profile(LegacyId, "Original") });
+            var path = Path.Combine(root, SourceProfilesFileStore.FileName);
+            var alias = Path.Combine(root, "alias.json");
+            Assert.That(CreateHardLinkNative(alias, path, IntPtr.Zero), Is.True);
+            Assert.That(store.Load(root).Succeeded, Is.False);
+            Assert.Throws<InvalidOperationException>(() => store.Save(root,
+                new[] { Profile(LegacyId, "Replacement") }));
+            Assert.That(File.ReadAllText(alias), Does.Contain("Original"));
+            Assert.That(File.ReadAllBytes(path), Is.EqualTo(File.ReadAllBytes(alias)));
+            Assert.That(Directory.GetFiles(root, "*.tmp"), Is.Empty);
+        }
+
         [Test]
         public void ExistingCorruptProfileFileIsNotSilentlyAdoptedOrOverwritten()
         {
