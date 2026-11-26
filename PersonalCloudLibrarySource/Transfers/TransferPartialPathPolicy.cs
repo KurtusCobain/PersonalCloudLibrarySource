@@ -215,13 +215,16 @@ namespace PersonalCloudLibrarySource
         // Nonparticipating processes and stale read-modify-write callers are
         // outside this serialization contract.
         internal static IDisposable OpenPrivateRecordWriteLock(string recordPath)
+            => OpenGuardedExclusiveLock(recordPath + ".write-lock");
+
+        internal static IDisposable OpenGuardedExclusiveLock(string lockPath)
         {
-            var parent = Path.GetDirectoryName(Path.GetFullPath(recordPath));
+            var parent = Path.GetDirectoryName(Path.GetFullPath(lockPath));
             var ancestors = PinPublicationAncestors(parent);
             FileStream stream = null;
             try
             {
-                stream = OpenJournalLock(recordPath + ".write-lock");
+                stream = OpenJournalLock(lockPath);
                 ancestors.Verify();
                 return new PrivateRecordWriteLock(stream, ancestors);
             }

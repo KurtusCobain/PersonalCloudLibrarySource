@@ -320,6 +320,54 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             }
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void CurrentSessionMissingOrAlteredMarkerCannotPermitAnotherReservation(bool alter)
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var job = Job("file.zip");
+            journal.Begin(job);
+            var marker = Path.Combine(records, job.Id.ToString("N") + ".pending");
+            if (alter)
+            {
+                var text = File.ReadAllText(marker).Replace(job.GameId.ToString("N"), Guid.NewGuid().ToString("N"));
+                File.WriteAllText(marker, text, new System.Text.UTF8Encoding(false));
+                Assert.That(journal.Inspect().Records[0].Origin, Is.EqualTo(TransferRecoveryOrigin.Replaced));
+            }
+            else File.Delete(marker);
+            Assert.That(journal.Inspect().IsComplete, Is.False);
+            Assert.Throws<IOException>(() => journal.Begin(Job("other.zip")));
+            Assert.Throws<IOException>(() => journal.Complete(job));
+            Assert.That(Directory.GetFiles(records, "*.pending").Length, Is.EqualTo(alter ? 1 : 0));
+        }
+
+        [Test]
+        public void SameLengthIncorrectReservationPayloadNeverExecutes()
+        {
+            var constructor = typeof(TransferRecoveryJournal).GetConstructor(
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+                null, new[] { typeof(string), typeof(Action<FileStream, byte[]>) }, null);
+            Assert.That(constructor, Is.Not.Null);
+            Action<FileStream, byte[]> wrongWrite = (stream, payload) =>
+            {
+                payload[0] ^= 1;
+                stream.Write(payload, 0, payload.Length);
+            };
+            var journal = (TransferRecoveryJournal)constructor.Invoke(new object[] { records, wrongWrite });
+            var executor = new CountingExecutor();
+            using (var queue = new TransferQueueService(manager, executor, journal))
+            {
+                var job = queue.EnqueueLocal(Guid.NewGuid(), "Fixture", "source",
+                    Path.Combine(root, "file.zip"), "LocalFolder", false);
+                var completion = queue.GetCompletion(job.Id);
+                Assert.That(completion.Wait(TimeSpan.FromSeconds(5)), Is.True);
+                Assert.That(completion.Result.RequiresManualRecovery, Is.True);
+                Assert.That(executor.Calls, Is.Zero);
+                Assert.That(Directory.GetFiles(records, "*.pending").Length, Is.EqualTo(1));
+                Assert.That(journal.Inspect().IsComplete, Is.False);
+            }
+        }
+
         [Test]
         public void QueueRefusesExecutionWithPendingReservationFromPreviousSession()
         {

@@ -81,8 +81,15 @@ namespace PersonalCloudLibrarySource
         private readonly Action<FileStream, byte[]> writePayload;
         // Only this journal instance can complete markers it created. A
         // restarted instance may inspect and enforce them, not release them.
-        private readonly Dictionary<Guid, TransferPartialPathPolicy.FileIdentity> ownedMarkers =
-            new Dictionary<Guid, TransferPartialPathPolicy.FileIdentity>();
+        private sealed class OwnedReservation
+        {
+            public TransferPartialPathPolicy.FileIdentity Identity;
+            public Guid GameId;
+            public string Destination;
+        }
+
+        private readonly Dictionary<Guid, OwnedReservation> ownedMarkers =
+            new Dictionary<Guid, OwnedReservation>();
 
         public TransferRecoveryJournal(string directory)
             : this(directory, (stream, payload) => stream.Write(payload, 0, payload.Length))
@@ -94,6 +101,9 @@ namespace PersonalCloudLibrarySource
         {
             if (string.IsNullOrWhiteSpace(directory))
                 throw new ArgumentException("Recovery journal directory is required.", nameof(directory));
+            if (SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(directory) ||
+                (Path.IsPathRooted(directory) && !SafeCacheDeletionPolicy.IsFullyRooted(directory)))
+                throw new ArgumentException("Recovery journal path is ambiguous.", nameof(directory));
             this.directory = Path.GetFullPath(directory);
             this.writePayload = writePayload ?? throw new ArgumentNullException(nameof(writePayload));
         }
@@ -112,12 +122,13 @@ namespace PersonalCloudLibrarySource
                     TransferPartialPathPolicy.RequireSafePath(directory);
                     FileAttributes attributes;
                     try { attributes = File.GetAttributes(directory); }
-                    catch (FileNotFoundException) { return new TransferRecoverySnapshot(records, 0, true); }
-                    catch (DirectoryNotFoundException) { return new TransferRecoverySnapshot(records, 0, true); }
+                    catch (FileNotFoundException) { return new TransferRecoverySnapshot(records, 0, ownedMarkers.Count == 0); }
+                    catch (DirectoryNotFoundException) { return new TransferRecoverySnapshot(records, 0, ownedMarkers.Count == 0); }
                     if ((attributes & FileAttributes.Directory) == 0)
                         return new TransferRecoverySnapshot(records, 0, false);
 
                     var count = 0;
+                    var observedOwned = new HashSet<Guid>();
                     foreach (var marker in Directory.EnumerateFileSystemEntries(directory, "*.pending", SearchOption.TopDirectoryOnly))
                     {
                         if (++count > MaxRecords) { complete = false; break; }
@@ -130,11 +141,13 @@ namespace PersonalCloudLibrarySource
                                 observedIdentity = TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
                                 record = ReadRecord(marker, stream);
                             }
-                            TransferPartialPathPolicy.FileIdentity expected;
+                            OwnedReservation expected;
                             var origin = !ownedMarkers.TryGetValue(record.Item3, out expected)
                                 ? TransferRecoveryOrigin.Unknown
-                                : TransferPartialPathPolicy.SameIdentity(expected, observedIdentity)
+                                : MatchesOwned(expected, observedIdentity, record)
                                     ? TransferRecoveryOrigin.CurrentJournal : TransferRecoveryOrigin.Replaced;
+                            if (origin == TransferRecoveryOrigin.CurrentJournal)
+                                observedOwned.Add(record.Item3);
                             if (origin == TransferRecoveryOrigin.Replaced) complete = false;
                             var staging = TransferPartialPathPolicy.Create(record.Item2, record.Item3);
                             var destinationState = InspectPath(record.Item2);
@@ -147,6 +160,7 @@ namespace PersonalCloudLibrarySource
                         }
                         catch (Exception ex) when (IsInspectionFailure(ex)) { unreadable++; }
                     }
+                    if (observedOwned.Count != ownedMarkers.Count) complete = false;
                 }
                 catch (Exception ex) when (IsInspectionFailure(ex)) { complete = false; }
             }
@@ -186,6 +200,9 @@ namespace PersonalCloudLibrarySource
             lock (syncRoot)
             using (Acquire())
             {
+                // A current-session marker that vanished or changed must
+                // not silently stop protecting a live or uncertain transfer.
+                VerifyOwnedReservations();
                 var count = 0;
                 foreach (var marker in Directory.EnumerateFileSystemEntries(directory, "*.pending", SearchOption.TopDirectoryOnly))
                 {
@@ -208,12 +225,15 @@ namespace PersonalCloudLibrarySource
                     using (var stream = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
                     {
                         identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
-                        writePayload(stream, payload);
+                        writePayload(stream, (byte[])payload.Clone());
                         stream.Flush(true);
-                        if (stream.Length != payload.Length)
-                            throw new IOException("Reservation payload length differs from expected length.");
+                        stream.Position = 0;
+                        TransferPartialPathPolicy.VerifyRecordStage(stream, identity, payload, CancellationToken.None);
                     }
-                    ownedMarkers.Add(job.Id, identity);
+                    ownedMarkers.Add(job.Id, new OwnedReservation
+                    {
+                        Identity = identity, GameId = job.GameId, Destination = destination
+                    });
                 }
                 catch (Exception ex)
                 {
@@ -233,15 +253,16 @@ namespace PersonalCloudLibrarySource
             using (Acquire())
             {
                 var marker = Marker(job.Id);
-                TransferPartialPathPolicy.FileIdentity expected;
+                OwnedReservation expected;
                 if (!ownedMarkers.TryGetValue(job.Id, out expected))
                     throw new IOException("Only the originating journal may complete this reservation.");
                 using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(marker, true))
                 {
-                    if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(stream.SafeFileHandle, expected))
+                    if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(stream.SafeFileHandle, expected.Identity))
                         throw new IOException("Transfer recovery record was replaced.");
                     var existing = ReadRecord(marker, stream);
-                    if (existing.Item1 != job.GameId ||
+                    if (!MatchesOwned(expected, TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle), existing) ||
+                        existing.Item1 != job.GameId ||
                         !string.Equals(existing.Item2, destination, StringComparison.OrdinalIgnoreCase))
                         throw new IOException("Transfer recovery record identity changed.");
                     // Never remove a reservation while staging is present or
@@ -255,7 +276,29 @@ namespace PersonalCloudLibrarySource
             }
         }
 
-        private FileStream Acquire()
+        private static bool MatchesOwned(OwnedReservation expected,
+            TransferPartialPathPolicy.FileIdentity identity, Tuple<Guid, string, Guid> record)
+        {
+            return TransferPartialPathPolicy.SameIdentity(expected.Identity, identity) &&
+                expected.GameId == record.Item1 &&
+                string.Equals(expected.Destination, record.Item2, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void VerifyOwnedReservations()
+        {
+            foreach (var entry in ownedMarkers)
+            {
+                var path = Marker(entry.Key);
+                using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
+                {
+                    var identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
+                    if (!MatchesOwned(entry.Value, identity, ReadRecord(path, stream)))
+                        throw new IOException("Current-session recovery marker changed; preserve journal evidence.");
+                }
+            }
+        }
+
+        private IDisposable Acquire()
         {
             TransferPartialPathPolicy.RequireSafePath(directory);
             Directory.CreateDirectory(directory);
@@ -264,7 +307,7 @@ namespace PersonalCloudLibrarySource
             var timer = Stopwatch.StartNew();
             while (true)
             {
-                try { return TransferPartialPathPolicy.OpenJournalLock(path); }
+                try { return TransferPartialPathPolicy.OpenGuardedExclusiveLock(path); }
                 catch (IOException ex) when ((ex.HResult & 0xffff) == 32 && timer.ElapsedMilliseconds < 2000)
                 {
                     // Another instance owns the short journal transaction.
@@ -324,6 +367,9 @@ namespace PersonalCloudLibrarySource
                 !Guid.TryParseExact(fields[2], "N", out jobId) || jobId == Guid.Empty ||
                 !string.Equals(Path.GetFileNameWithoutExtension(path), jobId.ToString("N"), StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Transfer recovery record is invalid.");
+            if (!SafeCacheDeletionPolicy.IsFullyRooted(fields[3]) ||
+                SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(fields[3]))
+                throw new IOException("Transfer recovery destination is ambiguous.");
             var destination = PathBoundary.Normalize(fields[3]);
             if (!string.Equals(destination, fields[3], StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Transfer recovery destination is not canonical.");
