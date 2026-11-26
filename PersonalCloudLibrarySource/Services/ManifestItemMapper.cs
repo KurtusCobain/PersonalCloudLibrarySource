@@ -15,7 +15,6 @@ namespace PersonalCloudLibrarySource
             var games = new List<GameMetadata>();
             var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var destinations = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var directoryDestinations = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var item in items ?? new PersonalCloudLibraryItem[0])
             {
                 if (item == null)
@@ -47,13 +46,12 @@ namespace PersonalCloudLibrarySource
                     ? paths.DestinationDirectory : paths.DestinationFile;
                 if (!string.IsNullOrWhiteSpace(destination))
                 {
+                    destination = PathBoundary.Normalize(destination);
                     string previousId;
                     if (destinations.TryGetValue(destination, out previousId))
                         throw new InvalidOperationException("Games '" + previousId +
                             "' and '" + item.Id + "' share the same cache destination.");
                     destinations.Add(destination, item.Id);
-                    if (PersonalCloudLibrarySource.IsDirectoryItem(item))
-                        directoryDestinations.Add(destination, item.Id);
                 }
 
                 var state = new LibraryItemStateResolver().Resolve(
@@ -98,17 +96,19 @@ namespace PersonalCloudLibrarySource
                 games.Add(game);
             }
             // Check ancestors after collecting every destination, independent of manifest order.
-            // A directory game cannot own a parent of another game's cache destination:
-            // uninstalling the parent would otherwise recursively delete its neighbor.
-            // Each lookup is O(1) on average; traversal is bounded by path depth.
+            // No file or directory destination can be an ancestor of a
+            // different game's destination. A file cannot simultaneously be
+            // a parent directory; directory packages cannot own neighbors.
+            // Sibling files sharing an ordinary parent remain supported.
+            // As in the multi-source preflight, cost is bounded by path depth.
             foreach (var destination in destinations)
             {
                 var parent = Path.GetDirectoryName(destination.Key);
                 while (!string.IsNullOrWhiteSpace(parent))
                 {
-                    string directoryOwner;
-                    if (directoryDestinations.TryGetValue(parent, out directoryOwner))
-                        throw new InvalidOperationException("Games '" + directoryOwner +
+                    string ancestorOwner;
+                    if (destinations.TryGetValue(parent, out ancestorOwner))
+                        throw new InvalidOperationException("Games '" + ancestorOwner +
                             "' and '" + destination.Value + "' have overlapping cache destinations.");
                     var next = Path.GetDirectoryName(parent);
                     if (string.Equals(next, parent, StringComparison.OrdinalIgnoreCase)) break;

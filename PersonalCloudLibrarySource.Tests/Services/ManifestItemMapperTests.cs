@@ -46,6 +46,33 @@ namespace PersonalCloudLibrarySource.Tests.Services
                 Throws.InvalidOperationException.With.Message.Contains("overlapping cache destinations"));
         }
 
+        [TestCase(true, "file")]
+        [TestCase(false, "file")]
+        [TestCase(true, "directory")]
+        [TestCase(false, "directory")]
+        public void Map_FileAncestorDestinationRejectsEveryOrderAndChildType(bool parentFirst, string childType)
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                LocalCacheFolder = Path.Combine(testRoot, "cache")
+            };
+            var parent = new PersonalCloudLibraryItem
+            {
+                Id = "parent", Title = "Parent", SourceType = "file",
+                CachePath = "shared"
+            };
+            var child = new PersonalCloudLibraryItem
+            {
+                Id = "child", Title = "Child", SourceType = childType,
+                CachePath = Path.Combine("SHARED", "game.exe"),
+                InstallDirectory = Path.Combine("SHARED", "package")
+            };
+            var items = parentFirst ? new[] { parent, child } : new[] { child, parent };
+            Assert.That(() => new ManifestItemMapper().Map(items, settings, new List<string>()),
+                Throws.InvalidOperationException.With.Message.Contains("overlapping cache destinations"));
+            Assert.That(Directory.Exists(settings.LocalCacheFolder), Is.False);
+        }
+
         [Test]
         public void Map_SiblingDestinations_AreAllowed()
         {
