@@ -24,7 +24,7 @@ Qualified source: b090230dea6c9d5832dee3e222b579c7e84dd154. Pre-remediation bran
 | P14 | Process environment contract | Open |
 | H1 | Handle inheritance | Open; adversarial host test |
 | H2 | Long paths | Open; fail safely and document/measure |
-| H3 | Overlapping ZIP member ranges | Open; validate actual local-header/data ranges, not only sum |
+| H3 | Overlapping ZIP member ranges | Confirmed missing range check; sorted local header/data interval validation and two regression cases added; Windows CI pending |
 | H4 | Superscript Windows device names | Confirmed in two inspected policies; corrected with 12 additional parameterized cases; Windows CI pending |
 | H5 | Encrypted rclone config | Open; test prompt/EOF behavior |
 | H6 | Extended Windows path roots | Open; inspect native path contracts |
@@ -54,3 +54,7 @@ Baseline CodeQL artifact: https://github.com/KurtusCobain/PersonalCloudLibrarySo
 SHA-256: 19e177486246fc7f1c5342a2c7ef7a8862bb2fea895b0e36409d560589459009. Downloaded archive digest matched; csharp.sarif contained one run with zero results. This is full reported-result evidence for that scan, not proof of no vulnerabilities. Future workflow retains ZIP Slip check and additionally gates every reported result, retaining artifact even on failure.
 
 Qualification pending for this batch. No Windows execution or Toolbox acceptance in this pass. Continue validating each open finding, record exact evidence and qualification, then address deferred CH-Rm before final independent review and owner host acceptance.
+
+## Second correction batch: ZIP local range validation
+
+The central inspector verified local offsets precede the central directory, but did not compare physical member intervals. A repeated offset or overlapping compressed range could pass that preliminary gate. The inspector now sorts offsets, reads bounded 30-byte local headers, validates their signatures and name/extra lengths, and refuses overlap or compressed data beyond the central-directory boundary. Two extraction regressions mutate central metadata to duplicate a local offset or extend a member beyond the data area. No stage or destination may be created and source bytes must remain unchanged. This checks header/data interval overlap, not the full semantics of optional data descriptors, and does not establish general malformed ZIP safety. Additional hosted Windows and provider compatibility qualification remains pending.

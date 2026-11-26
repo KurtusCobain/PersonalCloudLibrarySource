@@ -507,6 +507,46 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
                 "A corrupt user-supplied ZIP source must never be deleted.");
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void OverlappingOrOutOfBoundsLocalZipMembersRefuseBeforeStage(bool extendsIntoCentral)
+        {
+            WriteArchive(zip =>
+            {
+                AddFile(zip, "first.txt", "same sample bytes");
+                AddFile(zip, "other.txt", "same sample bytes");
+            });
+            var bytes = File.ReadAllBytes(source);
+            // Fixtures have no EOCD comment. Locate the two central entries
+            // through their actual header lengths rather than scanning payload.
+            var eocd = bytes.Length - 22;
+            Assert.That(BitConverter.ToUInt32(bytes, eocd), Is.EqualTo(0x06054B50u));
+            var central = (int)BitConverter.ToUInt32(bytes, eocd + 16);
+            Assert.That(BitConverter.ToUInt32(bytes, central), Is.EqualTo(0x02014B50u));
+            var second = central + 46 + BitConverter.ToUInt16(bytes, central + 28)
+                + BitConverter.ToUInt16(bytes, central + 30)
+                + BitConverter.ToUInt16(bytes, central + 32);
+            Assert.That(BitConverter.ToUInt32(bytes, second), Is.EqualTo(0x02014B50u));
+            if (extendsIntoCentral)
+            {
+                Buffer.BlockCopy(BitConverter.GetBytes((uint)central), 0, bytes, second + 20, 4);
+            }
+            else
+            {
+                // Two distinct central names refer to the same local record.
+                Buffer.BlockCopy(bytes, central + 42, bytes, second + 42, 4);
+            }
+            File.WriteAllBytes(source, bytes);
+            var job = Guid.NewGuid();
+            var result = new ZipPackageStagingExtractor().ExtractApprovedZip(
+                source, cache, destination, job, CancellationToken.None);
+
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(Directory.Exists(destination), Is.False);
+            Assert.That(Directory.Exists(TransferPartialPathPolicy.Create(destination, job)), Is.False);
+            Assert.That(File.ReadAllBytes(source), Is.EqualTo(bytes));
+        }
+
         [Test]
         public void PreexistingPartialStageIsNeverAdoptedOrDeleted()
         {

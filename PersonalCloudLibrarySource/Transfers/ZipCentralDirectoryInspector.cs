@@ -19,6 +19,13 @@ namespace PersonalCloudLibrarySource
     {
         private const uint EndSignature = 0x06054B50;
         private const uint EntrySignature = 0x02014B50;
+        private const uint LocalEntrySignature = 0x04034B50;
+
+        private sealed class LocalMember
+        {
+            public long Offset;
+            public long CompressedBytes;
+        }
         private const int MaxCentralBytes = 32 * 1024 * 1024;
 
         public static IReadOnlyList<ZipCentralEntry> Read(Stream source)
@@ -66,6 +73,7 @@ namespace PersonalCloudLibrarySource
 
             source.Position = centralOffset;
             var entries = new List<ZipCentralEntry>(count);
+            var members = new List<LocalMember>(count);
             var expectedEnd = (long)centralOffset + centralBytes;
             using (var reader = new BinaryReader(source, Encoding.UTF8, true))
             {
@@ -125,6 +133,11 @@ namespace PersonalCloudLibrarySource
                     // DOS link/reparse attribute, if the producer represented it.
                     unsafeType |= (external & (uint)FileAttributes.ReparsePoint) != 0;
 
+                    members.Add(new LocalMember
+                    {
+                        Offset = localOffset,
+                        CompressedBytes = compressed
+                    });
                     entries.Add(new ZipCentralEntry
                     {
                         Name = name,
@@ -135,7 +148,41 @@ namespace PersonalCloudLibrarySource
             }
             if (source.Position != expectedEnd)
                 throw new InvalidDataException("ZIP central directory has unsupported trailing data.");
+            ValidateLocalRanges(source, centralOffset, members);
             return entries;
+        }
+
+        // The ZIP reader seeks to local headers using offsets supplied by
+        // central metadata. A per-entry expansion limit is insufficient if
+        // many entries refer to the same compressed bytes. Inspect actual
+        // local header lengths and require disjoint header/data intervals,
+        // all before the central directory and before any extraction writes.
+        // Data descriptors (if present) are not consumed by the extractor;
+        // gaps between member data ranges remain allowed.
+        private static void ValidateLocalRanges(Stream source, long centralOffset,
+            List<LocalMember> members)
+        {
+            members.Sort((left, right) => left.Offset.CompareTo(right.Offset));
+            var header = new byte[30];
+            long previousEnd = 0;
+            foreach (var member in members)
+            {
+                if (member.Offset < previousEnd ||
+                    member.Offset > centralOffset - header.Length)
+                    throw new InvalidDataException("ZIP local member ranges overlap or exceed the data area.");
+
+                source.Position = member.Offset;
+                ReadExactly(source, header, 0, header.Length);
+                if (UInt32(header, 0) != LocalEntrySignature)
+                    throw new InvalidDataException("ZIP local member header is invalid.");
+                var nameLength = UInt16(header, 26);
+                var extraLength = UInt16(header, 28);
+                var dataStart = member.Offset + header.Length + nameLength + extraLength;
+                if (nameLength == 0 || dataStart > centralOffset ||
+                    member.CompressedBytes > centralOffset - dataStart)
+                    throw new InvalidDataException("ZIP local member data exceeds the data area.");
+                previousEnd = dataStart + member.CompressedBytes;
+            }
         }
 
         private static void ReadExactly(Stream input, byte[] buffer, int start, int length)
