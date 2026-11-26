@@ -61,12 +61,9 @@ namespace PersonalCloudLibrarySource
             var sourcePath = item == null
                 ? string.Empty
                 : PersonalCloudLibrarySource.GetItemSourcePath(item);
-            var launchPath = item == null
-                ? string.Empty
-                : PersonalCloudLibrarySource.ResolveLaunchPath(item, settings);
-            var installDirectory = item == null
-                ? string.Empty
-                : PersonalCloudLibrarySource.ResolveInstallDirectory(item, settings, launchPath);
+            var paths = new CachePathResolver().Resolve(item, settings);
+            var launchPath = paths.LaunchPath;
+            var installDirectory = paths.InstallDirectory;
             var itemState = new LibraryItemStateResolver().Resolve(
                 item,
                 launchPath,

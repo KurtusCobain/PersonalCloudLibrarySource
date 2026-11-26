@@ -48,6 +48,29 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             StringAssert.DoesNotContain("ResolveLocalFolderManifestPath", core + navigation);
         }
 
+        [TestCase("RcloneInstallController.cs")]
+        [TestCase("LibraryVerificationService.cs")]
+        [TestCase("Services/GameCommandService.cs")]
+        [TestCase("PersonalCloudLibraryUninstallController.cs")]
+        public void WorkflowConsumersResolveCachePathsOncePerOperation(string path)
+        {
+            var source = Read("PersonalCloudLibrarySource", path);
+            Assert.That(System.Text.RegularExpressions.Regex.Matches(source,
+                @"new CachePathResolver\(\)\.Resolve\(item, settings\)").Count, Is.EqualTo(1));
+            StringAssert.DoesNotContain("PersonalCloudLibrarySource.ResolveLaunchPath(", source);
+            StringAssert.DoesNotContain("PersonalCloudLibrarySource.ResolveInstallDirectory(", source);
+            StringAssert.DoesNotContain("PersonalCloudLibrarySource.ResolveDownloadDestination", source);
+        }
+
+        [Test]
+        public void InstallReceiptUsesCapturedQueueDestinationRatherThanResolvingAgain()
+        {
+            var install = Read("PersonalCloudLibrarySource", "RcloneInstallController.cs");
+            StringAssert.Contains("cacheRoot, job.Destination", install);
+            StringAssert.Contains("ownershipReceipts.RecordCompleted(cacheRoot, ownershipReceiptKey, destination)", install);
+            StringAssert.Contains("cacheRoot, ownershipReceiptKey, destination,", install);
+        }
+
         private static string Read(params string[] segments)
         {
             var path = RepositoryRoot;

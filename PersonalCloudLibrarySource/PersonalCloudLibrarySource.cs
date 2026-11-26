@@ -517,8 +517,9 @@ namespace PersonalCloudLibrarySource
 
             foreach (var item in parseResult.ValidItems)
             {
-                var launchPath = ResolveLaunchPath(item, pluginSettings);
-                var installDirectory = ResolveInstallDirectory(item, pluginSettings, launchPath);
+                var paths = new CachePathResolver().Resolve(item, pluginSettings);
+                var launchPath = paths.LaunchPath;
+                var installDirectory = paths.InstallDirectory;
                 var itemState = new LibraryItemStateResolver().Resolve(
                     item,
                     launchPath,

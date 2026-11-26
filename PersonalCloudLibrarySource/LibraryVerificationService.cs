@@ -236,10 +236,11 @@ namespace PersonalCloudLibrarySource
                     }
                 }
 
-                var launchPath = PersonalCloudLibrarySource.ResolveLaunchPath(item, settings);
-                var installDirectory = PersonalCloudLibrarySource.ResolveInstallDirectory(item, settings, launchPath);
-                var downloadDestinationFile = PersonalCloudLibrarySource.ResolveDownloadDestinationFilePath(item, settings, launchPath);
-                var downloadDestinationFolder = PersonalCloudLibrarySource.ResolveDownloadDestinationFolder(item, settings, launchPath);
+                var paths = new CachePathResolver().Resolve(item, settings);
+                var launchPath = paths.LaunchPath;
+                var installDirectory = paths.InstallDirectory;
+                var downloadDestinationFile = paths.DestinationFile;
+                var downloadDestinationFolder = paths.DestinationDirectory;
                 var cachePathValid = !string.IsNullOrWhiteSpace(downloadDestinationFile) || !string.IsNullOrWhiteSpace(downloadDestinationFolder);
                 if (!cachePathValid)
                 {

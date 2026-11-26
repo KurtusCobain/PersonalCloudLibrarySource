@@ -92,10 +92,12 @@ namespace PersonalCloudLibrarySource
                     return;
                 }
                 var sourceType = PersonalCloudLibrarySource.GetItemSourceType(item);
-                var launchPath = PersonalCloudLibrarySource.ResolveLaunchPath(item, settings);
-                var installDirectory = PersonalCloudLibrarySource.ResolveInstallDirectory(item, settings, launchPath);
-                var destinationFilePath = PersonalCloudLibrarySource.ResolveDownloadDestinationFilePath(item, settings, launchPath);
-                var destinationFolderPath = PersonalCloudLibrarySource.ResolveDownloadDestinationFolder(item, settings, launchPath);
+                var paths = new CachePathResolver().Resolve(item, settings);
+                var launchPath = paths.LaunchPath;
+                var installDirectory = paths.InstallDirectory;
+                var destinationFilePath = paths.DestinationFile;
+                var destinationFolderPath = paths.DestinationDirectory;
+                var cacheRoot = settings.LocalCacheFolder;
                 var sourcePath = PersonalCloudLibrarySource.GetItemSourcePath(item);
                 // Defense in depth: do not trust a manifest-supplied cache destination
                 // even if an install controller was constructed outside the normal policy.
@@ -157,7 +159,8 @@ namespace PersonalCloudLibrarySource
                         resolvedSource,
                         destinationPath, providerType, sourceType == "directory", settings, executionAuthorized);
                 activeJobId = job.Id;
-                ObserveCompletionAsync(job.Id, sourceType, launchPath, installDirectory);
+                ObserveCompletionAsync(job.Id, sourceType, launchPath, installDirectory,
+                    cacheRoot, job.Destination);
             }
             catch (Exception ex)
             {
@@ -169,7 +172,8 @@ namespace PersonalCloudLibrarySource
         }
 
         private async void ObserveCompletionAsync(
-            Guid jobId, string sourceType, string launchPath, string installDirectory)
+            Guid jobId, string sourceType, string launchPath, string installDirectory,
+            string cacheRoot, string destination)
         {
             try
             {
@@ -184,10 +188,8 @@ namespace PersonalCloudLibrarySource
                 {
                     try
                     {
-                        var destination = PersonalCloudLibrarySource.ResolveDownloadDestinationFolder(
-                            item, settings, launchPath);
                         await Task.Run(() => ownershipReceipts.RecordCompletedWithInventory(
-                            settings.LocalCacheFolder, ownershipReceiptKey, destination,
+                            cacheRoot, ownershipReceiptKey, destination,
                             inventoryCancellation.Token)).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException)
@@ -204,7 +206,8 @@ namespace PersonalCloudLibrarySource
                 {
                     if (disposed) return;
                     activeJobId = Guid.Empty;
-                    HandleCompletion(result, sourceType, launchPath, installDirectory);
+                    HandleCompletion(result, sourceType, launchPath, installDirectory,
+                        cacheRoot, destination);
                 });
             }
             catch (Exception ex)
@@ -230,7 +233,8 @@ namespace PersonalCloudLibrarySource
         }
 
         private void HandleCompletion(CloudTransferExecutionResult result,
-            string sourceType, string launchPath, string installDirectory)
+            string sourceType, string launchPath, string installDirectory,
+            string cacheRoot, string destination)
         {
             // Publication may have succeeded while journal completion failed.
             // Preserve the physical outcome, but never issue a receipt or
@@ -316,11 +320,7 @@ namespace PersonalCloudLibrarySource
             {
                 try
                 {
-                    var destination = string.Equals(sourceType, "directory",
-                        StringComparison.OrdinalIgnoreCase)
-                        ? PersonalCloudLibrarySource.ResolveDownloadDestinationFolder(item, settings, launchPath)
-                        : PersonalCloudLibrarySource.ResolveDownloadDestinationFilePath(item, settings, launchPath);
-                    ownershipReceipts.RecordCompleted(settings.LocalCacheFolder, ownershipReceiptKey, destination);
+                    ownershipReceipts.RecordCompleted(cacheRoot, ownershipReceiptKey, destination);
                 }
                 catch (Exception ex)
                 {

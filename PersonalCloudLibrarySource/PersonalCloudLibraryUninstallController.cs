@@ -67,8 +67,9 @@ namespace PersonalCloudLibrarySource
                 throw new InvalidOperationException(reason);
             }
 
-            var launchPath = PersonalCloudLibrarySource.ResolveLaunchPath(item, settings);
-            var installDirectory = PersonalCloudLibrarySource.ResolveInstallDirectory(item, settings, launchPath);
+            var paths = new CachePathResolver().Resolve(item, settings);
+            var launchPath = paths.LaunchPath;
+            var installDirectory = paths.InstallDirectory;
             var behavior = NormalizeUninstallBehavior(settings.UninstallBehavior);
 
             var requestedTargetPath = ResolveTargetPath(behavior, launchPath, installDirectory);
