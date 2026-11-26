@@ -196,7 +196,8 @@ namespace PersonalCloudLibrarySource
             PersonalCloudLibrarySourceSettings settings, string relativeLauncher,
             CacheOwnershipReceiptStore receipts, bool userConfirmed,
             CancellationToken cancellationToken, out string reason,
-            ZipMutableDataBaselineStore mutableBaseline = null)
+            ZipMutableDataBaselineStore mutableBaseline = null,
+            ZipManagedRecoveryService recovery = null)
         {
             reason = "Explicit approval and verified extracted files are required.";
             if (!userConfirmed || !Eligible(item, settings) || receipts == null ||
@@ -207,61 +208,73 @@ namespace PersonalCloudLibrarySource
                 cancellationToken.ThrowIfCancellationRequested();
                 if (!SafeSeparateStore(settings.LocalCacheFolder))
                     return false;
-                string recordPath = RecordPath(item.Id, settings.LocalCacheFolder);
-                // No implicit overwrite/reapproval. A future revoke/replace UI
-                // must be a distinct explicit action.
-                if (File.Exists(recordPath))
+                using (recovery?.AcquireLifecycleLock(settings.LocalCacheFolder, item.Id, cancellationToken))
                 {
-                    reason = "A launcher approval already exists for this game.";
-                    return false;
-                }
-                var review = new ZipExtractedLauncherReviewService().Inspect(
-                    settings.LocalCacheFolder, item.Id, item.Title,
-                    receipts, cancellationToken, mutableBaseline);
-                if (!review.InventoryVerified)
-                {
-                    reason = "Extracted files are unverified or have changed.";
-                    return false;
-                }
-                var choice = review.Launchers.Candidates.FirstOrDefault(c =>
-                    string.Equals(c.RelativePath, relativeLauncher,
-                        StringComparison.OrdinalIgnoreCase) &&
-                    c.Kind != LauncherCandidateKind.InstallerOrHelper &&
-                    string.Equals(Path.GetExtension(c.RelativePath), ".exe",
-                        StringComparison.OrdinalIgnoreCase));
-                if (choice == null)
-                {
-                    reason = "The selected file is not an approved game executable candidate.";
-                    return false;
-                }
+                    if (recovery != null)
+                    {
+                        var state = recovery.Inspect(settings.LocalCacheFolder, item.Id).State;
+                        if (state != ZipRecoveryState.NoJournal && state != ZipRecoveryState.Restored)
+                        {
+                            reason = "ZIP recovery must be resolved before approving a launcher.";
+                            return false;
+                        }
+                    }
+                    string recordPath = RecordPath(item.Id, settings.LocalCacheFolder);
+                    // No implicit overwrite/reapproval. A future revoke/replace UI
+                    // must be a distinct explicit action.
+                    if (File.Exists(recordPath))
+                    {
+                        reason = "A launcher approval already exists for this game.";
+                        return false;
+                    }
+                    var review = new ZipExtractedLauncherReviewService().Inspect(
+                        settings.LocalCacheFolder, item.Id, item.Title,
+                        receipts, cancellationToken, mutableBaseline);
+                    if (!review.InventoryVerified)
+                    {
+                        reason = "Extracted files are unverified or have changed.";
+                        return false;
+                    }
+                    var choice = review.Launchers.Candidates.FirstOrDefault(c =>
+                        string.Equals(c.RelativePath, relativeLauncher,
+                            StringComparison.OrdinalIgnoreCase) &&
+                        c.Kind != LauncherCandidateKind.InstallerOrHelper &&
+                        string.Equals(Path.GetExtension(c.RelativePath), ".exe",
+                            StringComparison.OrdinalIgnoreCase));
+                    if (choice == null)
+                    {
+                        reason = "The selected file is not an approved game executable candidate.";
+                        return false;
+                    }
 
-                var key = ZipManagedExtractionService.ReceiptKeyForGame(item.Id);
-                CacheOwnershipReceipt receipt;
-                if (!receipts.TryRead(settings.LocalCacheFolder, key, out receipt) ||
-                    receipt.Version != 2 ||
-                    !string.Equals(PathBoundary.Normalize(receipt.Destination),
-                        PathBoundary.Normalize(review.ExtractedDirectory),
-                        StringComparison.OrdinalIgnoreCase))
-                    return false;
-                var document = new ZipLauncherApproval
-                {
-                    Version = 1,
-                    GameId = item.Id,
-                    CacheRoot = PathBoundary.Normalize(settings.LocalCacheFolder),
-                    Destination = PathBoundary.Normalize(review.ExtractedDirectory),
-                    RelativeLauncher = choice.RelativePath,
-                    InventoryFingerprint = receipt.InventoryFingerprint,
-                    SourceBinding = SourceBinding(item, settings)
-                };
-                cancellationToken.ThrowIfCancellationRequested();
+                    var key = ZipManagedExtractionService.ReceiptKeyForGame(item.Id);
+                    CacheOwnershipReceipt receipt;
+                    if (!receipts.TryRead(settings.LocalCacheFolder, key, out receipt) ||
+                        receipt.Version != 2 ||
+                        !string.Equals(PathBoundary.Normalize(receipt.Destination),
+                            PathBoundary.Normalize(review.ExtractedDirectory),
+                            StringComparison.OrdinalIgnoreCase))
+                        return false;
+                    var document = new ZipLauncherApproval
+                    {
+                        Version = 1,
+                        GameId = item.Id,
+                        CacheRoot = PathBoundary.Normalize(settings.LocalCacheFolder),
+                        Destination = PathBoundary.Normalize(review.ExtractedDirectory),
+                        RelativeLauncher = choice.RelativePath,
+                        InventoryFingerprint = receipt.InventoryFingerprint,
+                        SourceBinding = SourceBinding(item, settings)
+                    };
+                    cancellationToken.ThrowIfCancellationRequested();
 
-                // Create-only write in the plugin data directory; no game files
-                // are edited and no pre-existing approval is overwritten.
-                TransferPartialPathPolicy.WritePrivateRecord(recordPath,
-                    new JavaScriptSerializer { MaxJsonLength = MaxBytes }.Serialize(document),
-                    MaxBytes, cancellationToken);
-                reason = "Launcher approved. Update Game Library to refresh Playnite.";
-                return true;
+                    // Create-only write in the plugin data directory; no game files
+                    // are edited and no pre-existing approval is overwritten.
+                    TransferPartialPathPolicy.WritePrivateRecord(recordPath,
+                        new JavaScriptSerializer { MaxJsonLength = MaxBytes }.Serialize(document),
+                        MaxBytes, cancellationToken);
+                    reason = "Launcher approved. Update Game Library to refresh Playnite.";
+                    return true;
+                }
             }
             catch (OperationCanceledException)
             {

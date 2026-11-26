@@ -88,6 +88,38 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void RecoveryLifecyclePreventsApprovalOfPreparedOrQuarantinedPackage()
+        {
+            var recovery = new ZipManagedRecoveryService(Path.Combine(root, "journals"));
+            string reason;
+            Assert.That(recovery.TryQuarantine(cache, item.Id, receipts, approvals, true,
+                CancellationToken.None, out reason), Is.True, reason);
+            var state = recovery.Inspect(cache, item.Id);
+            Assert.That(approvals.TryApprove(item, settings, "Game.exe", receipts, true,
+                CancellationToken.None, out reason, null, recovery), Is.False);
+            // Simulate the journal having been written but the move not yet
+            // completed. The intact original alone must not allow approval.
+            Directory.Move(state.RecoveryDirectory, state.OriginalDirectory);
+            Assert.That(recovery.Inspect(cache, item.Id).State, Is.EqualTo(ZipRecoveryState.Prepared));
+            Assert.That(approvals.TryApprove(item, settings, "Game.exe", receipts, true,
+                CancellationToken.None, out reason, null, recovery), Is.False);
+            Assert.That(approvals.HasApprovalFootprint(item.Id, cache), Is.False);
+        }
+
+        [Test]
+        public void RecoveryLifecycleAllowsApprovalAfterCompletedRestore()
+        {
+            var recovery = new ZipManagedRecoveryService(Path.Combine(root, "journals"));
+            string reason;
+            Assert.That(recovery.TryQuarantine(cache, item.Id, receipts, approvals, true,
+                CancellationToken.None, out reason), Is.True, reason);
+            Assert.That(recovery.TryRestore(cache, item.Id, receipts, approvals, true,
+                CancellationToken.None, out reason), Is.True, reason);
+            Assert.That(approvals.TryApprove(item, settings, "Game.exe", receipts, true,
+                CancellationToken.None, out reason, null, recovery), Is.True, reason);
+        }
+
+        [Test]
         public void ExplicitApprovalAfterVerifiedExtractionCreatesPlayableMetadataOnlyOnImport()
         {
             var game = Game();

@@ -378,13 +378,15 @@ namespace PersonalCloudLibrarySource
 
                     var service = new ZipLauncherApprovalService(Path.Combine(
                         GetPluginDataDirectory(), "zip-launcher-approvals"));
+                    var recovery = new ZipManagedRecoveryService(Path.Combine(
+                        GetPluginDataDirectory(), "zip-recovery-journals"));
                     var success = await Task.Run(() =>
                     {
                         string reason;
                         return service.TryApprove(updated.Item, latest,
                             choice.RelativePath, receipts, true,
                             CancellationToken.None, out reason,
-                            mutableBaseline);
+                            mutableBaseline, recovery);
                     });
                     playniteApi.Dialogs.ShowMessage(success
                         ? PclsResources.Get("LOCPLSZipApproveSuccess",
