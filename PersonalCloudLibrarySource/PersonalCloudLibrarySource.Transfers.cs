@@ -94,6 +94,13 @@ namespace PersonalCloudLibrarySource
             return manager == null || manager.GetReservationSnapshot().Count == 0;
         }
 
+        private CacheDeletionAuthorization ExecuteRecoveryProtectedRemoval(Func<CacheDeletionAuthorization> remove)
+        {
+            if (transferPresentationDisposed || !IsRecoveryClearForCatalogPublication())
+                return new CacheDeletionAuthorization { Reason = "Transfer recovery is unresolved; removal was refused." };
+            return GetTransferRecoveryJournal().RunFileRemovalIfClear(remove);
+        }
+
         private async void ReviewTransferRecovery()
         {
             if (recoveryReviewInProgress || transferPresentationDisposed) return;

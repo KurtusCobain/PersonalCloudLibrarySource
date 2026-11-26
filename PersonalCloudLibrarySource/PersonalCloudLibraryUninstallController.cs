@@ -18,6 +18,10 @@ namespace PersonalCloudLibrarySource
         private readonly CacheOwnershipReceiptStore ownershipReceipts;
         private readonly Func<bool> executionAuthorized;
 
+        // Bound only by the shipping host before publishing its controller.
+        // Keep the public constructor and low-level test/compatibility API.
+        internal Func<Func<CacheDeletionAuthorization>, CacheDeletionAuthorization> RecoveryProtectedRemoval { get; set; }
+
         public PersonalCloudLibraryUninstallController(
             IPlayniteAPI playniteApi,
             Game game,
@@ -122,10 +126,10 @@ namespace PersonalCloudLibrarySource
                 if (executionAuthorized != null && !executionAuthorized())
                     throw new InvalidOperationException(
                         "Uninstall authorization expired before deletion; review transfer recovery and refresh the library.");
-                var deletion = deletionExecutor.DeleteFileOnly(
-                    settings.LocalCacheFolder,
-                    targetPath,
-                    settings.AllowUninstallOutsideCacheFolder);
+                Func<CacheDeletionAuthorization> remove = () => deletionExecutor.DeleteFileOnly(
+                    settings.LocalCacheFolder, targetPath, settings.AllowUninstallOutsideCacheFolder);
+                var deletion = RecoveryProtectedRemoval == null
+                    ? remove() : RecoveryProtectedRemoval(remove);
                 if (!deletion.Allowed)
                 {
                     throw new InvalidOperationException("Cached-copy deletion refused: " + deletion.Reason);

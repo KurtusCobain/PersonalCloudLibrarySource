@@ -373,8 +373,12 @@ namespace PersonalCloudLibrarySource
                         playniteApi, args.Game, Id, plan, out scopedController,
                         new CacheOwnershipReceiptStore(Path.Combine(
                             GetPluginDataDirectory(), "ownership-receipts")),
-                        () => IsRecoveryClearForCatalogPublication() && IsCurrentExperimentalActionPlan(plan)))
-                        uninstallActions.Add(scopedController);
+                        () => IsRecoveryClearForCatalogPublication() && IsCurrentExperimentalActionPlan(plan)) &&
+                        scopedController is PersonalCloudLibraryUninstallController guardedController)
+                    {
+                        guardedController.RecoveryProtectedRemoval = ExecuteRecoveryProtectedRemoval;
+                        uninstallActions.Add(guardedController);
+                    }
                     return uninstallActions;
                 }
 
@@ -417,7 +421,10 @@ namespace PersonalCloudLibrarySource
                     uninstallActions.Add(new PersonalCloudLibraryUninstallController(
                         playniteApi, args.Game, item, pluginSettings,
                         ownershipReceipts: receipts,
-                        executionAuthorized: CreateLegacyActionGuard(args.Game, item, pluginSettings, false)));
+                        executionAuthorized: CreateLegacyActionGuard(args.Game, item, pluginSettings, false))
+                    {
+                        RecoveryProtectedRemoval = ExecuteRecoveryProtectedRemoval
+                    });
                     logger.Info($"Personal Cloud Library Source uninstall action returned for {item.Id}.");
                     return uninstallActions;
                 }

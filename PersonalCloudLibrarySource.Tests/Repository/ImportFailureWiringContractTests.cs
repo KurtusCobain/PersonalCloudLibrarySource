@@ -32,6 +32,9 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             StringAssert.DoesNotContain("experimentalMultiSourcePlan = null", deferral);
             StringAssert.DoesNotContain("PublishImportOutcome(failure", deferral);
             StringAssert.Contains("executionAuthorized != null && !executionAuthorized()", uninstall);
+            Assert.That(System.Text.RegularExpressions.Regex.Matches(source,
+                "RecoveryProtectedRemoval = ExecuteRecoveryProtectedRemoval").Count, Is.EqualTo(2));
+            StringAssert.Contains("RecoveryProtectedRemoval(remove)", uninstall);
         }
 
         [Test]

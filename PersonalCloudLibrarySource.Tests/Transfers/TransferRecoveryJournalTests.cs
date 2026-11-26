@@ -92,6 +92,63 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void ExclusiveRemovalGateRefusesPendingMarkerAndDoesNotInvokeMutation()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var job = Job("file.zip");
+            journal.Begin(job);
+            var other = new TransferRecoveryJournal(records);
+            var method = typeof(TransferRecoveryJournal).GetMethod("RunFileRemovalIfClear",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            Assert.That(method, Is.Not.Null);
+            var calls = 0;
+            Func<CacheDeletionAuthorization> remove = () =>
+            {
+                calls++;
+                return new CacheDeletionAuthorization { Allowed = true };
+            };
+            var result = (CacheDeletionAuthorization)method.Invoke(other, new object[] { remove });
+            Assert.That(result.Allowed, Is.False);
+            Assert.That(calls, Is.Zero);
+            Assert.That(Directory.GetFiles(records, "*.pending").Length, Is.EqualTo(1));
+            journal.Complete(job);
+            result = (CacheDeletionAuthorization)method.Invoke(other, new object[] { remove });
+            Assert.That(result.Allowed, Is.True);
+            Assert.That(calls, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ExclusiveRemovalGateExcludesOtherJournalTransactionsUntilCallbackReturns()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var other = new TransferRecoveryJournal(records);
+            var job = Job("file.zip");
+            var method = typeof(TransferRecoveryJournal).GetMethod("RunFileRemovalIfClear",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            Assert.That(method, Is.Not.Null);
+            var calls = 0;
+            Func<CacheDeletionAuthorization> nested = () =>
+            {
+                calls++;
+                return new CacheDeletionAuthorization { Allowed = true };
+            };
+            Func<CacheDeletionAuthorization> remove = () =>
+            {
+                var refused = (CacheDeletionAuthorization)method.Invoke(other, new object[] { nested });
+                Assert.That(refused.Allowed, Is.False);
+                Assert.That(calls, Is.Zero);
+                Assert.Throws<IOException>(() => other.Begin(job));
+                Assert.That(Directory.GetFiles(records, "*.pending"), Is.Empty);
+                return new CacheDeletionAuthorization { Allowed = true };
+            };
+            var result = (CacheDeletionAuthorization)method.Invoke(journal, new object[] { remove });
+            Assert.That(result.Allowed, Is.True);
+            other.Begin(job);
+            other.Complete(job);
+            Assert.That(Directory.GetFiles(records, "*.pending"), Is.Empty);
+        }
+
+        [Test]
         public void CatalogPublicationGateRefusesMissingOwnedMarker()
         {
             var journal = new TransferRecoveryJournal(records);

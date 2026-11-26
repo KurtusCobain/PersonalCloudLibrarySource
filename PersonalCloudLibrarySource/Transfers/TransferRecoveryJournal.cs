@@ -137,6 +137,33 @@ namespace PersonalCloudLibrarySource
             finally { Monitor.Exit(syncRoot); }
         }
 
+        // Serialize an already-authorized hosted file-only removal against
+        // cooperating journal transactions. This is not deletion authorization
+        // by itself. Unlike the advisory gate, a mutation may create the
+        // private journal directory and persistent lock file.
+        internal CacheDeletionAuthorization RunFileRemovalIfClear(Func<CacheDeletionAuthorization> remove)
+        {
+            if (remove == null) throw new ArgumentNullException(nameof(remove));
+            var refusal = new CacheDeletionAuthorization
+            {
+                Reason = "Transfer recovery is active or could not be exclusively verified. Preserve files and review recovery."
+            };
+            if (!Monitor.TryEnter(syncRoot)) return refusal;
+            try
+            {
+                IDisposable guard;
+                try { guard = Acquire(false); }
+                catch (Exception ex) when (IsInspectionFailure(ex)) { return refusal; }
+                using (guard)
+                {
+                    if (!IsClearForCatalogPublication()) return refusal;
+                    // Do not swallow mutation exceptions or retry the callback.
+                    return remove();
+                }
+            }
+            finally { Monitor.Exit(syncRoot); }
+        }
+
         // Advisory snapshot only. Never creates a directory or lock file,
         // changes a marker, or treats a missing marker as cleanup permission.
         public TransferRecoverySnapshot Inspect()
@@ -338,7 +365,7 @@ namespace PersonalCloudLibrarySource
             }
         }
 
-        private IDisposable Acquire()
+        private IDisposable Acquire(bool waitForContention = true)
         {
             TransferPartialPathPolicy.RequireSafePath(directory);
             Directory.CreateDirectory(directory);
@@ -348,7 +375,8 @@ namespace PersonalCloudLibrarySource
             while (true)
             {
                 try { return TransferPartialPathPolicy.OpenGuardedExclusiveLock(path); }
-                catch (IOException ex) when ((ex.HResult & 0xffff) == 32 && timer.ElapsedMilliseconds < 2000)
+                catch (IOException ex) when (waitForContention &&
+                    (ex.HResult & 0xffff) == 32 && timer.ElapsedMilliseconds < 2000)
                 {
                     // Another instance owns the short journal transaction.
                     // Bound contention without weakening the exclusive lock.
