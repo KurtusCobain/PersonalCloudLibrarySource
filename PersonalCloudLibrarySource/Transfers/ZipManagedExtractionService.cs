@@ -74,8 +74,7 @@ namespace PersonalCloudLibrarySource
                     PathBoundary.IsContained(destination, normalizedArchive))
                     return null;
 
-                CacheOwnershipReceipt existing;
-                if (receipts.TryRead(normalizedCache, key, out existing))
+                if (receipts.HasReceiptFootprint(normalizedCache, key))
                     return null;
                 return new ZipManagedExtractionPlan(reviewed, normalizedArchive,
                     normalizedCache, destination, gameId, key);
@@ -93,7 +92,8 @@ namespace PersonalCloudLibrarySource
             ZipManagedExtractionPlan plan, bool userConfirmedExtract,
             CacheOwnershipReceiptStore receipts, CancellationToken cancellationToken,
             Action<long, long?> progress = null,
-            ZipMutableDataBaselineStore mutableBaseline = null)
+            ZipMutableDataBaselineStore mutableBaseline = null,
+            ZipManagedRecoveryService recovery = null)
         {
             var refused = new ZipManagedExtractionResult
             {
@@ -104,66 +104,70 @@ namespace PersonalCloudLibrarySource
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                // Never accept an arbitrary path from a controller or caller:
-                // recompute the only allowable destination for the frozen ID.
-                var expected = Path.Combine(plan.CacheRoot, plan.ReceiptKey);
-                if (!string.Equals(PathBoundary.Normalize(plan.Destination),
-                        PathBoundary.Normalize(expected), StringComparison.OrdinalIgnoreCase) ||
-                    !new SafeCacheDeletionPolicy()
-                        .Authorize(plan.CacheRoot, plan.Destination, false).Allowed ||
-                    PathBoundary.IsContained(plan.Destination, plan.ArchivePath))
-                    return refused;
-                CacheOwnershipReceipt existing;
-                if (receipts.TryRead(plan.CacheRoot, plan.ReceiptKey, out existing) ||
-                    File.Exists(plan.Destination) || Directory.Exists(plan.Destination))
-                    return new ZipManagedExtractionResult
-                    {
-                        Reason = "Package extraction already exists or has an ownership receipt."
-                    };
-
-                var extraction = new ZipPackageReviewService().ExtractAfterExplicitChoice(
-                    plan.Review, true, plan.ArchivePath, plan.CacheRoot,
-                    plan.Destination, Guid.NewGuid(), cancellationToken, progress);
-                if (!extraction.Succeeded)
-                    return new ZipManagedExtractionResult
-                    {
-                        Cancelled = extraction.Cancelled,
-                        NeedsManualAttention = extraction.RequiresManualRecovery,
-                        Reason = extraction.Message
-                    };
-
-                // The ZIP has already been atomically committed. From this
-                // point a receipt failure must NEVER erase the new game files.
-                var outcome = new ZipManagedExtractionResult
+                using (recovery?.AcquireLifecycleLock(plan.CacheRoot, plan.GameId, cancellationToken))
                 {
-                    Succeeded = true, Destination = plan.Destination,
-                    Reason = "ZIP extracted to a separate cache folder. This does not install the game."
-                };
-                try
-                {
-                    // An inventory receipt is diagnostic provenance only; its
-                    // presence must never authorize recursive uninstall.
-                    var baseline = receipts.RecordCompletedWithInventorySnapshot(
-                        plan.CacheRoot, plan.ReceiptKey,
-                        plan.Destination, CancellationToken.None);
-                    outcome.ReceiptRecorded = true;
-                    if (mutableBaseline != null)
+                    if (recovery != null && recovery.Inspect(plan.CacheRoot, plan.GameId).State != ZipRecoveryState.NoJournal)
+                        return refused;
+                    // Never accept an arbitrary path from a controller or caller:
+                    // recompute the only allowable destination for the frozen ID.
+                    var expected = Path.Combine(plan.CacheRoot, plan.ReceiptKey);
+                    if (!string.Equals(PathBoundary.Normalize(plan.Destination),
+                            PathBoundary.Normalize(expected), StringComparison.OrdinalIgnoreCase) ||
+                        !new SafeCacheDeletionPolicy()
+                            .Authorize(plan.CacheRoot, plan.Destination, false).Allowed ||
+                        PathBoundary.IsContained(plan.Destination, plan.ArchivePath))
+                        return refused;
+                    if (receipts.HasReceiptFootprint(plan.CacheRoot, plan.ReceiptKey) ||
+                        File.Exists(plan.Destination) || Directory.Exists(plan.Destination))
+                        return new ZipManagedExtractionResult
+                        {
+                            Reason = "Package extraction already exists or has an ownership receipt."
+                        };
+
+                    var extraction = new ZipPackageReviewService().ExtractAfterExplicitChoice(
+                        plan.Review, true, plan.ArchivePath, plan.CacheRoot,
+                        plan.Destination, Guid.NewGuid(), cancellationToken, progress);
+                    if (!extraction.Succeeded)
+                        return new ZipManagedExtractionResult
+                        {
+                            Cancelled = extraction.Cancelled,
+                            NeedsManualAttention = extraction.RequiresManualRecovery,
+                            Reason = extraction.Message
+                        };
+
+                    // The ZIP has already been atomically committed. From this
+                    // point a receipt failure must NEVER erase the new game files.
+                    var outcome = new ZipManagedExtractionResult
                     {
-                        outcome.MutableDataBaselineRecorded = mutableBaseline.TryRecord(
-                            plan.CacheRoot, plan.GameId, plan.Destination,
-                            receipts, baseline);
+                        Succeeded = true, Destination = plan.Destination,
+                        Reason = "ZIP extracted to a separate cache folder. This does not install the game."
+                    };
+                    try
+                    {
+                        // An inventory receipt is diagnostic provenance only; its
+                        // presence must never authorize recursive uninstall.
+                        var baseline = receipts.RecordCompletedWithInventorySnapshot(
+                            plan.CacheRoot, plan.ReceiptKey,
+                            plan.Destination, CancellationToken.None);
+                        outcome.ReceiptRecorded = true;
+                        if (mutableBaseline != null)
+                        {
+                            outcome.MutableDataBaselineRecorded = mutableBaseline.TryRecord(
+                                plan.CacheRoot, plan.GameId, plan.Destination,
+                                receipts, baseline);
+                        }
                     }
+                    catch (Exception ex) when (ex is IOException ||
+                                               ex is UnauthorizedAccessException ||
+                                               ex is InvalidOperationException ||
+                                               ex is ArgumentException)
+                    {
+                        outcome.NeedsManualAttention = true;
+                        outcome.Reason = "ZIP extracted, but its ownership inventory could not be recorded. " +
+                            "Preserve the files and inspect the destination manually.";
+                    }
+                    return outcome;
                 }
-                catch (Exception ex) when (ex is IOException ||
-                                           ex is UnauthorizedAccessException ||
-                                           ex is InvalidOperationException ||
-                                           ex is ArgumentException)
-                {
-                    outcome.NeedsManualAttention = true;
-                    outcome.Reason = "ZIP extracted, but its ownership inventory could not be recorded. " +
-                        "Preserve the files and inspect the destination manually.";
-                }
-                return outcome;
             }
             catch (OperationCanceledException)
             {

@@ -104,7 +104,26 @@ namespace PersonalCloudLibrarySource
                 if (decision != MessageBoxResult.Yes)
                     return;
 
-                if (activeZipRecoveries.ContainsKey(gameId) || activeZipCleanups.ContainsKey(gameId))
+                // The modal confirmation can outlive the approved manifest
+                // and cache settings. Resolve them again before any write.
+                var latest = settings.GetRuntimeSettingsSnapshot();
+                if (latest == null || !latest.Enabled || !latest.AllowDownloads ||
+                    !string.Equals(PathBoundary.Normalize(latest.LocalCacheFolder),
+                        plan.CacheRoot, StringComparison.OrdinalIgnoreCase) ||
+                    !string.Equals(GetProviderType(latest), GetProviderType(currentSettings),
+                        StringComparison.OrdinalIgnoreCase))
+                    return;
+                var latestManifest = LoadValidatedManifest(latest);
+                var latestTarget = gameCommandService.ResolveTargets(
+                    new[] { selected.Game }, latestManifest.Items, latest, Id).Single();
+                var latestSource = new ZipGameReviewTargetPolicy().Resolve(latestTarget, latest, Id);
+                if (latestTarget.Item == null ||
+                    !string.Equals(latestTarget.Item.Id, plan.GameId, StringComparison.Ordinal) ||
+                    !latestSource.Available ||
+                    !string.Equals(latestSource.ArchivePath, plan.ArchivePath,
+                        StringComparison.OrdinalIgnoreCase) ||
+                    activeZipRecoveries.ContainsKey(gameId) || activeZipCleanups.ContainsKey(gameId) ||
+                    GetTransferManager().GetActiveJobForGame(gameId) != null)
                     return;
                 cancellation = new CancellationTokenSource();
                 if (!activeZipExtractions.TryAdd(gameId, cancellation))
@@ -118,8 +137,10 @@ namespace PersonalCloudLibrarySource
                 var token = cancellation.Token;
                 var mutableBaseline = new ZipMutableDataBaselineStore(Path.Combine(
                     GetPluginDataDirectory(), "zip-mutable-data-baselines"));
+                var recovery = new ZipManagedRecoveryService(Path.Combine(
+                    GetPluginDataDirectory(), "zip-recovery-journals"));
                 var result = await Task.Run(() => extractor.ExecuteApproved(
-                    approvedPlan, true, receiptStore, token, null, mutableBaseline));
+                    approvedPlan, true, receiptStore, token, null, mutableBaseline, recovery));
 
                 if (result.Cancelled)
                 {

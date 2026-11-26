@@ -151,14 +151,14 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         [Test]
         public void InventoryFailurePreservesSuccessfullyExtractedUserContent()
         {
-            var review = new ZipPackageReviewService().Inspect(archive, "game");
-            var invalidReceiptStore = new CacheOwnershipReceiptStore(
-                Path.Combine(cache, "receipts"));
             var service = new ZipManagedExtractionService();
-            var plan = service.Prepare(review, archive, cache, "game", invalidReceiptStore);
-            Assert.That(plan, Is.Not.Null);
+            var plan = Plan();
+            var unavailable = Path.Combine(root, "receipts");
             var result = service.ExecuteApproved(plan, true,
-                invalidReceiptStore, CancellationToken.None);
+                receipts, CancellationToken.None, (copied, total) =>
+                {
+                    if (!File.Exists(unavailable)) File.WriteAllText(unavailable, "preserve unexpected store");
+                });
             Assert.That(result.Succeeded, Is.True);
             Assert.That(result.ReceiptRecorded, Is.False);
             Assert.That(result.NeedsManualAttention, Is.True);
@@ -187,6 +187,32 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(first.ReceiptKey, Is.Not.EqualTo(second.ReceiptKey));
             Assert.That(Path.GetDirectoryName(first.Destination), Is.EqualTo(cache));
             Assert.That(Path.GetDirectoryName(second.Destination), Is.EqualTo(cache));
+        }
+
+        [Test]
+        public void CorruptReceiptFootprintBlocksPreparedAndNewExtraction()
+        {
+            var service = new ZipManagedExtractionService();
+            var plan = Plan();
+            Directory.CreateDirectory(plan.Destination);
+            receipts.RecordCompleted(cache, plan.ReceiptKey, plan.Destination);
+            Directory.Delete(plan.Destination);
+            var record = Directory.GetFiles(Path.Combine(root, "receipts"), "*.json")[0];
+            File.WriteAllText(record, "{corrupt receipt");
+            var review = new ZipPackageReviewService().Inspect(archive, "game");
+            Assert.That(service.Prepare(review, archive, cache, "game", receipts), Is.Null);
+            Assert.That(service.ExecuteApproved(plan, true, receipts, CancellationToken.None).Succeeded, Is.False);
+            Assert.That(Directory.Exists(plan.Destination), Is.False);
+            Assert.That(File.ReadAllText(record), Is.EqualTo("{corrupt receipt"));
+        }
+
+        [Test]
+        public void UnavailableReceiptStoreRefusesPreparation()
+        {
+            var review = new ZipPackageReviewService().Inspect(archive, "game");
+            var invalid = new CacheOwnershipReceiptStore(Path.Combine(cache, "receipts"));
+            Assert.That(new ZipManagedExtractionService().Prepare(review, archive, cache, "game", invalid), Is.Null);
+            Assert.That(Directory.GetFileSystemEntries(cache), Is.Empty);
         }
 
         [Test]
