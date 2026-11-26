@@ -366,87 +366,6 @@ namespace PersonalCloudLibrarySource
             return approved && !transferPresentationDisposed;
         }
 
-        private void ReviewZipGameTarget(GameCommandTarget selected)
-        {
-            // The menu snapshot is not authority: read the current manifest and
-            // verify source ownership and file presence when actually clicked.
-            var title = GetDashboardResource("LOCPLSGameReviewZip",
-                "Review ZIP Package Contents");
-            try
-            {
-                if (selected?.Game == null || selected.Game.PluginId != Id)
-                    return;
-                var currentSettings = settings.GetRuntimeSettingsSnapshot();
-                if (currentSettings == null || !currentSettings.Enabled)
-                    return;
-                var currentManifest = LoadValidatedManifest(currentSettings);
-                var refreshed = gameCommandService.ResolveTargets(
-                    new[] { selected.Game }, currentManifest.Items,
-                    currentSettings, Id).Single();
-                var candidate = new ZipGameReviewTargetPolicy()
-                    .Resolve(refreshed, currentSettings, Id);
-                if (!candidate.Available)
-                {
-                    playniteApi.Dialogs.ShowMessage(
-                        PclsResources.Get("LOCPLSZipReviewUnavailable",
-                            "A matching local ZIP is no longer available. No files were changed."),
-                        title);
-                    return;
-                }
-
-                if (candidate.RequiresExternalSourceConsent &&
-                    !ConfirmExternalSourceAccess(candidate.ArchivePath))
-                    return;
-
-                var review = new ZipPackageReviewService().Inspect(
-                    candidate.ArchivePath,
-                    refreshed.Item.Title);
-                if (!review.PassedPreflight)
-                {
-                    playniteApi.Dialogs.ShowMessage(
-                        PclsResources.Format("LOCPLSZipReviewRejected",
-                            "ZIP review was refused: {0}{1}No files were changed.",
-                            review.Reason, Environment.NewLine),
-                        title);
-                    return;
-                }
-
-                var classification = review.Kind == ZipPackageReviewKind.KeepArchiveCandidate
-                    ? PclsResources.Get("LOCPLSZipReviewKeep",
-                        "This may be an emulator-ready ZIP; keep or extract requires review.")
-                    : review.Kind == ZipPackageReviewKind.ExtractCandidate
-                        ? PclsResources.Get("LOCPLSZipReviewExtract",
-                            "Possible game launcher found; extraction requires separate approval.")
-                        : PclsResources.Get("LOCPLSZipReviewAmbiguous",
-                            "Archive contents are ambiguous; review the package manually.");
-                var launcher = review.Launchers.SuggestedRelativePath;
-                var launcherLine = string.IsNullOrWhiteSpace(launcher)
-                    ? string.Empty
-                    : PclsResources.Format("LOCPLSZipReviewLauncher",
-                        "Possible launcher (not approved): {0}{1}",
-                        launcher, Environment.NewLine);
-                var examples = string.Join(Environment.NewLine,
-                    review.MemberPaths.Take(6).Select(path => "  " + path));
-                if (review.FileCount > 6)
-                    examples += Environment.NewLine + "  ...";
-                playniteApi.Dialogs.ShowMessage(
-                    PclsResources.Format("LOCPLSZipReviewCompleted",
-                        "Read-only ZIP inspection complete.{0}Files: {1}{0}Uncompressed bytes: {2}{0}{3}{0}{4}Contents:{0}{5}{0}{0}No files were extracted, executed, installed or removed. The extraction/install workflow still requires an explicit choice.",
-                        Environment.NewLine, review.FileCount,
-                        review.TotalUncompressedBytes, classification,
-                        launcherLine, examples),
-                    title);
-            }
-            catch (Exception ex)
-            {
-                logger.Warn(ex, "PCLS could not inspect the selected ZIP.");
-                playniteApi.Dialogs.ShowMessage(
-                    PclsResources.Get("LOCPLSZipReviewFailed",
-                        "ZIP review could not be completed. No files were changed."),
-                    title);
-            }
-        }
-
         private void CancelActiveTransfer(GameCommandTarget target)
         {
             var active = target?.Game == null
@@ -544,30 +463,36 @@ namespace PersonalCloudLibrarySource
 
         private void OpenGameSourceLocation(GameCommandTarget target)
         {
-            if (target?.Game == null || target.Game.PluginId != Id) return;
-            var current = settings.GetRuntimeSettingsSnapshot();
-            if (current == null || !current.Enabled || current.EnableMultiSourceProfiles) return;
-            var manifest = LoadValidatedManifest(current);
-            var refreshed = gameCommandService.ResolveTargets(
-                new[] { target.Game }, manifest.Items, current, Id).Single();
-            var path = refreshed.ResolvedLocalSourcePath;
-            if (refreshed.RequiresExternalSourceConsent && !ConfirmExternalSourceAccess(path))
-                return;
-            if (File.Exists(path))
+            try
             {
-                OpenExplorerFile(path);
-                return;
+                if (target?.Game == null || target.Game.PluginId != Id || transferPresentationDisposed) return;
+                var current = settings.GetRuntimeSettingsSnapshot();
+                if (current == null || !current.Enabled || current.EnableMultiSourceProfiles) return;
+                var manifest = LoadValidatedManifest(current);
+                var refreshed = gameCommandService.ResolveTargets(
+                    new[] { target.Game }, manifest.Items, current, Id).Single();
+                var path = refreshed.ResolvedLocalSourcePath;
+                if (refreshed.RequiresExternalSourceConsent && !ConfirmExternalSourceAccess(path))
+                    return;
+                if (File.Exists(path))
+                {
+                    OpenExplorerFile(path);
+                    return;
+                }
+                if (Directory.Exists(path))
+                {
+                    OpenExplorerFolder(path);
+                    return;
+                }
             }
-
-            if (Directory.Exists(path))
+            catch (Exception ex)
             {
-                OpenExplorerFolder(path);
-                return;
+                logger.Warn(ex, "PCLS could not open the selected source location.");
             }
-
-            playniteApi.Dialogs.ShowMessage(
-                PclsResources.Get("LOCPLSGameSourceUnavailable", "The source file or folder is unavailable. Cloud source paths can still be copied from the details view."),
-                GetDashboardResource("LOCPLSDashboardTitle", "Personal Cloud Library"));
+            if (!transferPresentationDisposed)
+                playniteApi.Dialogs.ShowMessage(
+                    PclsResources.Get("LOCPLSGameSourceUnavailable", "The source file or folder is unavailable. Cloud source paths can still be copied from the details view."),
+                    GetDashboardResource("LOCPLSDashboardTitle", "Personal Cloud Library"));
         }
 
         private void VerifyGameTarget(GameCommandTarget target)

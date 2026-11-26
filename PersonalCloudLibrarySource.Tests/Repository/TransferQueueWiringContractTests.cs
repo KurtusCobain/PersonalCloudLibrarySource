@@ -25,6 +25,20 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             Assert.That(controller, Does.Contain("transferQueue.GetCompletion"));
         }
 
+        [Test]
+        public void ReadOnlyZipReviewUsesAwaitedWorkerAndShutdownCancellation()
+        {
+            var root = FindRepositoryRoot();
+            var source = File.ReadAllText(Path.Combine(root, "PersonalCloudLibrarySource", "PersonalCloudLibrarySource.ZipPackages.cs"));
+            var navigation = File.ReadAllText(Path.Combine(root, "PersonalCloudLibrarySource", "PersonalCloudLibrarySource.Navigation.cs"));
+            Assert.That(source, Does.Contain("private async void ReviewZipGameTarget"));
+            Assert.That(source, Does.Contain("await Task.Run(() => new ZipPackageReviewService().Inspect("));
+            Assert.That(source, Does.Contain("ref activeZipReview"));
+            Assert.That(source, Does.Contain("review?.Cancel()"));
+            Assert.That(source, Does.Contain("cancellation.IsCancellationRequested || transferPresentationDisposed"));
+            Assert.That(navigation, Does.Contain("CancelAllZipExtractions();"));
+        }
+
         private static string FindRepositoryRoot()
         {
             var current = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);
