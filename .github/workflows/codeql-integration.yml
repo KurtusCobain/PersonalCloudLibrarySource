@@ -82,6 +82,32 @@ jobs:
           }
           Write-Host 'CodeQL SARIF: zero ZIP Slip / archive extraction findings.'
 
+      - name: Gate all reported CodeQL findings
+        if: always() && steps.codeql.outcome == 'success'
+        shell: pwsh
+        run: |
+          $sarifFiles = @(Get-ChildItem -LiteralPath 'codeql-results' -Filter '*.sarif' -Recurse -File)
+          if ($sarifFiles.Count -eq 0) { throw 'CodeQL SARIF is missing.' }
+          $findings = @()
+          $runCount = 0
+          foreach ($file in $sarifFiles) {
+            $report = Get-Content -LiteralPath $file.FullName -Raw | ConvertFrom-Json
+            foreach ($run in @($report.runs)) {
+              if ($null -eq $run) { continue }
+              $runCount++
+              foreach ($result in @($run.results)) {
+                if ($null -eq $result) { continue }
+                $findings += [string]$result.ruleId
+              }
+            }
+          }
+          if ($runCount -eq 0) { throw 'CodeQL SARIF contains no runs.' }
+          Write-Host "CodeQL SARIF: $($findings.Count) total reported findings across $runCount run(s)."
+          if ($findings.Count -gt 0) {
+            $findings | Group-Object | ForEach-Object { Write-Host "$($_.Name): $($_.Count)" }
+            throw 'CodeQL reported findings; inspect the retained SARIF and resolve or explicitly adjudicate before qualification.'
+          }
+
       - name: Retain private SARIF evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

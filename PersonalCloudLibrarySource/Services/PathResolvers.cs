@@ -171,7 +171,8 @@ namespace PersonalCloudLibrarySource
             if (stem == "CON" || stem == "PRN" || stem == "AUX" || stem == "NUL" ||
                 (stem.Length == 4 && (stem.StartsWith("COM", StringComparison.Ordinal) ||
                                       stem.StartsWith("LPT", StringComparison.Ordinal)) &&
-                 stem[3] >= '1' && stem[3] <= '9'))
+                 ((stem[3] >= '1' && stem[3] <= '9') ||
+                  stem[3] == '\u00B9' || stem[3] == '\u00B2' || stem[3] == '\u00B3')))
                 throw new InvalidOperationException("Manifest item id is a reserved Windows folder name.");
 
             var resolved = Path.GetFullPath(Path.Combine(cacheRoot, itemId));

@@ -49,6 +49,12 @@ namespace PersonalCloudLibrarySource.Tests.Services
         [TestCase("game/./dot.exe")]
         [TestCase("game/CON.txt")]
         [TestCase("LPT1/file.exe")]
+        [TestCase("game/COM\u00B9.txt")]
+        [TestCase("game/com\u00B2")]
+        [TestCase("game/COM\u00B3.exe")]
+        [TestCase("LPT\u00B9/file.exe")]
+        [TestCase("LPT\u00B2/file.exe")]
+        [TestCase("LPT\u00B3/file.exe")]
         [TestCase("game/trailing./file.exe")]
         [TestCase("game/trailing /file.exe")]
         [TestCase("game/file.exe:stream")]
@@ -95,6 +101,16 @@ namespace PersonalCloudLibrarySource.Tests.Services
                 .AllowedForStagedExtraction, Is.False);
             Assert.That(new ArchiveInspectionPolicy().Inspect(new[] { File("x", 1, 0) })
                 .AllowedForStagedExtraction, Is.False);
+        }
+
+        [TestCase(2000L, 2L, true)]
+        [TestCase(2001L, 2L, false)]
+        [TestCase(1999L, 2L, true)]
+        [TestCase(1L, long.MaxValue, true)]
+        public void ExpansionRatioUsesExactBoundWithoutMultiplicationOverflow(long bytes, long compressed, bool allowed)
+        {
+            var result = new ArchiveInspectionPolicy().Inspect(new[] { File("game.bin", bytes, compressed) });
+            Assert.That(result.AllowedForStagedExtraction, Is.EqualTo(allowed), result.Reason);
         }
 
         [Test]

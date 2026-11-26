@@ -108,6 +108,12 @@ namespace PersonalCloudLibrarySource.Tests.Services
         [TestCase("C:evil")]
         [TestCase("CON")]
         [TestCase("NUL")]
+        [TestCase("COM\u00B9")]
+        [TestCase("com\u00B2.txt")]
+        [TestCase("COM\u00B3")]
+        [TestCase("LPT\u00B9")]
+        [TestCase("LPT\u00B2.txt")]
+        [TestCase("LPT\u00B3")]
         [TestCase("game/child")]
         [TestCase(@"game\child")]
         public void CacheResolver_UnsafeFallbackId_RejectsBeforeInstall(string id)

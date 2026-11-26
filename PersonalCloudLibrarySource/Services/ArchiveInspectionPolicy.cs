@@ -135,7 +135,7 @@ namespace PersonalCloudLibrarySource
                 {
                     if (entry.UncompressedBytes > 0 &&
                         (entry.CompressedBytes == 0 ||
-                         entry.UncompressedBytes / entry.CompressedBytes > MaxExpansionRatio))
+                         (entry.UncompressedBytes - 1) / entry.CompressedBytes >= MaxExpansionRatio))
                         return Refuse("Archive expands excessively compared with compressed bytes.");
                     if (total > MaxTotalBytes - entry.UncompressedBytes)
                         return Refuse("Archive uncompressed size exceeds the configured limit.");
@@ -174,7 +174,8 @@ namespace PersonalCloudLibrarySource
             if (name.Length == 4 &&
                 (name.StartsWith("COM", StringComparison.OrdinalIgnoreCase) ||
                  name.StartsWith("LPT", StringComparison.OrdinalIgnoreCase)) &&
-                name[3] >= '1' && name[3] <= '9')
+                ((name[3] >= '1' && name[3] <= '9') ||
+                 name[3] == '\u00B9' || name[3] == '\u00B2' || name[3] == '\u00B3'))
                 return true;
             return false;
         }
