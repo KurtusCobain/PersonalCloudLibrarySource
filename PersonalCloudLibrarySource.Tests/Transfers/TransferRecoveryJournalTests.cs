@@ -43,6 +43,45 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void CatalogPublicationGateDoesNotCreateJournalAndDefersUntilCleanCompletion()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            Assert.That(journal.IsClearForCatalogPublication(), Is.True);
+            Assert.That(Directory.Exists(records), Is.False);
+            var job = Job("file.zip");
+            journal.Begin(job);
+            Assert.That(journal.IsClearForCatalogPublication(), Is.False);
+            Assert.That(new TransferRecoveryJournal(records).IsClearForCatalogPublication(), Is.False);
+            journal.Complete(job);
+            Assert.That(journal.IsClearForCatalogPublication(), Is.True);
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void CatalogPublicationGateRefusesUnreadableOrUnexpectedJournal(bool directory)
+        {
+            if (directory)
+            {
+                Directory.CreateDirectory(records);
+                File.WriteAllText(Path.Combine(records, "unknown.pending"), "invalid");
+            }
+            else File.WriteAllText(records, "preserve");
+            Assert.That(new TransferRecoveryJournal(records).IsClearForCatalogPublication(), Is.False);
+            if (directory) Assert.That(File.ReadAllText(Path.Combine(records, "unknown.pending")), Is.EqualTo("invalid"));
+            else Assert.That(File.ReadAllText(records), Is.EqualTo("preserve"));
+        }
+
+        [Test]
+        public void CatalogPublicationGateRefusesMissingOwnedMarker()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var job = Job("file.zip");
+            journal.Begin(job);
+            File.Delete(Path.Combine(records, job.Id.ToString("N") + ".pending"));
+            Assert.That(journal.IsClearForCatalogPublication(), Is.False);
+        }
+
+        [Test]
         public void Inspect_ValidAndCorruptRecordsRemainReserved()
         {
             var journal = new TransferRecoveryJournal(records);

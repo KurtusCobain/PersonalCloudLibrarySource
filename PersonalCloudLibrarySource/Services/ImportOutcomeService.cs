@@ -9,7 +9,8 @@ namespace PersonalCloudLibrarySource
         None = 0,
         SourceUnavailable = 1,
         InvalidManifest = 2,
-        UnsupportedSchema = 3
+        UnsupportedSchema = 3,
+        RecoveryPending = 4
     }
 
     public sealed class ImportOutcome

@@ -8,6 +8,7 @@ namespace PersonalCloudLibrarySource
         private CloudTransferExecutor transferExecutor;
         private TransferQueueService transferQueue;
         private TransferRecoveryJournal transferRecoveryJournal;
+        private readonly object recoveryJournalSync = new object();
         private DashboardTransferActivityBridge transferActivityBridge;
         private readonly DashboardRefreshPostGate dashboardTransferRefreshGate = new DashboardRefreshPostGate();
         private bool transferPresentationDisposed;
@@ -56,10 +57,28 @@ namespace PersonalCloudLibrarySource
 
         private TransferRecoveryJournal GetTransferRecoveryJournal()
         {
-            if (transferRecoveryJournal == null)
-                transferRecoveryJournal = new TransferRecoveryJournal(
-                    System.IO.Path.Combine(GetPluginDataDirectory(), "transfer-recovery"));
-            return transferRecoveryJournal;
+            lock (recoveryJournalSync)
+            {
+                if (transferRecoveryJournal == null)
+                    transferRecoveryJournal = new TransferRecoveryJournal(
+                        System.IO.Path.Combine(GetPluginDataDirectory(), "transfer-recovery"));
+                return transferRecoveryJournal;
+            }
+        }
+
+        private bool IsRecoveryClearForCatalogPublication()
+        {
+            // Include queued jobs and current-session quarantine even if a
+            // marker is missing. Recheck after the namespace observation.
+            // This is an advisory publication fence, not a transaction with
+            // Playnite or a nonparticipating process.
+            var manager = transferManager;
+            if (manager != null && manager.GetReservationSnapshot().Count != 0)
+                return false;
+            if (!GetTransferRecoveryJournal().IsClearForCatalogPublication())
+                return false;
+            manager = transferManager;
+            return manager == null || manager.GetReservationSnapshot().Count == 0;
         }
 
         private async void ReviewTransferRecovery()

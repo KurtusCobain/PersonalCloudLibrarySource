@@ -113,6 +113,30 @@ namespace PersonalCloudLibrarySource
             this.writePayload = writePayload ?? throw new ArgumentNullException(nameof(writePayload));
         }
 
+        // A conservative, read-only gate for catalog publication. Do not
+        // parse markers or probe their destinations: a pending filename alone
+        // is enough to defer refresh, including malformed records. Do not wait
+        // behind an in-process reservation transaction on a host thread.
+        public bool IsClearForCatalogPublication()
+        {
+            if (!Monitor.TryEnter(syncRoot)) return false;
+            try
+            {
+                if (ownedMarkers.Count != 0) return false;
+                TransferPartialPathPolicy.RequireSafePath(directory);
+                FileAttributes attributes;
+                try { attributes = File.GetAttributes(directory); }
+                catch (FileNotFoundException) { return true; }
+                catch (DirectoryNotFoundException) { return true; }
+                if ((attributes & FileAttributes.Directory) == 0) return false;
+                using (var entries = Directory.EnumerateFileSystemEntries(directory, "*.pending",
+                    SearchOption.TopDirectoryOnly).GetEnumerator())
+                    return !entries.MoveNext();
+            }
+            catch (Exception ex) when (IsInspectionFailure(ex)) { return false; }
+            finally { Monitor.Exit(syncRoot); }
+        }
+
         // Advisory snapshot only. Never creates a directory or lock file,
         // changes a marker, or treats a missing marker as cleanup permission.
         public TransferRecoverySnapshot Inspect()

@@ -7,6 +7,18 @@ namespace PersonalCloudLibrarySource.Tests.Repository
     public class ImportFailureWiringContractTests
     {
         [Test]
+        public void CatalogPublicationRechecksRecoveryBeforeBothRoutesReturn()
+        {
+            var source = File.ReadAllText(Path.Combine(TestContext.CurrentContext.WorkDirectory,
+                "PersonalCloudLibrarySource", "PersonalCloudLibrarySource.cs"));
+            StringAssert.Contains("RequireRecoveryClearForCatalogPublication(pluginSettings);", source);
+            Assert.That(System.Text.RegularExpressions.Regex.Matches(source,
+                @"RequireRecoveryClearForCatalogPublication\(pluginSettings\);").Count, Is.EqualTo(4));
+            StringAssert.Contains("ImportFailureKind.RecoveryPending", source);
+            StringAssert.Contains("throw new ImportOutcomeException(failure);", source);
+        }
+
+        [Test]
         public void GetGames_PublishesFailureThenPropagatesTypedOutcome()
         {
             var source = File.ReadAllText(Path.Combine(

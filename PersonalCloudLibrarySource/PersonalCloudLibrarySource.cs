@@ -63,6 +63,7 @@ namespace PersonalCloudLibrarySource
                 return new List<GameMetadata>();
             }
 
+            RequireRecoveryClearForCatalogPublication(pluginSettings);
             if (pluginSettings.EnableMultiSourceProfiles)
                 return GetExperimentalMultiSourceGames(pluginSettings);
 
@@ -70,6 +71,8 @@ namespace PersonalCloudLibrarySource
                 experimentalMultiSourcePlan = null;
 
             var outcome = importOutcomeService.Import(pluginSettings, rcloneManifestReader.ReadManifestJson);
+            if (outcome.Succeeded)
+                RequireRecoveryClearForCatalogPublication(pluginSettings);
             PublishImportOutcome(outcome, pluginSettings);
             if (!outcome.Succeeded)
             {
@@ -84,8 +87,11 @@ namespace PersonalCloudLibrarySource
             // Multi-source game IDs are source-bound and require separately
             // scoped ownership verification; do not inherit legacy approvals.
             if (outcome.Succeeded)
+            {
                 ApplyExplicitZipLauncherApprovals(outcome.Games, outcome.ValidItems,
                     pluginSettings);
+                RequireRecoveryClearForCatalogPublication(pluginSettings);
+            }
             return ImportExecutionPolicy.Complete(outcome);
         }
 
@@ -110,6 +116,7 @@ namespace PersonalCloudLibrarySource
                     ImportFailureKind.SourceUnavailable, "multi-source-profiles",
                     prepared.RefusalReason));
 
+            RequireRecoveryClearForCatalogPublication(pluginSettings);
             // Only publish a complete atomic snapshot. Game IDs in this plan
             // resolve to their source-specific manifest and runtime settings.
             lock (multiSourcePlanSync)
@@ -117,6 +124,17 @@ namespace PersonalCloudLibrarySource
             logger.Info("PCLS experimental multi-source catalog prepared " +
                 prepared.Games.Count + " entries.");
             return prepared.Games;
+        }
+
+        private void RequireRecoveryClearForCatalogPublication(PersonalCloudLibrarySourceSettings pluginSettings)
+        {
+            if (IsRecoveryClearForCatalogPublication()) return;
+            lock (multiSourcePlanSync)
+                experimentalMultiSourcePlan = null;
+            var failure = ImportOutcome.Failure(ImportFailureKind.RecoveryPending,
+                "transfer-recovery", "Library refresh deferred because a transfer is active or recovery evidence cannot be cleared. Previous catalog retained; review transfer recovery.");
+            PublishImportOutcome(failure, pluginSettings);
+            throw new ImportOutcomeException(failure);
         }
 
         // Every action request revalidates the live profile document and

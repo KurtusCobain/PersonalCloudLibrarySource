@@ -66,6 +66,8 @@ namespace PersonalCloudLibrarySource
         {
             switch (kind)
             {
+                case ImportFailureKind.RecoveryPending:
+                    return "LOCPLSImportFailureRecoveryPending";
                 case ImportFailureKind.UnsupportedSchema:
                     return "LOCPLSImportFailureUnsupportedSchema";
                 case ImportFailureKind.InvalidManifest:
