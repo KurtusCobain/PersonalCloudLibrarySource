@@ -253,6 +253,7 @@
     <sys:String x:Key="LOCPLSTransferBytesTransferred">{0} transferred</sys:String>
     <sys:String x:Key="LOCPLSActivityUnnamedGame">Unnamed game</sys:String>
     <sys:String x:Key="LOCPLSActivityReady">{0} is ready to play.</sys:String>
+    <sys:String x:Key="LOCPLSActivityRecoveryRequired">{0} requires manual recovery. Preserve files and review recovery evidence.</sys:String>
     <sys:String x:Key="LOCPLSActivityFailed">{0} failed: {1}</sys:String>
     <sys:String x:Key="LOCPLSActivityTransferFailed">Transfer failed.</sys:String>
     <sys:String x:Key="LOCPLSActivityCancelled">{0} transfer was cancelled.</sys:String>
@@ -283,6 +284,7 @@
     <sys:String x:Key="LOCPLSInstallControllerName">Download to local cache</sys:String>
     <sys:String x:Key="LOCPLSExternalSourceTitle">Confirm external library source</sys:String>
     <sys:String x:Key="LOCPLSExternalSourceConfirmation">This manifest references a source outside the configured library location:{0}{0}{1}{0}{0}Only continue if you recognize and trust this path. Accessing a network share may authenticate to that server. Allow access for this operation only?</sys:String>
+    <sys:String x:Key="LOCPLSInstallRecoveryNotification">Download requires manual recovery.{0}{0}Item: {1}{0}Files and recovery evidence must be preserved. Installation was not confirmed. Do not retry or delete staging; open Review Transfer Recovery.</sys:String>
     <sys:String x:Key="LOCPLSInstallCancelledNotification">Download to local cache was cancelled.{0}{0}Item: {1}{0}Partial files were removed and the game remains uninstalled.</sys:String>
     <sys:String x:Key="LOCPLSInstallFailedNotification">Download to local cache failed.{0}{0}Item: {1}{0}Source type: {2}{0}Result: {3}{0}{0}Next: review the manifest source path and cache settings, then try again.</sys:String>
     <sys:String x:Key="LOCPLSUnknownFailure">Unknown failure.</sys:String>

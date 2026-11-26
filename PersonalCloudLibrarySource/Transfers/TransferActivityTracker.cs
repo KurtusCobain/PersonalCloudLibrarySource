@@ -49,6 +49,16 @@ namespace PersonalCloudLibrarySource
                 : job.DisplayName.Trim();
             var timestamp = job.CompletedAt ?? DateTime.UtcNow;
 
+            if (job.RequiresManualRecovery)
+                return new DashboardActivityRecord
+                {
+                    Kind = DashboardActivityKind.TransferFailed,
+                    Message = PclsResources.Format("LOCPLSActivityRecoveryRequired",
+                        "{0} requires manual recovery. Preserve files and review recovery evidence.", displayName),
+                    TimestampUtc = timestamp,
+                    GameId = job.GameId
+                };
+
             switch (job.State)
             {
                 case CloudTransferState.Completed:

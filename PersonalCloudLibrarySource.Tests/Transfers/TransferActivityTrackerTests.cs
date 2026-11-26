@@ -37,6 +37,27 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(second, Is.Empty);
         }
 
+        [TestCase(CloudTransferState.Completed)]
+        [TestCase(CloudTransferState.Cancelled)]
+        [TestCase(CloudTransferState.Failed)]
+        public void RecoveryRequirementOverridesTerminalActivityMessage(CloudTransferState state)
+        {
+            var manager = new CloudTransferManager(1);
+            var job = manager.Enqueue(Guid.NewGuid(), "Game", "source", "destination", "LocalFolder");
+            manager.Transition(job.Id, CloudTransferState.Transferring);
+            manager.Transition(job.Id, state);
+            var mark = typeof(CloudTransferManager).GetMethod("MarkRequiresManualRecovery",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.That(mark, Is.Not.Null);
+            mark.Invoke(manager, new object[] { job.Id });
+            var tracker = new TransferActivityTracker();
+            var record = tracker.CollectNew(manager.Jobs)[0];
+            Assert.That(record.Kind, Is.EqualTo(DashboardActivityKind.TransferFailed));
+            Assert.That(record.Message, Does.Contain("requires manual recovery"));
+            Assert.That(record.Message, Does.Not.Contain("ready to play"));
+            Assert.That(tracker.CollectNew(manager.Jobs), Is.Empty);
+        }
+
         [Test]
         public void CollectNew_FailedJob_IncludesFriendlyErrorSummary()
         {

@@ -640,6 +640,62 @@ namespace PersonalCloudLibrarySource.Tests.Services
             }
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void RecoveryRequiredOutcomeDoesNotPromoteInstallOrIssueReceipt(bool directory)
+        {
+            var settings = FileOnlySettings();
+            settings.SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType;
+            var source = Path.Combine(root, "source", "game.bin");
+            var destination = Path.Combine(cache, "game", "game.bin");
+            Directory.CreateDirectory(Path.GetDirectoryName(source));
+            File.WriteAllText(source, "fixture");
+            Directory.CreateDirectory(Path.GetDirectoryName(destination));
+            File.WriteAllText(destination, "published fixture");
+            var game = Game("recovery");
+            game.IsInstalled = false;
+            var item = new PersonalCloudLibraryItem
+            {
+                Id = game.GameId, Title = "Recovery fixture", SourcePath = source,
+                SourceType = directory ? "directory" : "file",
+                CachePath = Path.Combine("game", "game.bin"),
+                InstallDirectory = "game", LaunchFile = "game.bin"
+            };
+            var receiptPath = Path.Combine(root, "receipts");
+            var receipts = new CacheOwnershipReceiptStore(receiptPath);
+            var sink = new RecordingSink();
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager, new RecoverySuccessExecutor(manager)))
+            using (var controller = new RcloneInstallController(null, game, item, settings, queue,
+                new GameWorkflowNotificationService(sink), receipts))
+            {
+                controller.Install(new InstallActionArgs());
+                Assert.That(SpinWait.SpinUntil(() => sink.Messages.Count > 0, 5000), Is.True);
+                Assert.That(sink.Messages[0].Text, Does.Contain("requires manual recovery"));
+                Assert.That(game.IsInstalled, Is.False);
+                Assert.That(Directory.Exists(receiptPath), Is.False);
+                Assert.That(File.ReadAllText(destination), Is.EqualTo("published fixture"));
+            }
+        }
+
+        private sealed class RecoverySuccessExecutor : ICloudTransferExecutor
+        {
+            private readonly CloudTransferManager manager;
+            public RecoverySuccessExecutor(CloudTransferManager manager) { this.manager = manager; }
+
+            public CloudTransferExecutionResult ExecuteLocal(Guid jobId, bool directory)
+            {
+                manager.Transition(jobId, CloudTransferState.Transferring);
+                manager.Transition(jobId, CloudTransferState.Completed);
+                var result = CloudTransferExecutionResult.Success(1, 1);
+                result.RequiresManualRecovery = true;
+                return result;
+            }
+
+            public CloudTransferExecutionResult ExecuteRclone(Guid jobId, PersonalCloudLibrarySourceSettings settings)
+                => ExecuteLocal(jobId, false);
+        }
+
         private sealed class PausingTransferExecutor : ICloudTransferExecutor
         {
             private readonly CloudTransferManager manager;

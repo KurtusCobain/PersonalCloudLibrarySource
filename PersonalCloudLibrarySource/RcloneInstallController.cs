@@ -179,7 +179,7 @@ namespace PersonalCloudLibrarySource
                 // Hash directory transfers away from Playnite's UI thread.
                 // Failed inventory issuance never converts a failed transfer to
                 // success or grants deletion authority.
-                if (result.Succeeded && ownershipReceipts != null &&
+                if (result.Succeeded && !result.RequiresManualRecovery && ownershipReceipts != null &&
                     string.Equals(sourceType, "directory", StringComparison.OrdinalIgnoreCase))
                 {
                     try
@@ -232,6 +232,19 @@ namespace PersonalCloudLibrarySource
         private void HandleCompletion(CloudTransferExecutionResult result,
             string sourceType, string launchPath, string installDirectory)
         {
+            // Publication may have succeeded while journal completion failed.
+            // Preserve the physical outcome, but never issue a receipt or
+            // promote Playnite installation state while recovery is required.
+            if (result.RequiresManualRecovery)
+            {
+                SignalCancelledIfHosted();
+                workflowNotifications.Warning("install", Game.GameId, PclsResources.Format(
+                    "LOCPLSInstallRecoveryNotification",
+                    "Download requires manual recovery.{0}{0}Item: {1}{0}Files and recovery evidence must be preserved. Installation was not confirmed. Do not retry or delete staging; open Review Transfer Recovery.",
+                    Environment.NewLine, item.Title));
+                return;
+            }
+
             var succeeded = result.Succeeded;
             var cancelled = result.Cancelled;
             var message = result.Message;
