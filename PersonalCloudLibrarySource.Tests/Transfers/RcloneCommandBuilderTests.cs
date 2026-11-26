@@ -25,6 +25,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(arguments, Does.Contain("--stats=1s"));
             Assert.That(arguments, Does.Contain("--stats-one-line"));
             Assert.That(arguments, Does.Contain("--progress"));
+            Assert.That(arguments, Does.Contain("--ask-password=false"));
         }
 
         [Test]
@@ -58,6 +59,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         [TestCase("--config", "game.exe")]
         [TestCase("games,token=fixture", "game.exe")]
         [TestCase(":sftp:", "game.exe")]
+        [TestCase(":local:", @"C:\Fixture\game.exe")]
         [TestCase("games", "library/../outside.exe")]
         [TestCase("games", @"library\..\outside.exe")]
         [TestCase("games", "library/\nfile.exe")]
@@ -69,14 +71,14 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
-        public void BuildArguments_ExplicitLocalBackendPreservesAbsolutePath()
+        public void BuildArguments_ConfiguredRemotePreservesAbsoluteDrivePath()
         {
             var args = RcloneCommandBuilder.BuildArguments(new RcloneTransferRequest
             {
-                RemoteName = ":local:", RemoteSourcePath = @"C:\Fixture\game.exe",
+                RemoteName = "pclsfixture", RemoteSourcePath = @"C:\Fixture\game.exe",
                 DestinationPath = @"C:\Cache\game.exe"
             });
-            Assert.That(args, Does.Contain("\":local:C:/Fixture/game.exe\""));
+            Assert.That(args, Does.Contain("\"pclsfixture:C:/Fixture/game.exe\""));
         }
 
         [Test]

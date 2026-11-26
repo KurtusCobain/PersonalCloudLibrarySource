@@ -22,7 +22,7 @@ namespace PersonalCloudLibrarySource
             var arguments = command + " " +
                             QuoteArgument(remoteOperand) + " " +
                             QuoteArgument(destinationPath) +
-                            " --stats=1s --stats-one-line --progress";
+                            " --stats=1s --stats-one-line --progress --ask-password=false";
 
             if (request.UseInPlace)
             {
@@ -37,8 +37,8 @@ namespace PersonalCloudLibrarySource
             return arguments;
         }
 
-        // Named remotes only (plus the explicit local-only backend used for
-        // disposable fixtures). Do not reinterpret inline backend/config syntax.
+        // Configured named remotes only. Do not reinterpret inline backend or
+        // config syntax, including :local:. Disposable tests use named local remotes.
         internal static bool TryBuildRemoteOperand(string name, string path,
             bool trimLeadingSlash, out string operand)
         {
@@ -50,11 +50,6 @@ namespace PersonalCloudLibrarySource
                 if (char.IsControl(ch)) return false;
             foreach (var segment in source.Split('/'))
                 if (segment == "." || segment == "..") return false;
-            if (string.Equals(remote, ":local:", StringComparison.Ordinal))
-            {
-                operand = ":local:" + source;
-                return true;
-            }
             if (remote.EndsWith(":", StringComparison.Ordinal))
                 remote = remote.Substring(0, remote.Length - 1);
             if (string.IsNullOrWhiteSpace(remote) || remote.StartsWith("-", StringComparison.Ordinal) ||

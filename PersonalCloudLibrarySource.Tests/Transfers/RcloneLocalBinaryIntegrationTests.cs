@@ -24,6 +24,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             var destination = Path.Combine(cache, "payload.bin");
             var sentinel = Path.Combine(cache, "unrelated.txt");
             var previousLimit = Environment.GetEnvironmentVariable("RCLONE_BWLIMIT");
+            var previousConfig = Environment.GetEnvironmentVariable("RCLONE_CONFIG");
             try
             {
                 Directory.CreateDirectory(cache);
@@ -32,10 +33,11 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
                 payload[payload.Length - 1] = 0xA5;
                 File.WriteAllBytes(source, payload);
                 File.WriteAllText(sentinel, "preserve unrelated content");
+                var remote = ConfigureDisposableLocalRemote(root);
                 var settings = new PersonalCloudLibrarySourceSettingsV3
                 {
                     RcloneExecutablePath = rclone,
-                    RcloneRemoteName = ":local:",
+                    RcloneRemoteName = remote,
                     RcloneTimeoutSeconds = 30
                 };
                 var adapter = new RcloneTransferAdapter(new RcloneProcessRunner());
@@ -91,6 +93,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             finally
             {
                 Environment.SetEnvironmentVariable("RCLONE_BWLIMIT", previousLimit);
+                Environment.SetEnvironmentVariable("RCLONE_CONFIG", previousConfig);
                 if (Directory.Exists(root)) Directory.Delete(root, true);
             }
         }
@@ -100,7 +103,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         public void OptInRealRclone_LocalBackendCreatesInventoriedDirectoryWithoutCloudAccess()
         {
             // Never invoke a real process in ordinary CI or without explicit
-            // user-provided executable path. ":local:" uses no cloud account.
+            // user-provided executable path. Use a unique isolated local config.
             var rclone = Environment.GetEnvironmentVariable("PCLS_TEST_RCLONE_EXE");
             if (string.IsNullOrWhiteSpace(rclone))
                 Assert.Ignore("Set PCLS_TEST_RCLONE_EXE to an installed rclone.exe to enable the disposable local-only fixture.");
@@ -111,16 +114,18 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             var source = Path.Combine(root, "source");
             var cache = Path.Combine(root, "cache");
             var destination = Path.Combine(cache, "real-rclone-game");
+            var previousConfig = Environment.GetEnvironmentVariable("RCLONE_CONFIG");
             try
             {
                 Directory.CreateDirectory(Path.Combine(source, "assets"));
                 Directory.CreateDirectory(cache);
                 File.WriteAllText(Path.Combine(source, "play.exe"), "local backend test");
                 File.WriteAllText(Path.Combine(source, "assets", "data.bin"), "texture");
+                var remote = ConfigureDisposableLocalRemote(root);
                 var settings = new PersonalCloudLibrarySourceSettingsV3
                 {
                     RcloneExecutablePath = rclone,
-                    RcloneRemoteName = ":local:",
+                    RcloneRemoteName = remote,
                     RcloneTimeoutSeconds = 60
                 };
                 var manifest = Path.Combine(root, "manifest.json");
@@ -129,16 +134,13 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
                 settings.RcloneManifestPath = manifest.Replace('\\', '/');
                 Assert.That(new RcloneManifestReader().ReadManifestJson(settings),
                     Is.EqualTo(manifestJson), "Real rclone manifest reads also use the contained launcher.");
-                // Only inspect remotes when the CI step explicitly created an
-                // isolated configuration with one local-only fixture remote.
-                if (Environment.GetEnvironmentVariable("PCLS_TEST_RCLONE_ISOLATED_CONFIG") == "1")
-                {
-                    var list = typeof(RcloneManifestReader).GetMethod("ListRemotes",
-                        System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-                    Assert.That(list, Is.Not.Null);
-                    Assert.That(((string)list.Invoke(null, new object[] { settings })).Trim(),
-                        Is.EqualTo("pcls-fixture:"));
-                }
+                // Verify the isolated config was actually used, not the
+                // operator's normal rclone configuration.
+                var list = typeof(RcloneManifestReader).GetMethod("ListRemotes",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                Assert.That(list, Is.Not.Null);
+                Assert.That(((string)list.Invoke(null, new object[] { settings })).Trim(),
+                    Is.EqualTo(remote + ":"));
                 var adapter = new RcloneTransferAdapter(new RcloneProcessRunner());
                 var result = adapter.Copy(settings, source.Replace('\\', '/'),
                     destination, true, CancellationToken.None, null);
@@ -163,11 +165,23 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             }
             finally
             {
+                Environment.SetEnvironmentVariable("RCLONE_CONFIG", previousConfig);
                 // A uniquely generated disposable subtree only; never use an
                 // arbitrary user-provided cache folder or configured remote.
                 if (Directory.Exists(root))
                     Directory.Delete(root, true);
             }
+        }
+        private static string ConfigureDisposableLocalRemote(string root)
+        {
+            // Unique name prevents collisions with configured remotes and
+            // name-specific environment overrides. Never read user config.
+            var remote = "pclsfixture" + Guid.NewGuid().ToString("N");
+            var path = Path.Combine(root, "isolated-rclone.conf");
+            File.WriteAllText(path, "[" + remote + "]\ntype = local\n",
+                System.Text.Encoding.ASCII);
+            Environment.SetEnvironmentVariable("RCLONE_CONFIG", path);
+            return remote;
         }
     }
 }

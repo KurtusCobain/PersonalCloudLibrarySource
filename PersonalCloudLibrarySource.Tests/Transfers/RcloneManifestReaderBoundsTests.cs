@@ -10,6 +10,20 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
     public class RcloneManifestReaderBoundsTests
     {
         [Test]
+        public void InlineLocalBackendIsRefusedBeforeManifestProcessLaunch()
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                RcloneExecutablePath = "unavailable-fixture-executable",
+                RcloneRemoteName = ":local:",
+                RcloneManifestPath = "fixture.json"
+            };
+            var failure = Assert.Throws<InvalidOperationException>(() =>
+                new RcloneManifestReader().ReadManifestJson(settings));
+            Assert.That(failure.Message, Does.Contain("source is invalid"));
+        }
+
+        [Test]
         public void ChunkReader_PreservesExactTextAndBoundary()
         {
             var json = "{\n  \"items\": []\r\n}";

@@ -324,13 +324,14 @@ function Quote-Argument {
 
 function Invoke-RcloneJsonList {
     param([string]$RcloneExe, [string]$RemoteRoot, [bool]$UseFastList)
-    $arguments = 'lsjson -R --no-mimetype --no-modtime'
+    $arguments = 'lsjson -R --no-mimetype --no-modtime --ask-password=false'
     if ($UseFastList) { $arguments += ' --fast-list' }
     $arguments += ' -- ' + (Quote-Argument $RemoteRoot)
     $psi = [Diagnostics.ProcessStartInfo]::new()
     $psi.FileName = $RcloneExe
     $psi.Arguments = $arguments
     $psi.UseShellExecute = $false
+    $psi.RedirectStandardInput = $true
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
     $psi.StandardOutputEncoding = [Text.Encoding]::UTF8
@@ -342,6 +343,7 @@ function Invoke-RcloneJsonList {
     try {
         if (-not $process.Start()) { throw 'Unable to start rclone.' }
         $started = $true
+        $process.StandardInput.Close()
         $timer = [Diagnostics.Stopwatch]::StartNew()
         $stdout = [Text.StringBuilder]::new()
         $outBuffer = New-Object char[] 8192

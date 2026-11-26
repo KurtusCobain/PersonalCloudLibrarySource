@@ -13,7 +13,7 @@ Qualified source: b090230dea6c9d5832dee3e222b579c7e84dd154. Pre-remediation bran
 | P3 | Free-space checks for UNC/ZIP/rclone | Local and ZIP now query actual destination ancestor capacity via Win32; Windows CI pending. Unknown capacity remains best effort; rclone without reliable expected size still needs separate design/host test |
 | P4 | ZIP32 limits vs advisory policy | Open; align shipping ZIP parser and documentation without narrowing unrelated archive advisory contracts unnecessarily |
 | P5 | Temporary files retained on failures | Open; only remove verified owned files, preserve uncertain evidence |
-| P6 | rclone :local: production configuration | Open; assess supported provider semantics and tests before change |
+| P6 | rclone :local: production configuration | Inline backend removed from plugin; opt-in real-rclone tests now create uniquely named isolated local config; CI pending |
 | P7 | Explorer argument quoting | Confirmed two raw directory arguments; now use existing Windows argument quoting. File selection already quoted; host behavior pending |
 | P8 | Process diagnostics | Added exception type/HRESULT only, with regression assertions against message disclosure; qualification pending |
 | P9 | Queue ordering/concurrency settings | Dispatch uses registration order; clock regression added. Invalid concurrency fallback to one is an explicit tested conservative contract, retained |
@@ -26,7 +26,7 @@ Qualified source: b090230dea6c9d5832dee3e222b579c7e84dd154. Pre-remediation bran
 | H2 | Long paths | Open; fail safely and document/measure |
 | H3 | Overlapping ZIP member ranges | Confirmed missing range check; sorted local header/data interval validation and two regression cases added; Windows CI passed at 39dc6f3 |
 | H4 | Superscript Windows device names | Confirmed in two inspected policies; corrected with 12 additional parameterized cases; Windows CI passed at 39dc6f3 |
-| H5 | Encrypted rclone config | Open; test prompt/EOF behavior |
+| H5 | Encrypted rclone config | Explicit no-password-prompt flag for plugin copy/cat/listremotes and standalone listing; encrypted-config host behavior still unqualified |
 | H6 | Extended Windows path roots | Open; inspect native path contracts |
 
 ## Grok register
@@ -82,3 +82,7 @@ Use numeric version 0.3.2.1 only on the isolated development branch (extension m
 The withdrawn d1d74d74 experiment combined ancestor guarding with parent-relative FileRenameInfo and failed 125 Windows tests. This batch leaves the qualified absolute no-replace rename buffer/RootDirectory unchanged. It opens non-volume/share-root ancestor directories top-down with FILE_LIST_DIRECTORY and FILE_READ_ATTRIBUTES, no-follow, read/write sharing but no delete sharing; captures identities and reobserves them before/after publication, then verifies the published pathname against the same source identity. A disposable test checks that ordinary parent/grandparent rename is refused during the guard, child creation remains possible, and rename works after release. API references: https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_rename_info and https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilea. This is an isolated compatibility experiment until exact CI passes. It narrows ordinary ancestor rename/delete races, not full ancestor-relative namespace resolution, root mapping changes, arbitrary reparse changes or transactional member locking. Directory listing permission/SMB behavior may refuse previously usable paths; verify on real providers before acceptance. No additional deletion or overwrite authority.
 
 Candidate CI 45773386451 failed one repository contract (976 standard passed, one failed, two opt-in skips) because Get-FileHash was not available in the test PowerShell process; preliminary version guard passed and Debug compiled without errors. Replace that cmdlet with the same .NET SHA-256 streaming primitive used in existing regression fixtures. Requalify exact corrected SHA; do not describe c25a1e2c as passing.
+
+## Eighth correction batch: rclone named remotes and noninteractive behavior
+
+Remove the test-only inline :local: exception from the plugin operand builder. Configured named local remotes remain available; no claim that named remotes are a sandbox. Both opt-in binary fixtures create unique named local configs inside their disposable roots, set/restore RCLONE_CONFIG, and one checks exact listremotes output to verify isolation. Add builder and manifest-reader rejection cases. Explicit --ask-password=false is supported by the documented rclone config flag; plugin copy/cat/listremotes and standalone lsjson use it. The CLI also closes redirected stdin. Reference: https://rclone.org/commands/rclone/. Real binary and encrypted-config behavior need qualification; no credential access or remote writes. Legacy inline users must configure a named remote or choose LocalFolder. CI pending.

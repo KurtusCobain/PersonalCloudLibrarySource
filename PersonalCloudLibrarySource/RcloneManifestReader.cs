@@ -59,7 +59,7 @@ namespace PersonalCloudLibrarySource
                 process.StartInfo = new ProcessStartInfo
                 {
                     FileName = executablePath,
-                    Arguments = arguments,
+                    Arguments = arguments + " --ask-password=false",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
