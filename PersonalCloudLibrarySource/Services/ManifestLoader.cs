@@ -72,11 +72,13 @@ namespace PersonalCloudLibrarySource
 
         private static string ReadBoundedManifest(string path)
         {
-            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            // Refuse an actively written manifest rather than importing a
+            // potentially mixed generation. The import failure is nonauthorizing.
+            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
-                // Reject large files before allocating; also enforce the limit while
-                // reading in case the file grows between opening and reading.
-                if (stream.Length > ManifestParserValidator.MaxManifestCharacters)
+                var expectedBytes = stream.Length;
+                // Retain BOM compatibility and both existing import limits.
+                if (expectedBytes > ManifestParserValidator.MaxManifestCharacters)
                     throw new InvalidOperationException("Manifest file exceeds the 32 MB size limit.");
 
                 using (var reader = new StreamReader(stream, Encoding.UTF8, true))
@@ -88,8 +90,12 @@ namespace PersonalCloudLibrarySource
                     {
                         if (text.Length > ManifestParserValidator.MaxManifestCharacters - count)
                             throw new InvalidOperationException("Manifest exceeds the 32 million character limit.");
+                        if (stream.Position > expectedBytes)
+                            throw new IOException("Manifest grew during reading.");
                         text.Append(buffer, 0, count);
                     }
+                    if (stream.Length != expectedBytes || stream.Position != expectedBytes)
+                        throw new IOException("Manifest changed during reading.");
 
                     return text.ToString();
                 }

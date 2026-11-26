@@ -55,6 +55,40 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void Load_ActivelyWrittenManifestRefusesUntilWriterCloses()
+        {
+            var path = Path.Combine(testRoot, "manifest.json");
+            const string json = "{\"version\":3,\"items\":[]}";
+            File.WriteAllText(path, json);
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType,
+                LocalManifestPath = path
+            };
+            var loader = new ManifestLoader();
+            using (var writer = new FileStream(path, FileMode.Open, FileAccess.Write, FileShare.ReadWrite))
+                Assert.That(loader.Load(settings, null).Succeeded, Is.False);
+            var result = loader.Load(settings, null);
+            Assert.That(result.Succeeded, Is.True, result.Error);
+            Assert.That(result.Json, Is.EqualTo(json));
+        }
+
+        [Test]
+        public void Load_Utf16BomManifestRetainsCompatibility()
+        {
+            var path = Path.Combine(testRoot, "manifest.json");
+            const string json = "{\"version\":3,\"items\":[]}";
+            File.WriteAllText(path, json, System.Text.Encoding.Unicode);
+            var result = new ManifestLoader().Load(new PersonalCloudLibrarySourceSettingsV3
+            {
+                SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType,
+                LocalManifestPath = path
+            }, null);
+            Assert.That(result.Succeeded, Is.True, result.Error);
+            Assert.That(result.Json, Is.EqualTo(json));
+        }
+
+        [Test]
         public void Load_OversizedRemoteManifest_RejectsBeforeParsing()
         {
             var settings = new PersonalCloudLibrarySourceSettingsV3
