@@ -88,9 +88,25 @@ Confirm:
 - The provider can resolve the source path.
 - The game belongs to this plugin.
 
+## External LocalFile sources (internal stabilization candidate)
+
+Absolute and UNC source paths remain supported. The configured local library root, or the manifest directory when no root is configured, is the selected source boundary. An item outside that boundary is a lexical candidate, not proof of file availability. The candidate prompts before external download, source navigation or ZIP inspection; access to a network share can authenticate to its server. Approve only a path you recognize and trust. Declining does not queue an install or inspect the external file. A configured UNC library can operate without an extra per-item prompt. These are consent guards, not a filesystem sandbox; use trusted manifests and configured roots.
+
+## Interrupted transfer or recovery reservation (internal stabilization candidate)
+
+Open **Review Transfer Recovery** in the plugin menu. The review shows recorded destinations and staging paths, marker origin, unreadable records and current-session job IDs whose reservations could not be reconciled. Missing markers or an empty list do not by themselves establish safe recovery.
+
+1. Stop new downloads and request cancellation of any known active job through the normal transfer UI.
+2. Record the job ID and recovery screen; close Playnite normally and establish whether related transfers/processes have stopped. If unsure, preserve all evidence and seek assistance.
+3. Preserve the source, existing cached destination, any partial staging, and the complete plugin user-data recovery journal. Copy evidence to a separate safe backup location after activity has stopped, without moving or deleting the original.
+4. Do not edit or remove `.pending` markers or rename/delete staging to force a retry. A valid marker may belong to another instance; an unreadable marker may protect an ambiguous transfer. The current candidate deliberately does not provide restart release or automatic cleanup of uncertain evidence.
+5. Report whether destination and staging exist, the exact candidate revision and the observed error. Redact private paths or credentials when sharing diagnostics.
+
+This procedure preserves evidence; it does not clear a reservation. Support-assisted recovery and a validated operator release protocol are still outstanding.
+
 ## Difference between Remove and Uninstall
 
-`Remove cached copy` and Playnite uninstall only target the local cached file or folder. They do not delete the manifest, source provider files, or rclone remote content.
+`Remove cached copy` and Playnite uninstall target eligible local cached files. Recursive folder removal is disabled in the internal candidate; source provider files, manifests and rclone remote content must remain untouched.
 
 ## sourceType=directory Item Imports but Is Not Playable
 
@@ -134,19 +150,13 @@ This behavior is intentional so the manifest stays focused on launchable files a
 
 ## Uninstall Did Not Delete Files
 
-Uninstall only removes local cached files or folders. It never deletes the manifest, cloud/source files, or rclone remote content.
-
-Check `UninstallBehavior`:
-
-- `RemoveCachedFileOnly` deletes only the resolved cached launch file.
-- `RemoveCachedInstallFolder` deletes the resolved cached install folder.
-- `AskEachTime` prompts when Playnite's dialog API is available.
+In the internal stabilization candidate, file-only uninstall requires a verified ordinary eligible cache file. Recursive folder removal remains disabled, regardless of legacy folder-removal or ask-each-time settings. Preserve managed ZIP content for the dedicated maintenance/recovery workflow. Do not manually remove a folder simply because the uninstall action was refused.
 
 ## Uninstall Refused Because Path Is Outside Cache
 
 By default, uninstall is only allowed for paths inside `LocalCacheFolder`. This prevents accidental deletion of source-provider files or unrelated local files.
 
-If you intentionally use absolute cache paths outside `LocalCacheFolder`, enable `AllowUninstallOutsideCacheFolder`.
+Do not enable outside-cache removal to work around a refusal. Use a valid managed cache configuration. The internal multi-source candidate does not permit outside-cache uninstall.
 
 ## Game Still Appears After Uninstall
 

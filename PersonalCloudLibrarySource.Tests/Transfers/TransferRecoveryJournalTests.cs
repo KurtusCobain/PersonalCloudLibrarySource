@@ -38,6 +38,7 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             var snapshot = new TransferRecoveryJournal(records).Inspect();
             Assert.That(snapshot.IsComplete, Is.True);
             Assert.That(snapshot.Records, Is.Empty);
+            Assert.That(snapshot.UnverifiedOwnedJobIds, Is.Empty);
             Assert.That(Directory.Exists(records), Is.False);
         }
 
@@ -335,10 +336,28 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
                 Assert.That(journal.Inspect().Records[0].Origin, Is.EqualTo(TransferRecoveryOrigin.Replaced));
             }
             else File.Delete(marker);
-            Assert.That(journal.Inspect().IsComplete, Is.False);
+            var snapshot = journal.Inspect();
+            Assert.That(snapshot.IsComplete, Is.False);
+            Assert.That(snapshot.UnverifiedOwnedJobIds, Is.EqualTo(new[] { job.Id }));
             Assert.Throws<IOException>(() => journal.Begin(Job("other.zip")));
             Assert.Throws<IOException>(() => journal.Complete(job));
             Assert.That(Directory.GetFiles(records, "*.pending").Length, Is.EqualTo(alter ? 1 : 0));
+        }
+
+        [Test]
+        public void MissingJournalDirectoryReportsCurrentJobIdentityWithoutRecreatingIt()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var job = Job("file.zip");
+            journal.Begin(job);
+            var preserved = Path.Combine(root, "preserved-journal");
+            Directory.Move(records, preserved);
+            var snapshot = journal.Inspect();
+            Assert.That(snapshot.IsComplete, Is.False);
+            Assert.That(snapshot.Records, Is.Empty);
+            Assert.That(snapshot.UnverifiedOwnedJobIds, Is.EqualTo(new[] { job.Id }));
+            Assert.That(Directory.Exists(records), Is.False);
+            Assert.That(Directory.GetFiles(preserved, "*.pending").Length, Is.EqualTo(1));
         }
 
         [Test]

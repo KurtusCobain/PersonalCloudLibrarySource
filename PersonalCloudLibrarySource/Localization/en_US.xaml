@@ -452,6 +452,7 @@
     <sys:String x:Key="LOCPLSTransferRecoveryReview">Review Transfer Recovery</sys:String>
     <sys:String x:Key="LOCPLSTransferRecoverySummary">Pending reservations: {0}; unreadable records: {1}.</sys:String>
     <sys:String x:Key="LOCPLSTransferRecoveryIncomplete">The journal could not be fully verified. Do not assume recovery is clear.</sys:String>
+    <sys:String x:Key="LOCPLSTransferRecoveryUnverifiedOwned">Current-session reservations not reconciled: {0}. Job IDs (first 20): {1}. Do not retry or edit the journal.</sys:String>
     <sys:String x:Key="LOCPLSTransferRecoveryAdvisory">Reservations may belong to active or interrupted transfers. This review does not authorize retry, deletion, or release. Preserve all staging and journal files.</sys:String>
     <sys:String x:Key="LOCPLSTransferRecoveryRecord">Job: {0}{1}Destination: {2} ({4}){1}Staging: {3} ({5})</sys:String>
     <sys:String x:Key="LOCPLSTransferRecoveryPathMissing">not found during review</sys:String>
@@ -462,7 +463,7 @@
     <sys:String x:Key="LOCPLSTransferRecoveryJournalLocation">Journal location: {0}</sys:String>
     <sys:String x:Key="LOCPLSTransferRecoveryOrigin">Marker origin: {0}</sys:String>
     <sys:String x:Key="LOCPLSTransferRecoveryOriginCurrent">recorded by this session; may still be active</sys:String>
-    <sys:String x:Key="LOCPLSTransferRecoveryOriginReplaced">identity changed; preserve evidence</sys:String>
+    <sys:String x:Key="LOCPLSTransferRecoveryOriginReplaced">identity or binding changed; preserve evidence</sys:String>
     <sys:String x:Key="LOCPLSTransferRecoveryOriginUnknown">unknown session; activity not established</sys:String>
     <sys:String x:Key="LOCPLSCommittedGenerationRequired">Save a valid local-folder configuration and close the settings editor before generating a catalog.</sys:String>
     <sys:String x:Key="LOCPLSCommittedGenerationCompleted">Generated and saved {0} catalog entries. Run Update Game Library to import them.</sys:String>

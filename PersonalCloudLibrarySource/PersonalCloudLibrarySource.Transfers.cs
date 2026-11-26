@@ -79,6 +79,13 @@ namespace PersonalCloudLibrarySource
                 if (!snapshot.IsComplete)
                     message.AppendLine(PclsResources.Get("LOCPLSTransferRecoveryIncomplete",
                         "The journal could not be fully verified. Do not assume recovery is clear."));
+                if (snapshot.UnverifiedOwnedJobIds.Count > 0)
+                {
+                    var sample = string.Join(", ", System.Linq.Enumerable.Take(snapshot.UnverifiedOwnedJobIds, 20));
+                    message.AppendLine(PclsResources.Format("LOCPLSTransferRecoveryUnverifiedOwned",
+                        "Current-session reservations not reconciled: {0}. Job IDs (first 20): {1}. Do not retry or edit the journal.",
+                        snapshot.UnverifiedOwnedJobIds.Count, sample));
+                }
                 message.AppendLine(PclsResources.Get("LOCPLSTransferRecoveryAdvisory",
                     "Reservations may belong to active or interrupted transfers. This review does not authorize retry, deletion, or release. Preserve all staging and journal files."));
                 message.AppendLine(PclsResources.Format("LOCPLSTransferRecoveryJournalLocation",
@@ -114,7 +121,7 @@ namespace PersonalCloudLibrarySource
                 case TransferRecoveryOrigin.CurrentJournal:
                     return PclsResources.Get("LOCPLSTransferRecoveryOriginCurrent", "recorded by this session; may still be active");
                 case TransferRecoveryOrigin.Replaced:
-                    return PclsResources.Get("LOCPLSTransferRecoveryOriginReplaced", "identity changed; preserve evidence");
+                    return PclsResources.Get("LOCPLSTransferRecoveryOriginReplaced", "identity or binding changed; preserve evidence");
                 default:
                     return PclsResources.Get("LOCPLSTransferRecoveryOriginUnknown", "unknown session; activity not established");
             }

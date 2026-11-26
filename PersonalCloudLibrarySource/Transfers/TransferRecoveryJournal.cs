@@ -51,14 +51,19 @@ namespace PersonalCloudLibrarySource
 
     public sealed class TransferRecoverySnapshot
     {
-        internal TransferRecoverySnapshot(List<TransferRecoveryRecord> records, int unreadableCount, bool complete)
+        internal TransferRecoverySnapshot(List<TransferRecoveryRecord> records, int unreadableCount,
+            bool complete, List<Guid> unverifiedOwnedJobIds)
         {
             Records = new ReadOnlyCollection<TransferRecoveryRecord>(records);
             UnreadableCount = unreadableCount;
-            IsComplete = complete;
+            UnverifiedOwnedJobIds = new ReadOnlyCollection<Guid>(unverifiedOwnedJobIds);
+            IsComplete = complete && unreadableCount == 0 && unverifiedOwnedJobIds.Count == 0;
         }
         public IReadOnlyList<TransferRecoveryRecord> Records { get; }
         public int UnreadableCount { get; }
+        // Missing, changed, unreadable or not fully observed. Not evidence
+        // that the job stopped or that any path may be deleted.
+        public IReadOnlyList<Guid> UnverifiedOwnedJobIds { get; }
         public bool IsComplete { get; }
     }
 
@@ -117,18 +122,18 @@ namespace PersonalCloudLibrarySource
             var complete = true;
             lock (syncRoot)
             {
+                var observedOwned = new HashSet<Guid>();
                 try
                 {
                     TransferPartialPathPolicy.RequireSafePath(directory);
                     FileAttributes attributes;
                     try { attributes = File.GetAttributes(directory); }
-                    catch (FileNotFoundException) { return new TransferRecoverySnapshot(records, 0, ownedMarkers.Count == 0); }
-                    catch (DirectoryNotFoundException) { return new TransferRecoverySnapshot(records, 0, ownedMarkers.Count == 0); }
+                    catch (FileNotFoundException) { return Snapshot(records, 0, true, observedOwned); }
+                    catch (DirectoryNotFoundException) { return Snapshot(records, 0, true, observedOwned); }
                     if ((attributes & FileAttributes.Directory) == 0)
-                        return new TransferRecoverySnapshot(records, 0, false);
+                        return Snapshot(records, 0, false, observedOwned);
 
                     var count = 0;
-                    var observedOwned = new HashSet<Guid>();
                     foreach (var marker in Directory.EnumerateFileSystemEntries(directory, "*.pending", SearchOption.TopDirectoryOnly))
                     {
                         if (++count > MaxRecords) { complete = false; break; }
@@ -160,11 +165,22 @@ namespace PersonalCloudLibrarySource
                         }
                         catch (Exception ex) when (IsInspectionFailure(ex)) { unreadable++; }
                     }
-                    if (observedOwned.Count != ownedMarkers.Count) complete = false;
                 }
                 catch (Exception ex) when (IsInspectionFailure(ex)) { complete = false; }
+                return Snapshot(records, unreadable, complete, observedOwned);
             }
-            return new TransferRecoverySnapshot(records, unreadable, complete && unreadable == 0);
+        }
+
+        // Called only under syncRoot. Include the IDs that could not be
+        // reconciled even when zero marker files were physically observed.
+        private TransferRecoverySnapshot Snapshot(List<TransferRecoveryRecord> records,
+            int unreadable, bool complete, HashSet<Guid> observedOwned)
+        {
+            var unverified = new List<Guid>();
+            foreach (var id in ownedMarkers.Keys)
+                if (!observedOwned.Contains(id)) unverified.Add(id);
+            unverified.Sort();
+            return new TransferRecoverySnapshot(records, unreadable, complete, unverified);
         }
 
         private static TransferRecoveryPathState InspectPath(string path)
