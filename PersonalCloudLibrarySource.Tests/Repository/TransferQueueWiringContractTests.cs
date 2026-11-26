@@ -77,6 +77,21 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             Assert.That(extraction, Does.Contain("zipHostStopping || token.IsCancellationRequested"));
         }
 
+        [Test]
+        public void HostLaunchChecksTransferRecoveryBeforeOrdinaryAndManagedActions()
+        {
+            var source = File.ReadAllText(Path.Combine(FindRepositoryRoot(),
+                "PersonalCloudLibrarySource", "PersonalCloudLibrarySource.ZipLaunchGuard.cs"));
+            var start = source.IndexOf("public override void OnGameStarting", StringComparison.Ordinal);
+            var launch = source.Substring(start);
+            Assert.That(launch.IndexOf("!IsTransferRecoveryClearForLaunch(", StringComparison.Ordinal),
+                Is.LessThan(launch.IndexOf("if (!gate.IsManagedAction", StringComparison.Ordinal)));
+            Assert.That(launch, Does.Contain("activeZipExtractions.ContainsKey(args.Game.Id)"));
+            Assert.That(launch, Does.Contain("decision.Applies && decision.Allowed &&"));
+            Assert.That(source, Does.Contain("manager.GetReservationSnapshot()"));
+            Assert.That(source, Does.Contain("IsClearForGameLaunch(gameId, launchPath, installDirectory)"));
+        }
+
         private static string FindRepositoryRoot()
         {
             var current = new DirectoryInfo(TestContext.CurrentContext.TestDirectory);

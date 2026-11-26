@@ -92,6 +92,48 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void LaunchGateBlocksRelatedReservationButAllowsUnrelatedGame()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var job = Job("package");
+            var other = Guid.NewGuid();
+            var method = typeof(TransferRecoveryJournal).GetMethod("IsClearForGameLaunch",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            Assert.That(method, Is.Not.Null);
+            Func<TransferRecoveryJournal, Guid, string, string, bool> clear =
+                (owner, game, path, folder) => (bool)method.Invoke(owner, new object[] { game, path, folder });
+            Assert.That(clear(journal, job.GameId, "", ""), Is.True);
+            Assert.That(Directory.Exists(records), Is.False);
+            journal.Begin(job);
+            var restarted = new TransferRecoveryJournal(records);
+            Assert.That(clear(journal, job.GameId, "", ""), Is.False);
+            Assert.That(clear(restarted, job.GameId, "", ""), Is.False);
+            Assert.That(clear(restarted, other, Path.Combine(job.Destination, "play.exe"), ""), Is.False);
+            Assert.That(clear(restarted, other, "", root), Is.False);
+            Assert.That(clear(restarted, other, Path.Combine(root, "other.exe"), ""), Is.True);
+            journal.Complete(job);
+            Assert.That(clear(restarted, job.GameId, "", ""), Is.True);
+        }
+
+        [TestCase(false)]
+        [TestCase(true)]
+        public void LaunchGateRefusesMissingOwnedOrCorruptRecordWithoutMutation(bool corrupt)
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var job = Job("package");
+            journal.Begin(job);
+            var marker = Path.Combine(records, job.Id.ToString("N") + ".pending");
+            if (corrupt) File.WriteAllText(marker, "invalid");
+            else File.Delete(marker);
+            var method = typeof(TransferRecoveryJournal).GetMethod("IsClearForGameLaunch",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            Assert.That(method, Is.Not.Null);
+            Assert.That(method.Invoke(journal, new object[] { Guid.NewGuid(), "", "" }), Is.False);
+            if (corrupt) Assert.That(File.ReadAllText(marker), Is.EqualTo("invalid"));
+            else Assert.That(File.Exists(marker), Is.False);
+        }
+
+        [Test]
         public void ExclusiveRemovalGateRefusesPendingMarkerAndDoesNotInvokeMutation()
         {
             var journal = new TransferRecoveryJournal(records);

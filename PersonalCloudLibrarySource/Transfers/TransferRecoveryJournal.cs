@@ -137,6 +137,67 @@ namespace PersonalCloudLibrarySource
             finally { Monitor.Exit(syncRoot); }
         }
 
+        // Read only reservation metadata, never the recorded destination.
+        // A valid unrelated reservation does not block launching another game.
+        // Unknown, malformed, changed or excessive evidence fails closed.
+        internal bool IsClearForGameLaunch(Guid gameId, string launchPath, string installDirectory)
+        {
+            if (gameId == Guid.Empty || !Monitor.TryEnter(syncRoot)) return false;
+            try
+            {
+                TransferPartialPathPolicy.RequireSafePath(directory);
+                FileAttributes attributes;
+                try { attributes = File.GetAttributes(directory); }
+                catch (FileNotFoundException) { return ownedMarkers.Count == 0; }
+                catch (DirectoryNotFoundException) { return ownedMarkers.Count == 0; }
+                if ((attributes & FileAttributes.Directory) == 0) return false;
+
+                var timer = Stopwatch.StartNew();
+                var observedOwned = new HashSet<Guid>();
+                var count = 0;
+                foreach (var marker in Directory.EnumerateFileSystemEntries(directory, "*.pending", SearchOption.TopDirectoryOnly))
+                {
+                    // A host launch is synchronous. Bound the amount of
+                    // metadata work and check elapsed time between reads.
+                    if (++count > 128 || timer.ElapsedMilliseconds >= 1000) return false;
+                    using (var stream = TransferPartialPathPolicy.OpenPrivateFileForReview(marker, false))
+                    {
+                        var identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
+                        var record = ReadRecord(marker, stream, false);
+                        OwnedReservation expected;
+                        if (ownedMarkers.TryGetValue(record.Item3, out expected))
+                        {
+                            if (!MatchesOwned(expected, identity, record)) return false;
+                            observedOwned.Add(record.Item3);
+                        }
+                        if (ConflictsWithLaunch(record.Item1, record.Item2, record.Item3,
+                            gameId, launchPath, installDirectory))
+                            return false;
+                    }
+                }
+                return observedOwned.Count == ownedMarkers.Count && timer.ElapsedMilliseconds < 1000;
+            }
+            catch (Exception ex) when (IsInspectionFailure(ex) || ex is InvalidOperationException) { return false; }
+            finally { Monitor.Exit(syncRoot); }
+        }
+
+        internal static bool ConflictsWithLaunch(Guid reservedGame, string destination, Guid jobId,
+            Guid gameId, string launchPath, string installDirectory)
+        {
+            if (reservedGame == gameId) return true;
+            var staging = TransferPartialPathPolicy.Create(destination, jobId);
+            return LaunchPathOverlaps(launchPath, destination, staging) ||
+                LaunchPathOverlaps(installDirectory, destination, staging);
+        }
+
+        private static bool LaunchPathOverlaps(string path, string destination, string staging)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !Path.IsPathRooted(path)) return false;
+            if (!SafeCacheDeletionPolicy.IsFullyRooted(path) || SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(path))
+                return true;
+            return Overlaps(path, destination) || Overlaps(path, staging);
+        }
+
         // Serialize an already-authorized hosted file-only removal against
         // cooperating journal transactions. This is not deletion authorization
         // by itself. Unlike the advisory gate, a mutation may create the
@@ -408,7 +469,7 @@ namespace PersonalCloudLibrarySource
             }
         }
 
-        private Tuple<Guid, string, Guid> ReadRecord(string path, FileStream stream)
+        private Tuple<Guid, string, Guid> ReadRecord(string path, FileStream stream, bool inspectDestination = true)
         {
             var length = stream.Length;
             if (length <= 0 || length > MaxRecordBytes)
@@ -441,7 +502,7 @@ namespace PersonalCloudLibrarySource
             var destination = PathBoundary.Normalize(fields[3]);
             if (!string.Equals(destination, fields[3], StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Transfer recovery destination is not canonical.");
-            TransferPartialPathPolicy.RequireSafePath(destination);
+            if (inspectDestination) TransferPartialPathPolicy.RequireSafePath(destination);
             var staging = TransferPartialPathPolicy.Create(destination, jobId);
             if (Overlaps(directory, destination) || Overlaps(directory, staging))
                 throw new IOException("Transfer recovery record overlaps journal storage.");

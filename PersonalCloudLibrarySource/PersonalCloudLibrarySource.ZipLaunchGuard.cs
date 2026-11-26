@@ -8,6 +8,26 @@ namespace PersonalCloudLibrarySource
 {
     public partial class PersonalCloudLibrarySource
     {
+        private bool IsTransferRecoveryClearForLaunch(Guid gameId, string launchPath, string installDirectory)
+        {
+            if (zipHostStopping || transferPresentationDisposed) return false;
+            try
+            {
+                var manager = transferManager;
+                if (manager != null)
+                    foreach (var job in manager.GetReservationSnapshot())
+                        if (TransferRecoveryJournal.ConflictsWithLaunch(job.GameId, job.Destination, job.Id,
+                            gameId, launchPath, installDirectory))
+                            return false;
+                return GetTransferRecoveryJournal().IsClearForGameLaunch(gameId, launchPath, installDirectory);
+            }
+            catch (Exception ex)
+            {
+                logger.Warn(ex, "PCLS could not establish transfer recovery state for launch.");
+                return false;
+            }
+        }
+
         public override void OnGameStarting(OnGameStartingEventArgs args)
         {
             if (args?.Game == null || args.Game.PluginId != Id)
@@ -17,17 +37,19 @@ namespace PersonalCloudLibrarySource
             // game while file-level deletion is in progress. This complements
             // the IsRunning/IsLaunching check performed before cleanup.
             if (activeZipCleanups.ContainsKey(args.Game.Id) ||
-                activeZipRecoveries.ContainsKey(args.Game.Id))
+                activeZipRecoveries.ContainsKey(args.Game.Id) ||
+                activeZipExtractions.ContainsKey(args.Game.Id) ||
+                !IsTransferRecoveryClearForLaunch(args.Game.Id, args.SourceAction?.Path, args.Game.InstallDirectory))
             {
                 args.CancelStartup = true;
-                logger.Warn("PCLS prevented game startup during managed ZIP recovery or cleanup.");
+                logger.Warn("PCLS prevented game startup during package work or unresolved transfer recovery.");
                 try
                 {
                     playniteApi.Dialogs.ShowMessage(
-                        PclsResources.Get("LOCPLSZipLifecycleLaunchBusy",
-                            "This game cannot start while its managed ZIP recovery or cleanup is in progress."),
-                        PclsResources.Get("LOCPLSZipLaunchBlockedTitle",
-                            "Managed ZIP Launch Blocked"),
+                        PclsResources.Get("LOCPLSTransferRecoveryLaunchBusy",
+                            "This game cannot start while its transfer or ZIP operation is active, or recovery evidence cannot be verified. Preserve files and review transfer recovery."),
+                        PclsResources.Get("LOCPLSTransferRecoveryLaunchTitle",
+                            "Library Launch Deferred"),
                         MessageBoxButton.OK, MessageBoxImage.Warning);
                 }
                 catch (Exception ex)
@@ -69,7 +91,8 @@ namespace PersonalCloudLibrarySource
                         item, snapshot, receipts, approvals,
                         verification.Token, baseline);
                 }
-                if (decision.Applies && decision.Allowed)
+                if (decision.Applies && decision.Allowed &&
+                    IsTransferRecoveryClearForLaunch(args.Game.Id, args.SourceAction?.Path, args.Game.InstallDirectory))
                     return;
 
                 args.CancelStartup = true;
