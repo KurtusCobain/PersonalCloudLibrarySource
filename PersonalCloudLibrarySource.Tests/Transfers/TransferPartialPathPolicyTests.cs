@@ -21,6 +21,38 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(partial, Does.StartWith(Path.GetFullPath(destination) + ".pcls-partial-"));
         }
 
+        [Test]
+        public void PublicationAncestorGuardRefusesOrdinaryDirectoryRenamesUntilReleased()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "PCLS-AncestorGuardTests", Guid.NewGuid().ToString("N"));
+            var grandparent = Path.Combine(root, "grandparent");
+            var parent = Path.Combine(grandparent, "parent");
+            var movedParent = Path.Combine(grandparent, "moved-parent");
+            var movedGrandparent = Path.Combine(root, "moved-grandparent");
+            Directory.CreateDirectory(parent);
+            try
+            {
+                var method = typeof(TransferPartialPathPolicy).GetMethod("PinPublicationAncestors",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                Assert.That(method, Is.Not.Null);
+                using (var guard = (IDisposable)method.Invoke(null, new object[] { parent }))
+                {
+                    Assert.Catch(() => Directory.Move(parent, movedParent));
+                    Assert.Catch(() => Directory.Move(grandparent, movedGrandparent));
+                    Assert.That(Directory.Exists(parent), Is.True);
+                    Assert.That(Directory.Exists(movedParent), Is.False);
+                    Assert.That(Directory.Exists(movedGrandparent), Is.False);
+                    // Ordinary child creation is not blocked by the guard.
+                    File.WriteAllText(Path.Combine(parent, "fixture.txt"), "fixture");
+                }
+                Directory.Move(parent, movedParent);
+                Assert.That(File.ReadAllText(Path.Combine(movedParent, "fixture.txt")), Is.EqualTo("fixture"));
+                Directory.Move(grandparent, movedGrandparent);
+                Assert.That(Directory.Exists(Path.Combine(movedGrandparent, "moved-parent")), Is.True);
+            }
+            finally { Directory.Delete(root, true); }
+        }
+
         [TestCase(false)]
         [TestCase(true)]
         public void ReplacementRefusesInvalidOriginalOrOccupiedBackupBeforeStaging(bool occupiedBackup)

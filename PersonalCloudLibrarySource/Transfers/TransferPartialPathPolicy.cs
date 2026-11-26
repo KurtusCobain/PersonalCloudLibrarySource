@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
@@ -269,16 +270,110 @@ namespace PersonalCloudLibrarySource
         private static extern bool SetRenameInformation(SafeFileHandle handle,
             int informationClass, IntPtr information, uint size);
 
-        // Bind the source of publication to the inspected handle, never a
-        // second source pathname. The target is a validated sibling and the
-        // native no-replace flag also rejects a late destination collision.
-        // Full ancestor-relative target resolution remains a separate gate.
+        // Hold ordinary directory handles below the volume/share root. Use
+        // FILE_LIST_DIRECTORY (data read) as well as FILE_READ_ATTRIBUTES:
+        // a metadata-only handle is not a rename/delete guard. Deny delete
+        // sharing while allowing ordinary sibling operations. Root mappings,
+        // nonparticipating filesystem providers and reparse mutations still
+        // require independent qualification; this is not a namespace sandbox.
+        private sealed class PublicationAncestors : IDisposable
+        {
+            private sealed class PinnedDirectory
+            {
+                public string Path;
+                public SafeFileHandle Handle;
+                public FileIdentity Identity;
+            }
+
+            private readonly List<PinnedDirectory> directories = new List<PinnedDirectory>();
+
+            public PublicationAncestors(string parent)
+            {
+                var chain = new Stack<string>();
+                var root = Path.GetPathRoot(parent);
+                if (string.IsNullOrWhiteSpace(root))
+                    throw new IOException("Publication parent is not rooted.");
+                var normalizedRoot = root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                for (var current = parent; !string.IsNullOrEmpty(current) &&
+                    !string.Equals(current.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                        normalizedRoot, StringComparison.OrdinalIgnoreCase);
+                    current = Path.GetDirectoryName(current))
+                {
+                    if (chain.Count >= 256)
+                        throw new IOException("Publication ancestor depth exceeds the safety limit.");
+                    chain.Push(current);
+                }
+                try
+                {
+                    while (chain.Count > 0)
+                    {
+                        var path = chain.Pop();
+                        var handle = OpenNativeFile(path, 0x81u, 3u, IntPtr.Zero, 3u, 0x02200000u, IntPtr.Zero);
+                        if (handle.IsInvalid)
+                        {
+                            var error = Marshal.GetLastWin32Error();
+                            handle.Dispose();
+                            throw new IOException("Publication ancestor could not be guarded.",
+                                new System.ComponentModel.Win32Exception(error));
+                        }
+                        try
+                        {
+                            directories.Add(new PinnedDirectory
+                            {
+                                Path = path, Handle = handle, Identity = CaptureDirectoryIdentity(handle)
+                            });
+                        }
+                        catch { handle.Dispose(); throw; }
+                    }
+                    Verify();
+                }
+                catch { Dispose(); throw; }
+            }
+
+            public void Verify()
+            {
+                foreach (var directory in directories)
+                {
+                    if (!SameIdentity(CaptureDirectoryIdentity(directory.Handle), directory.Identity) ||
+                        !SameIdentity(ObservePublicationObject(directory.Path, true), directory.Identity))
+                        throw new IOException("Publication ancestor identity changed.");
+                }
+            }
+
+            public void Dispose()
+            {
+                for (var index = directories.Count - 1; index >= 0; index--)
+                    directories[index].Handle.Dispose();
+                directories.Clear();
+            }
+        }
+
+        private static PublicationAncestors PinPublicationAncestors(string parent)
+            => new PublicationAncestors(parent);
+
+        private static FileIdentity ObservePublicationObject(string path, bool directory)
+        {
+            // Metadata-only observation must share all accesses of the
+            // primary inspected source handle, including DELETE access.
+            using (var observed = OpenNativeFile(path, 0x80u, 7u, IntPtr.Zero, 3u, 0x02200000u, IntPtr.Zero))
+            {
+                if (observed.IsInvalid)
+                    throw new IOException("Publication object could not be re-observed.",
+                        new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()));
+                return directory ? CaptureDirectoryIdentity(observed) : CapturePrivateFileIdentity(observed);
+            }
+        }
+
+        // Retain the qualified absolute sibling native no-replace rename.
+        // Unlike the withdrawn relative-name experiment, the ancestor guards
+        // do not change the native rename buffer, flags or RootDirectory.
         internal static void PublishVerifiedHandle(SafeFileHandle handle, string staging, string destination)
         {
             var sourceFull = Path.GetFullPath(staging);
             var targetFull = Path.GetFullPath(destination);
-            if (!string.Equals(Path.GetDirectoryName(sourceFull), Path.GetDirectoryName(targetFull),
-                StringComparison.OrdinalIgnoreCase) ||
+            var parent = Path.GetDirectoryName(targetFull);
+            if (string.IsNullOrEmpty(parent) ||
+                !string.Equals(Path.GetDirectoryName(sourceFull), parent, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(sourceFull, targetFull, StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Publication must rename staging to a distinct sibling.");
             RequireSafePath(sourceFull);
@@ -288,31 +383,34 @@ namespace PersonalCloudLibrarySource
                 throw new IOException("Publication source handle could not be inspected.");
             var directory = (sourceInformation.Attributes & (uint)FileAttributes.Directory) != 0;
             var expected = directory ? CaptureDirectoryIdentity(handle) : CapturePrivateFileIdentity(handle);
-            // FILE_READ_ATTRIBUTES only; share all existing accesses of the
-            // primary inspected handle, including its DELETE access.
-            using (var observed = OpenNativeFile(sourceFull, 0x80u, 7u, IntPtr.Zero, 3u, 0x02200000u, IntPtr.Zero))
+            using (var ancestors = PinPublicationAncestors(parent))
             {
-                if (observed.IsInvalid ||
-                    !SameIdentity(directory ? CaptureDirectoryIdentity(observed) : CapturePrivateFileIdentity(observed), expected))
+                RequireSafePath(sourceFull);
+                RequireSafePath(targetFull);
+                if (!SameIdentity(ObservePublicationObject(sourceFull, directory), expected))
                     throw new IOException("Publication source pathname does not identify the inspected handle.");
+                ancestors.Verify();
+                var name = System.Text.Encoding.Unicode.GetBytes(targetFull);
+                var nameOffset = Marshal.OffsetOf(typeof(RenameHeader), nameof(RenameHeader.FirstCharacter)).ToInt32();
+                var lengthOffset = Marshal.OffsetOf(typeof(RenameHeader), nameof(RenameHeader.NameBytes)).ToInt32();
+                var size = Math.Max(Marshal.SizeOf(typeof(RenameHeader)), checked(nameOffset + name.Length + 2));
+                var info = Marshal.AllocHGlobal(size);
+                try
+                {
+                    // Zero flags (ReplaceIfExists=false), zero root (absolute
+                    // target), and a NUL-terminated length-delimited UTF-16 name.
+                    Marshal.Copy(new byte[size], 0, info, size);
+                    Marshal.WriteInt32(info, lengthOffset, name.Length);
+                    Marshal.Copy(name, 0, IntPtr.Add(info, nameOffset), name.Length);
+                    if (!SetRenameInformation(handle, 3, info, (uint)size)) // FileRenameInfo
+                        throw new IOException("Verified staging could not be published without replacement.",
+                            new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()));
+                    ancestors.Verify();
+                    if (!SameIdentity(ObservePublicationObject(targetFull, directory), expected))
+                        throw new IOException("Published pathname does not identify the inspected handle.");
+                }
+                finally { Marshal.FreeHGlobal(info); }
             }
-            var name = System.Text.Encoding.Unicode.GetBytes(targetFull);
-            var nameOffset = Marshal.OffsetOf(typeof(RenameHeader), nameof(RenameHeader.FirstCharacter)).ToInt32();
-            var lengthOffset = Marshal.OffsetOf(typeof(RenameHeader), nameof(RenameHeader.NameBytes)).ToInt32();
-            var size = Math.Max(Marshal.SizeOf(typeof(RenameHeader)), checked(nameOffset + name.Length + 2));
-            var info = Marshal.AllocHGlobal(size);
-            try
-            {
-                // Zero flags (ReplaceIfExists=false), zero root (absolute
-                // target), and a NUL-terminated length-delimited UTF-16 name.
-                Marshal.Copy(new byte[size], 0, info, size);
-                Marshal.WriteInt32(info, lengthOffset, name.Length);
-                Marshal.Copy(name, 0, IntPtr.Add(info, nameOffset), name.Length);
-                if (!SetRenameInformation(handle, 3, info, (uint)size)) // FileRenameInfo
-                    throw new IOException("Verified staging could not be published without replacement.",
-                        new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error()));
-            }
-            finally { Marshal.FreeHGlobal(info); }
         }
 
         internal static void PublishOwnedDirectory(string staging, string destination, FileIdentity expected)
