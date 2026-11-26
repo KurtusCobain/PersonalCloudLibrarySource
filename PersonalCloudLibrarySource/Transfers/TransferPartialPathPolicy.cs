@@ -318,7 +318,7 @@ namespace PersonalCloudLibrarySource
         // sharing while allowing ordinary sibling operations. Root mappings,
         // nonparticipating filesystem providers and reparse mutations still
         // require independent qualification; this is not a namespace sandbox.
-        private sealed class PublicationAncestors : IDisposable
+        internal sealed class PublicationAncestors : IDisposable
         {
             private sealed class PinnedDirectory
             {
@@ -390,7 +390,7 @@ namespace PersonalCloudLibrarySource
             }
         }
 
-        private static PublicationAncestors PinPublicationAncestors(string parent)
+        internal static PublicationAncestors PinPublicationAncestors(string parent)
             => new PublicationAncestors(parent);
 
         private static FileIdentity ObservePublicationObject(string path, bool directory)
@@ -583,10 +583,32 @@ namespace PersonalCloudLibrarySource
         {
             if (stream.Length <= 0 || stream.Length > maxRecordBytes)
                 throw new IOException("Private record exceeds its digest size limit.");
-            // The read handle excludes ordinary writers. Bound the read to
-            // the validated record budget rather than hashing arbitrary data.
+            return ComputeExactFileDigest(stream, stream.Length);
+        }
+
+        // Hash only the observed file length plus an EOF check, never
+        // arbitrary growth beyond the inspected byte budget.
+        internal static byte[] ComputeExactFileDigest(FileStream stream, long expectedLength)
+        {
+            if (expectedLength < 0 || stream.Length != expectedLength)
+                throw new IOException("Inspected file length changed.");
+            stream.Position = 0;
+            var buffer = new byte[65536];
+            var remaining = expectedLength;
             using (var sha = System.Security.Cryptography.SHA256.Create())
-                return sha.ComputeHash(stream);
+            {
+                while (remaining > 0)
+                {
+                    var count = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                    if (count <= 0) throw new IOException("Inspected file was truncated.");
+                    sha.TransformBlock(buffer, 0, count, buffer, 0);
+                    remaining -= count;
+                }
+                if (stream.ReadByte() != -1 || stream.Length != expectedLength)
+                    throw new IOException("Inspected file grew.");
+                sha.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+                return sha.Hash;
+            }
         }
 
         private static void RequireRecordDigest(FileStream stream, byte[] expected, int maxRecordBytes)
@@ -599,7 +621,7 @@ namespace PersonalCloudLibrarySource
                     throw new IOException("Private record content changed.");
         }
 
-        private static FileIdentity WriteRecordStage(string temporary, byte[] payload)
+        internal static FileIdentity WriteRecordStage(string temporary, byte[] payload)
         {
             RequireVacant(temporary);
             using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
@@ -611,7 +633,7 @@ namespace PersonalCloudLibrarySource
             }
         }
 
-        private static void VerifyRecordStage(FileStream input, FileIdentity identity,
+        internal static void VerifyRecordStage(FileStream input, FileIdentity identity,
             byte[] payload, System.Threading.CancellationToken token)
         {
             if (!MatchesPrivateFileIdentity(input.SafeFileHandle, identity) || input.Length != payload.Length)

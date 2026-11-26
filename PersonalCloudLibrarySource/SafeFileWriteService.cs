@@ -20,104 +20,138 @@ namespace PersonalCloudLibrarySource
             WriteAllText(path, content, backupDirectory, createBackup);
         }
 
-        private static void WriteBytes(string path, byte[] content, string backupDirectory, bool createBackup)
+        internal static string ValidateOutputPath(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
-            {
                 throw new ArgumentException("A target path is required.", nameof(path));
-            }
-
-            var targetDirectory = Path.GetDirectoryName(path);
-            if (string.IsNullOrWhiteSpace(targetDirectory))
+            ValidateOrdinaryPath(path);
+            if (string.IsNullOrWhiteSpace(Path.GetDirectoryName(path)))
                 throw new InvalidOperationException("The target path must include a directory.");
+            var full = Path.GetFullPath(path);
+            TransferPartialPathPolicy.RequireSafePath(full);
+            return full;
+        }
 
-            path = Path.GetFullPath(path);
-            targetDirectory = Path.GetDirectoryName(path);
-            TransferPartialPathPolicy.RequireSafePath(path);
+        internal static void ValidateOrdinaryPath(string path)
+        {
+            if (SafeCacheDeletionPolicy.IsUnsupportedWindowsPath(path) ||
+                (Path.IsPathRooted(path) && !SafeCacheDeletionPolicy.IsFullyRooted(path)))
+                throw new IOException("Path uses an unsupported Windows namespace or name.");
+        }
+
+        private static void WriteBytes(string path, byte[] content, string backupDirectory, bool createBackup)
+        {
+            path = ValidateOutputPath(path);
+            if (createBackup && !string.IsNullOrWhiteSpace(backupDirectory))
+                ValidateOrdinaryPath(backupDirectory);
+            var targetDirectory = Path.GetDirectoryName(path);
             Directory.CreateDirectory(targetDirectory);
             TransferPartialPathPolicy.RequireSafePath(targetDirectory);
-
-            // A new output and a replacement are distinct operations. Do not
-            // switch from one to the other after a concurrent path change.
-            TransferPartialPathPolicy.FileIdentity? original = null;
-            if (File.Exists(path))
-            {
-                using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
-                    original = TransferPartialPathPolicy.CapturePrivateFileIdentity(input.SafeFileHandle);
-            }
-            else TransferPartialPathPolicy.RequireVacant(path);
-
-            var tempPath = Path.Combine(targetDirectory, Guid.NewGuid().ToString("N") + ".tmp");
-            TransferPartialPathPolicy.RequireVacant(tempPath);
             var bytes = content ?? Array.Empty<byte>();
-            TransferPartialPathPolicy.FileIdentity staged;
-            using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+            using (var ancestors = TransferPartialPathPolicy.PinPublicationAncestors(targetDirectory))
             {
-                staged = TransferPartialPathPolicy.CapturePrivateFileIdentity(stream.SafeFileHandle);
-                stream.Write(bytes, 0, bytes.Length);
-                stream.Flush(true);
-            }
-
-            // For new files, publish through the exact verified handle.
-            // On uncertain failure preserve evidence instead of deleting by name.
-            using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(tempPath, true))
-            {
-                if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(input.SafeFileHandle, staged) ||
-                    input.Length != bytes.Length)
-                    throw new IOException("Output staging identity or length changed.");
-                var buffer = new byte[65536];
-                var offset = 0;
-                while (offset < bytes.Length)
+                TransferPartialPathPolicy.RequireSafePath(path);
+                var temporary = Path.Combine(targetDirectory, Guid.NewGuid().ToString("N") + ".tmp");
+                if (!File.Exists(path))
                 {
-                    var count = input.Read(buffer, 0, Math.Min(buffer.Length, bytes.Length - offset));
-                    if (count == 0) throw new IOException("Output staging was truncated.");
-                    for (var i = 0; i < count; i++)
-                        if (buffer[i] != bytes[offset + i])
-                            throw new IOException("Output staging changed.");
-                    offset += count;
-                }
-                if (input.ReadByte() != -1) throw new IOException("Output staging grew.");
-                if (!original.HasValue)
-                {
-                    TransferPartialPathPolicy.PublishVerifiedHandle(input.SafeFileHandle, tempPath, path);
+                    TransferPartialPathPolicy.RequireVacant(path);
+                    var staged = TransferPartialPathPolicy.WriteRecordStage(temporary, bytes);
+                    using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(temporary, true))
+                    {
+                        TransferPartialPathPolicy.VerifyRecordStage(input, staged, bytes, System.Threading.CancellationToken.None);
+                        TransferPartialPathPolicy.PublishVerifiedHandle(input.SafeFileHandle, temporary, path);
+                    }
+                    TransferPartialPathPolicy.RequireVacant(temporary);
                     return;
                 }
-            }
 
-            // Replacement retains the existing File.Replace compatibility
-            // contract. Check the original again and copy its backup while
-            // holding a read handle that denies ordinary writes and deletion.
-            using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
-            {
-                if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(input.SafeFileHandle, original.Value))
-                    throw new IOException("Output target changed before replacement.");
-                if (createBackup && !string.IsNullOrWhiteSpace(backupDirectory))
+                // Hold the original through staging, verification and backup.
+                // The final File.Replace call still requires closed leaf handles.
+                using (var original = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
                 {
-                    backupDirectory = Path.GetFullPath(backupDirectory);
-                    TransferPartialPathPolicy.RequireSafePath(backupDirectory);
-                    Directory.CreateDirectory(backupDirectory);
-                    TransferPartialPathPolicy.RequireSafePath(backupDirectory);
-                    var backupPath = Path.Combine(backupDirectory, Path.GetFileName(path) + "." +
-                        DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "." + Guid.NewGuid().ToString("N") + ".bak");
-                    TransferPartialPathPolicy.RequireVacant(backupPath);
-                    using (var backup = new FileStream(backupPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                    TransferPartialPathPolicy.CapturePrivateFileIdentity(original.SafeFileHandle);
+                    var staged = TransferPartialPathPolicy.WriteRecordStage(temporary, bytes);
+                    using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(temporary, false))
                     {
-                        input.CopyTo(backup);
-                        backup.Flush(true);
+                        TransferPartialPathPolicy.VerifyRecordStage(input, staged, bytes, System.Threading.CancellationToken.None);
+                        if (createBackup && !string.IsNullOrWhiteSpace(backupDirectory))
+                            PublishBackup(original, path, backupDirectory);
+                        ancestors.Verify();
+                        input.Position = 0;
+                        TransferPartialPathPolicy.VerifyRecordStage(input, staged, bytes, System.Threading.CancellationToken.None);
                     }
                 }
+                File.Replace(temporary, path, null);
+                // Report uncertainty without rolling back by pathname.
+                ancestors.Verify();
+                TransferPartialPathPolicy.RequireVacant(temporary);
+                using (var result = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
+                {
+                    var identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(result.SafeFileHandle);
+                    TransferPartialPathPolicy.VerifyRecordStage(result, identity, bytes, System.Threading.CancellationToken.None);
+                }
             }
-            // File.Replace requires closed handles. This is a narrowed
-            // pathname replacement window, not an atomic identity comparison.
-            TransferPartialPathPolicy.RequireSafePath(path);
-            TransferPartialPathPolicy.RequireSafePath(tempPath);
-            using (var check = TransferPartialPathPolicy.OpenPrivateFileForReview(tempPath, false))
-                if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(check.SafeFileHandle, staged))
-                    throw new IOException("Output staging was replaced.");
-            using (var check = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
-                if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(check.SafeFileHandle, original.Value))
-                    throw new IOException("Output target was replaced.");
-            File.Replace(tempPath, path, null);
+        }
+
+        private static void PublishBackup(FileStream original, string target, string backupDirectory)
+        {
+            backupDirectory = Path.GetFullPath(backupDirectory);
+            TransferPartialPathPolicy.RequireSafePath(backupDirectory);
+            Directory.CreateDirectory(backupDirectory);
+            TransferPartialPathPolicy.RequireSafePath(backupDirectory);
+            using (var ancestors = TransferPartialPathPolicy.PinPublicationAncestors(backupDirectory))
+            {
+                var backupPath = Path.Combine(backupDirectory, Path.GetFileName(target) + "." +
+                    DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + "." + Guid.NewGuid().ToString("N") + ".bak");
+                var stagePath = Path.Combine(backupDirectory, Guid.NewGuid().ToString("N") + ".tmp");
+                TransferPartialPathPolicy.RequireVacant(backupPath);
+                TransferPartialPathPolicy.RequireVacant(stagePath);
+                var length = original.Length;
+                var expected = TransferPartialPathPolicy.ComputeExactFileDigest(original, length);
+                original.Position = 0;
+                TransferPartialPathPolicy.FileIdentity staged;
+                using (var backup = new FileStream(stagePath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None))
+                {
+                    staged = TransferPartialPathPolicy.CapturePrivateFileIdentity(backup.SafeFileHandle);
+                    var buffer = new byte[65536];
+                    var remaining = length;
+                    while (remaining > 0)
+                    {
+                        var count = original.Read(buffer, 0, (int)Math.Min(buffer.Length, remaining));
+                        if (count <= 0) throw new IOException("Backup source was truncated.");
+                        backup.Write(buffer, 0, count);
+                        remaining -= count;
+                    }
+                    if (original.ReadByte() != -1 || original.Length != length)
+                        throw new IOException("Backup source changed.");
+                    backup.Flush(true);
+                }
+                using (var backup = TransferPartialPathPolicy.OpenPrivateFileForReview(stagePath, true))
+                {
+                    if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(backup.SafeFileHandle, staged) ||
+                        !SameDigest(TransferPartialPathPolicy.ComputeExactFileDigest(backup, length), expected))
+                        throw new IOException("Backup stage identity or content changed.");
+                    ancestors.Verify();
+                    TransferPartialPathPolicy.PublishVerifiedHandle(backup.SafeFileHandle, stagePath, backupPath);
+                }
+                TransferPartialPathPolicy.RequireVacant(stagePath);
+                using (var backup = TransferPartialPathPolicy.OpenPrivateFileForReview(backupPath, false))
+                {
+                    if (!TransferPartialPathPolicy.MatchesPrivateFileIdentity(backup.SafeFileHandle, staged) ||
+                        !SameDigest(TransferPartialPathPolicy.ComputeExactFileDigest(backup, length), expected))
+                        throw new IOException("Published backup could not be verified.");
+                }
+                if (!SameDigest(TransferPartialPathPolicy.ComputeExactFileDigest(original, length), expected))
+                    throw new IOException("Original changed during backup creation.");
+            }
+        }
+
+        private static bool SameDigest(byte[] first, byte[] second)
+        {
+            if (first.Length != second.Length) return false;
+            for (var i = 0; i < first.Length; i++)
+                if (first[i] != second[i]) return false;
+            return true;
         }
     }
 }

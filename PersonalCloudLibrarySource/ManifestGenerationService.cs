@@ -143,6 +143,7 @@ namespace PersonalCloudLibrarySource
                 throw new InvalidOperationException("A source root folder is required.");
             }
 
+            SafeFileWriteService.ValidateOrdinaryPath(options.SourceRoot);
             if (!fileSystem.DirectoryExists(options.SourceRoot))
             {
                 throw new DirectoryNotFoundException("The source root folder was not found: " + options.SourceRoot);
@@ -153,10 +154,18 @@ namespace PersonalCloudLibrarySource
                 throw new InvalidOperationException("An output manifest path is required.");
             }
 
-            if (!previewOnly && !options.NoReport && !string.IsNullOrWhiteSpace(options.ReportPath) &&
-                string.Equals(Path.GetFullPath(options.OutputPath), Path.GetFullPath(options.ReportPath),
-                    StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("Manifest and report must have different output paths.");
+            if (!previewOnly)
+            {
+                var output = SafeFileWriteService.ValidateOutputPath(options.OutputPath);
+                if (!options.NoReport && !string.IsNullOrWhiteSpace(options.ReportPath))
+                {
+                    var reportPath = SafeFileWriteService.ValidateOutputPath(options.ReportPath);
+                    if (string.Equals(output, reportPath, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidOperationException("Manifest and report must have different output paths.");
+                }
+                if (!string.IsNullOrWhiteSpace(options.BackupDirectory))
+                    SafeFileWriteService.ValidateOrdinaryPath(options.BackupDirectory);
+            }
 
             var includeExtensions = options.IncludeExtensions.Count == 0
                 ? DefaultSingleFileExtensions
@@ -375,12 +384,7 @@ namespace PersonalCloudLibrarySource
             var json = Serialization.ToJson(report.Manifest);
             ValidateSerializedManifest(json);
 
-            var outputDirectory = Path.GetDirectoryName(options.OutputPath);
             cancellationToken.ThrowIfCancellationRequested();
-            if (!string.IsNullOrWhiteSpace(outputDirectory))
-            {
-                Directory.CreateDirectory(outputDirectory);
-            }
 
             safeFileWriteService.WriteAllText(
                 options.OutputPath,
@@ -391,12 +395,6 @@ namespace PersonalCloudLibrarySource
             if (!options.NoReport && !string.IsNullOrWhiteSpace(options.ReportPath))
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var reportDirectory = Path.GetDirectoryName(options.ReportPath);
-                if (!string.IsNullOrWhiteSpace(reportDirectory))
-                {
-                    Directory.CreateDirectory(reportDirectory);
-                }
-
                 safeFileWriteService.WriteAllLines(
                     options.ReportPath,
                     BuildReportLines(report),

@@ -83,6 +83,51 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void SafeWriter_RejectsRawAliasesAndKeepsEmptyBackupCompatible()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "PCLS-Writer-Alias-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            try
+            {
+                var target = Path.Combine(root, "catalog.json");
+                var backup = Path.Combine(root, "backups");
+                var writer = new SafeFileWriteService();
+                writer.WriteAllText(target, string.Empty);
+                Assert.Throws<IOException>(() => writer.WriteAllText(target + ".", "unexpected", backup, true));
+                Assert.That(File.ReadAllText(target), Is.Empty);
+                Assert.That(Directory.Exists(backup), Is.False);
+                Assert.That(Directory.GetFiles(root, "*.tmp"), Is.Empty);
+
+                writer.WriteAllText(target, "replacement", backup, true);
+                Assert.That(File.ReadAllText(target), Is.EqualTo("replacement"));
+                Assert.That(Directory.GetFiles(backup, "*.bak").Select(File.ReadAllText), Is.EqualTo(new[] { "" }));
+                Assert.That(Directory.GetFiles(backup, "*.tmp"), Is.Empty);
+            }
+            finally { Directory.Delete(root, true); }
+        }
+
+        [Test]
+        public void Generation_RefusesAmbiguousReportBeforeManifestOrDirectoryCreation()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "PCLS-Report-Alias-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            try
+            {
+                File.WriteAllText(Path.Combine(root, "fixture.nes"), "fixture");
+                var outputDirectory = Path.Combine(root, "new-output");
+                Assert.Throws<IOException>(() => new ManifestGenerationService().Generate(
+                    new ManifestGenerationOptions
+                    {
+                        SourceRoot = root,
+                        OutputPath = Path.Combine(outputDirectory, "catalog.json"),
+                        ReportPath = Path.Combine(outputDirectory, "report.txt.")
+                    }));
+                Assert.That(Directory.Exists(outputDirectory), Is.False);
+            }
+            finally { Directory.Delete(root, true); }
+        }
+
+        [Test]
         public void SafeWriter_RepeatedUpdatesPreserveEveryBackup()
         {
             var root = Path.Combine(Path.GetTempPath(), "PCLS-BackupFixture-" + Guid.NewGuid().ToString("N"));
