@@ -82,6 +82,13 @@ The following supplement A10–A32. They remain NOT RUN until performed in the d
 | R07 | Actual low-capacity destination (disposable volume only) | Local/ZIP preflight fails safely if measured insufficient; unknown capacity not presented as a guarantee; source retained | |
 | R08 | Concurrent private metadata replacement | Locked/changed records and occupied backup names refuse when detected; preserve ambiguous evidence, record remaining pathname race as a limitation | |
 
+| R09 | External LocalFile source in Desktop and Fullscreen | With a disposable external fixture, no content access before consent; denial queues nothing, explicit approval applies only to exact path, stale settings refuse; configured roots retain compatibility | |
+| R10 | Unapproved external ZIP and source navigation | Menu eligibility is lexical; denial causes no file access; approved ZIP review is read-only; extraction still requires separate consent | |
+| R11 | Missing/changed owned marker during disposable transfer | New reservations blocked, recovery reports unreconciled job ID, no automatic release; preserve all evidence | |
+| R12 | Large disposable ZIP review and close/shutdown | Awaited worker keeps UI responsive; no duplicate review, no canceled/stale result after shutdown; no extraction or launch authority | |
+| R13 | Private metadata writer contention and late cancellation | Competing save refuses before stage, stale profile edit refuses; verified unpublished canceled scratch may be removed, altered or uncertain stage and unrelated files remain | |
+| R14 | Contained launcher environment and concurrent host activity | Configured environment honored; no secrets logged, no unlisted inheritable fixture handle visible; unrelated host operations preserved | |
+
 ## Stop rules
 
 Stop on possible source/user-data mutation, unexpected deletion, incorrect cross-source identity, unauthorized launcher execution, unexplained host freeze or unknown process ownership. Preserve logs, journal and staging. Do not automatically remove evidence, rerun a destructive operation, or bypass a refusal to obtain a PASS. Reviewers and owner adjudicate the failure before continuing.

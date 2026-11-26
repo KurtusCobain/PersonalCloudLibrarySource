@@ -12,35 +12,35 @@ Qualified source: b090230dea6c9d5832dee3e222b579c7e84dd154. Pre-remediation bran
 | P2 | Narrow CodeQL gate | Baseline artifact downloaded and digest verified; zero results across full C# SARIF scan. All-result CI gate added; qualified at 39dc6f3 (zero reported findings) |
 | P3 | Free-space checks for UNC/ZIP/rclone | Local and ZIP now query actual destination ancestor capacity via Win32; Windows regression passed at 362d5d3. Unknown capacity remains best effort; rclone without reliable expected size still needs separate design/host test |
 | P4 | ZIP32 limits vs advisory policy | Documented effective ZIP32 limits separately from format-neutral ceilings; ZIP64 remains unsupported; no expansion of supported formats |
-| P5 | Temporary files retained on failures | Open; only remove verified owned files, preserve uncertain evidence |
+| P5 | Temporary files retained on failures | Narrow verified unpublished private-stage cancellation cleanup implemented; Windows CI pending at 5bc59a1. Preserve all uncertain/old staging |
 | P6 | rclone :local: production configuration | Inline backend removed from plugin; opt-in real-rclone tests now create uniquely named isolated local config; both real-binary cases passed at ae0c9fa1 |
 | P7 | Explorer argument quoting | Confirmed two raw directory arguments; now use existing Windows argument quoting. File selection already quoted; host behavior pending |
 | P8 | Process diagnostics | Added exception type/HRESULT only, with regression assertions against message disclosure; Windows qualification passed at 362d5d3 |
 | P9 | Queue ordering/concurrency settings | Dispatch uses registration order; clock regression added. Invalid concurrency fallback to one is an explicit tested conservative contract, retained |
 | P10 | Worker fault containment | Executor and subscriber exceptions already handled/tested; repeated-failure test added. Unexpected internal bookkeeping fault remains investigation target |
-| P11 | Legacy process code | Open; reachability/test audit |
+| P11 | Legacy process code | Shipping runner uses WindowsJobProcessFactory; public RcloneProcessFactory/IRcloneProcessHandle retained for compatibility and exercised by bounded reader/injected lifecycle tests. Broader reachability and deprecation decision still open |
 | P12 | Old release workflow | Open; do not change main or public release controls without separate approval |
-| P13 | Absolute/UNC LocalFile source paths | Ordinary absolute/UNC compatibility retained; ambiguous device/drive-relative/stream names rejected lexically. Consent/trust boundary for valid external paths remains open |
-| P14 | Process environment contract | Open |
-| H1 | Handle inheritance | Open; adversarial host test |
+| P13 | Absolute/UNC LocalFile source paths | Per-operation consent for external downloads, open-source and ZIP review/extraction; lexical menu classification avoids unapproved probes. Host callback correction passed Windows at 553173d. Separate verification count pending. Actual host modal/share behavior and full trust-boundary review outstanding |
+| P14 | Process environment contract | Bounded Unicode ProcessStartInfo environment snapshot and matching PATH lookup; real child override/removal test qualified at 4d7b106 |
+| H1 | Handle inheritance | Actual unlisted inheritable file-handle probe passed at 4d7b106; does not exhaust simultaneous nonparticipating process creation or every host handle type |
 | H2 | Long paths | Open; fail safely and document/measure |
 | H3 | Overlapping ZIP member ranges | Confirmed missing range check; sorted local header/data interval validation and two regression cases added; Windows CI passed at 39dc6f3 |
 | H4 | Superscript Windows device names | Confirmed in two inspected policies; corrected with 12 additional parameterized cases; Windows CI passed at 39dc6f3 |
 | H5 | Encrypted rclone config | Explicit no-password-prompt flag for plugin copy/cat/listremotes and standalone listing; encrypted-config host behavior still unqualified |
-| H6 | Extended Windows path roots | Raw namespace/name checks at local source, cache resolver, manifest loader and containment; tests added, CI pending |
+| H6 | Extended Windows path roots | Raw namespace/name checks at local source, cache resolver, manifest loader and containment; all workflows passed at 6327eae |
 
 ## Grok register
 
 | ID | Reported finding | Current disposition |
 |---|---|---|
-| G1 | Non-atomic metadata replacement | Partially narrowed for three metadata stores: verify staged identity/bytes and lock original through validation; final File.Replace pathname race remains open |
+| G1 | Non-atomic metadata replacement | Verified replacement and backup contents, guarded ancestors and participating per-record writer locks qualified at 4d7b106; user-selected manifest backups staged before publishing. Final File.Replace closed-leaf pathname race remains open |
 | G2 | Ancestor-relative publication | Separate guard experiment retains qualified absolute native rename; below-root ancestor data-read handles deny delete sharing, identities checked before/after. All three workflows passed at 38c076c5; root mapping/reparse/SMB limitations remain |
-| G3 | Cooperative cross-process locking | Open; external nonparticipants cannot be universally serialized by a named mutex |
-| G4 | Crash/power-loss recovery | Open; read-only diagnostics remain, no automatic deletion/release |
+| G3 | Cooperative cross-process locking | Private metadata locks and locked profile baseline comparison qualified at 4d7b106; journal transactions now retain directory guards, qualified at 06b937f. External nonparticipants remain outside cooperative contract |
+| G4 | Crash/power-loss recovery | Reservation byte verification and current-session missing/changed marker refusal qualified at 06b937f. Unreconciled job-ID display Windows passed at 7fcbac3; offline evidence-preservation runbook added. Restart release and power-loss certification remain open |
 | G5 | Legacy recursive deletion | Open; disabled shipping behavior remains |
-| G6 | Process containment | Open; Claude disputes breakaway claim; verify actual flags and lifecycle tests |
+| G6 | Process containment | Actual launcher sets kill-on-close without breakaway, explicit job/stdio attribute list; child-tree and unlisted handle tests passed at 4d7b106. Not a capability sandbox or proof against all concurrent handle inheritance |
 | G7 | Real-world race tests | Open; add disposable-host and CI fixtures where practical |
-| G8 | Performance and operational behavior | Open; measure rather than extrapolate synthetic results |
+| G8 | Performance and operational behavior | Read-only ZIP inspection/hash moved to awaited worker with shutdown cancellation; Windows passed at ac77e88. Actual responsiveness, NAS, large-library and release performance qualification still outstanding |
 | G9 | Dead code and complexity | Open; semantic review |
 | G10 | Dependencies and supply chain | Positive observation; continue qualification |
 
@@ -153,3 +153,17 @@ Read-only verification already probed source existence only for configured Local
 ## Twenty-second correction batch: narrow cancellation cleanup for owned private scratch
 
 Previously a clean cancellation after successful private record staging left a temporary file even when publication was never attempted. CompletePrivateRecordStage now guards sibling ancestry and verifies the exact newly created single-link stage identity and full bounded payload before handling cancellation. A confirmed prepublication cancellation removes only that inspected handle, then checks vacancy; modified/uncertain stage or failed publication remains preserved. Existing target and unrelated files are never deleted. Two disposable regressions cover verified canceled scratch removal and modified scratch preservation with occupied target/sentinel. This is not broad cleanup of old temporary files, restart recovery, or recursive removal. Finishing bounded metadata verification before honoring late cancellation is intentional. CI pending.
+
+## Qualification evidence — continued recovery and external-source remediation
+
+| Exact source | Windows standard + real-rclone passed | Archive | Full CodeQL | Evidence |
+|---|---:|---|---|---|
+| `4d7b106278681511a882e611a81ccc3f3f9809cd` | 1004 + 2 | PASS | PASS | [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45784804856), [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45784804735), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45784804757) |
+| `06b937faa5c0197dd7841820e2ee38fad50b6794` | 1007 + 2 | PASS | PASS | [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45785923334), [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45785923624), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45785923389) |
+| `553173de717418a5c74fbf79b2121478ff084d4a` | 1012 + 2 | PASS | Pending at entry | [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45786466568), [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45786466803), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45786466584) |
+| `7fcbac371cb2c8e6762c636d9a61659beda1c360` | 1013 + 2 | PASS | Pending at entry | [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45786551528), [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45786551468), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45786551577) |
+| `ac77e886629848c34e382ccefb1ed9d8a60ace55` | 1014 + 2 | PASS | Pending at entry | [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45786748225), [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45786748358), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45786748251) |
+| `c6cd0b2d5c9a882095723c9599fefb0a50acc3f9` | Pending at entry | PASS | Pending at entry | [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45786902221), [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45786901901), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45786901920) |
+| `5bc59a18c9c257cbfebad8db2aeaa6dbde610fc8` | Pending at entry | Pending at entry | Pending at entry | [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45787027087), [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45787027080), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45787027140) |
+
+The two intermediate source-consent revisions e44b8f0 and 9988b93 failed Windows qualification; the host-boundary correction 553173d subsequently passed the unchanged Fullscreen contract. No failed checkpoint is described as qualified. Windows logs at ac77e88 show 1014 standard + 2 opt-in real-rclone passing, zero errors or warnings, candidate digest 9A04329F67A1F303B7D88B3DDA6FC765C7EA18A1B40FC84A40FBB95DF22EDF63. Digest belongs only to that exact artifact. Latest fully verified three-workflow checkpoint at entry: 06b937f. Latest Windows-qualified revision at entry: ac77e88. No independent-review closure, native acceptance, public release or CH-Rm integration claim.
