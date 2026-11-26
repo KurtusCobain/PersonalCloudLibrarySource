@@ -141,6 +141,28 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             }
         }
 
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "CreateHardLinkW",
+            CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true, ExactSpelling = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CreateHardLinkNative(string link, string existing, IntPtr reserved);
+
+        [Test]
+        public void OrdinaryHardlinkedReadOnlyArchiveRemainsSupported()
+        {
+            WriteZip("game.exe");
+            var alias = Path.Combine(root, "alias.zip");
+            Assert.That(CreateHardLinkNative(alias, source, IntPtr.Zero), Is.True);
+            var service = new ZipPackageReviewService();
+            var review = service.Inspect(alias, "Game");
+            Assert.That(review.PassedPreflight, Is.True, review.Reason);
+            var outcome = service.ExtractAfterExplicitChoice(review, true, alias,
+                cache, destination, Guid.NewGuid(), CancellationToken.None);
+            Assert.That(outcome.Succeeded, Is.True, outcome.Message);
+            Assert.That(File.ReadAllBytes(alias), Is.EqualTo(File.ReadAllBytes(source)));
+            Assert.That(File.ReadAllText(Path.Combine(destination, "game.exe")),
+                Is.EqualTo("fixture game game.exe"));
+        }
+
         [Test]
         public void ApprovedZipStaysReadLockedDuringStreamingOnWindows()
         {
