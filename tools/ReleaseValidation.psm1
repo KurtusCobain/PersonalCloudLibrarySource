@@ -259,7 +259,15 @@ function Assert-UnpublishedCandidate {
     }
     if ($PackagePath) {
         Test-ReleasePackage -PackagePath $PackagePath -ExtensionPath $ExtensionPath | Out-Null
-        $digest = (Get-FileHash -LiteralPath $PackagePath -Algorithm SHA256).Hash
+        # Use the same framework hashing primitive as the Windows
+        # PowerShell regression fixtures; cmdlet/module availability varies.
+        $stream = [IO.File]::OpenRead((Resolve-Path -LiteralPath $PackagePath).Path)
+        try {
+            $sha256 = [Security.Cryptography.SHA256]::Create()
+            try { $digest = ([BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '') }
+            finally { $sha256.Dispose() }
+        }
+        finally { $stream.Dispose() }
         if ($digest -eq '1781fe630fad9398b8e810e3cf843309acc68a8a3dcfba720873042da41b2ed7') {
             throw 'Candidate digest matches the published v0.3.2 package.'
         }
