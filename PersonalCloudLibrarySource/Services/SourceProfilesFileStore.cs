@@ -30,32 +30,36 @@ namespace PersonalCloudLibrarySource
         {
             var root = ValidateStoreDirectory(pluginDataDirectory);
             var primary = Path.Combine(root, FileName);
-            RejectLinksAndDirectories(primary);
-            var replacing = File.Exists(primary);
-            if (replacing && !ReadValidated(primary).Succeeded)
-                throw new InvalidOperationException(
-                    "Existing source profiles are invalid; inspect and recover manually.");
             var json = codec.Serialize(profiles);
             var payload = new UTF8Encoding(false, true).GetBytes(json);
             if (payload.Length > SourceProfilesConfigurationCodec.MaxDocumentCharacters * 4)
                 throw new InvalidOperationException("Source profiles file is too large.");
 
-            if (!replacing)
+            using (var writeLock = TransferPartialPathPolicy.OpenPrivateRecordWriteLock(primary))
             {
-                TransferPartialPathPolicy.WritePrivateRecord(primary, json,
-                    SourceProfilesConfigurationCodec.MaxDocumentCharacters * 4,
-                    System.Threading.CancellationToken.None);
-                return string.Empty;
-            }
+                RejectLinksAndDirectories(primary);
+                var replacing = File.Exists(primary);
+                if (replacing && !ReadValidated(primary).Succeeded)
+                    throw new InvalidOperationException(
+                        "Existing source profiles are invalid; inspect and recover manually.");
+    
+                if (!replacing)
+                {
+                    TransferPartialPathPolicy.WritePrivateRecord(primary, json,
+                        SourceProfilesConfigurationCodec.MaxDocumentCharacters * 4,
+                        System.Threading.CancellationToken.None);
+                    return string.Empty;
+                }
 
-            var pending = Path.Combine(root, "source-profiles-" +
-                Guid.NewGuid().ToString("N") + ".tmp");
-            var backup = Path.Combine(root, "source-profiles-backup-" +
-                Guid.NewGuid().ToString("N") + ".json");
-            TransferPartialPathPolicy.ReplacePrivateRecord(primary, payload, pending, backup,
-                () => ReadValidated(primary).Succeeded,
-                "Existing source profiles are invalid; inspect and recover manually.");
-            return backup;
+                var pending = Path.Combine(root, "source-profiles-" +
+                    Guid.NewGuid().ToString("N") + ".tmp");
+                var backup = Path.Combine(root, "source-profiles-backup-" +
+                    Guid.NewGuid().ToString("N") + ".json");
+                TransferPartialPathPolicy.ReplacePrivateRecord(primary, payload, pending, backup,
+                    () => ReadValidated(primary).Succeeded,
+                    "Existing source profiles are invalid; inspect and recover manually.");
+                return backup;
+            }
         }
 
         public SourceProfilesParseResult Load(string pluginDataDirectory)

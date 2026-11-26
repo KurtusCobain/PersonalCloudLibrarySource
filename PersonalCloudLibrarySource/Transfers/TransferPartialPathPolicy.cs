@@ -209,6 +209,16 @@ namespace PersonalCloudLibrarySource
             catch { handle.Dispose(); throw; }
         }
 
+        // The three private metadata stores share this persistent lock naming
+        // convention. Never unlink the lock on release: a competing writer
+        // may already have opened it. Contention fails fast without staging.
+        // Nonparticipating processes and stale read-modify-write callers are
+        // outside this serialization contract.
+        internal static FileStream OpenPrivateRecordWriteLock(string recordPath)
+        {
+            return OpenJournalLock(recordPath + ".write-lock");
+        }
+
         internal static FileStream OpenPrivateFileForReview(string path, bool deleteAccess)
         {
             RequireSafePath(path);
@@ -483,29 +493,70 @@ namespace PersonalCloudLibrarySource
             if (payload == null || payload.Length == 0)
                 throw new IOException("Private record replacement payload is empty.");
             if (validateOriginal == null) throw new ArgumentNullException(nameof(validateOriginal));
-            RequireVacant(temporary);
-            RequireVacant(backup);
-            FileIdentity original;
-            FileIdentity staged;
-            using (var input = OpenPrivateFileForReview(path, false))
+            var parent = Path.GetDirectoryName(Path.GetFullPath(path));
+            var temporaryParent = Path.GetDirectoryName(Path.GetFullPath(temporary));
+            var backupParent = Path.GetDirectoryName(Path.GetFullPath(backup));
+            if (string.IsNullOrWhiteSpace(parent) ||
+                !string.Equals(parent, temporaryParent, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(parent, backupParent, StringComparison.OrdinalIgnoreCase))
+                throw new IOException("Private record replacement requires sibling staging and backup paths.");
+            using (var ancestors = PinPublicationAncestors(parent))
             {
-                if (!validateOriginal()) throw new InvalidOperationException(invalidMessage);
-                original = CapturePrivateFileIdentity(input.SafeFileHandle);
-                staged = WriteRecordStage(temporary, payload);
-                using (var check = OpenPrivateFileForReview(temporary, false))
-                    VerifyRecordStage(check, staged, payload, System.Threading.CancellationToken.None);
-            }
+                RequireVacant(temporary);
+                RequireVacant(backup);
+                FileIdentity original;
+                FileIdentity staged;
+                byte[] originalDigest;
+                using (var input = OpenPrivateFileForReview(path, false))
+                {
+                    if (!validateOriginal()) throw new InvalidOperationException(invalidMessage);
+                    original = CapturePrivateFileIdentity(input.SafeFileHandle);
+                    using (var sha = System.Security.Cryptography.SHA256.Create())
+                        originalDigest = sha.ComputeHash(input);
+                    staged = WriteRecordStage(temporary, payload);
+                    using (var check = OpenPrivateFileForReview(temporary, false))
+                        VerifyRecordStage(check, staged, payload, System.Threading.CancellationToken.None);
+                }
 
-            RequireVacant(backup);
-            using (var check = OpenPrivateFileForReview(temporary, false))
-                VerifyRecordStage(check, staged, payload, System.Threading.CancellationToken.None);
-            using (var check = OpenPrivateFileForReview(path, false))
-            {
-                if (!MatchesPrivateFileIdentity(check.SafeFileHandle, original))
-                    throw new IOException("Private record target identity changed before replacement.");
-                if (!validateOriginal()) throw new InvalidOperationException(invalidMessage);
+                using (var stage = OpenPrivateFileForReview(temporary, false))
+                using (var check = OpenPrivateFileForReview(path, false))
+                {
+                    VerifyRecordStage(stage, staged, payload, System.Threading.CancellationToken.None);
+                    if (!MatchesPrivateFileIdentity(check.SafeFileHandle, original))
+                        throw new IOException("Private record target identity changed before replacement.");
+                    if (!validateOriginal()) throw new InvalidOperationException(invalidMessage);
+                    RequireRecordDigest(check, originalDigest);
+                    ancestors.Verify();
+                    RequireVacant(backup);
+                }
+                File.Replace(temporary, path, backup);
+                // Detect uncertainty after replacement; do not attempt
+                // rollback or remove evidence by pathname on failure.
+                ancestors.Verify();
+                RequireVacant(temporary);
+                using (var check = OpenPrivateFileForReview(path, false))
+                {
+                    var identity = CapturePrivateFileIdentity(check.SafeFileHandle);
+                    VerifyRecordStage(check, identity, payload, System.Threading.CancellationToken.None);
+                }
+                using (var check = OpenPrivateFileForReview(backup, false))
+                {
+                    CapturePrivateFileIdentity(check.SafeFileHandle);
+                    RequireRecordDigest(check, originalDigest);
+                }
             }
-            File.Replace(temporary, path, backup);
+        }
+
+        private static void RequireRecordDigest(FileStream stream, byte[] expected)
+        {
+            byte[] actual;
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+                actual = sha.ComputeHash(stream);
+            if (actual.Length != expected.Length)
+                throw new IOException("Private record digest changed.");
+            for (var i = 0; i < actual.Length; i++)
+                if (actual[i] != expected[i])
+                    throw new IOException("Private record content changed.");
         }
 
         private static FileIdentity WriteRecordStage(string temporary, byte[] payload)

@@ -43,31 +43,34 @@ namespace PersonalCloudLibrarySource
             var root = ValidateDirectory(pluginDataDirectory);
             var document = MakeDocument(snapshot);
             var target = Path.Combine(root, FileName(document.ProfileId));
-            RejectLinkOrDirectory(target);
-            // Do not silently overwrite corrupt or future-schema records.
-            var replacing = File.Exists(target);
-            if (replacing && !ReadFile(target, document.ProfileId).Succeeded)
-                throw new InvalidOperationException("Existing catalog identity snapshot is invalid.");
-
             var json = Serializer().Serialize(document);
             var payload = new UTF8Encoding(false, true).GetBytes(json);
             if (payload.Length > MaxFileBytes)
                 throw new InvalidOperationException("Catalog identity snapshot exceeds storage limit.");
 
-            if (!replacing)
+            using (var writeLock = TransferPartialPathPolicy.OpenPrivateRecordWriteLock(target))
             {
-                TransferPartialPathPolicy.WritePrivateRecord(target, json, MaxFileBytes,
-                    System.Threading.CancellationToken.None);
+                RejectLinkOrDirectory(target);
+                // Do not silently overwrite corrupt or future-schema records.
+                var replacing = File.Exists(target);
+                if (replacing && !ReadFile(target, document.ProfileId).Succeeded)
+                    throw new InvalidOperationException("Existing catalog identity snapshot is invalid.");
+    
+                if (!replacing)
+                {
+                    TransferPartialPathPolicy.WritePrivateRecord(target, json, MaxFileBytes,
+                        System.Threading.CancellationToken.None);
+                    return target;
+                }
+
+                var pending = Path.Combine(root, FilePrefix + Guid.NewGuid().ToString("N") + ".tmp");
+                var backup = Path.Combine(root, FilePrefix + "backup-" +
+                    Guid.NewGuid().ToString("N") + ".json");
+                TransferPartialPathPolicy.ReplacePrivateRecord(target, payload, pending, backup,
+                    () => ReadFile(target, document.ProfileId).Succeeded,
+                    "Existing catalog identity snapshot is invalid.");
                 return target;
             }
-
-            var pending = Path.Combine(root, FilePrefix + Guid.NewGuid().ToString("N") + ".tmp");
-            var backup = Path.Combine(root, FilePrefix + "backup-" +
-                Guid.NewGuid().ToString("N") + ".json");
-            TransferPartialPathPolicy.ReplacePrivateRecord(target, payload, pending, backup,
-                () => ReadFile(target, document.ProfileId).Succeeded,
-                "Existing catalog identity snapshot is invalid.");
-            return target;
         }
 
         public SourceCatalogSnapshotRead Load(string pluginDataDirectory, string profileId)

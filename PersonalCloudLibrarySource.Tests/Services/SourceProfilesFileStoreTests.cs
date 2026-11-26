@@ -55,6 +55,44 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(Directory.GetFiles(root, "*.tmp"), Is.Empty);
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void CompetingProfileWriterRefusesWithoutStagingAndCanRetry(bool existing)
+        {
+            var store = new SourceProfilesFileStore();
+            var primary = Path.Combine(root, SourceProfilesFileStore.FileName);
+            var lockPath = primary + ".write-lock";
+            if (existing) store.Save(root, new[] { Profile(LegacyId, "Original") });
+            using (var writer = new FileStream(lockPath, FileMode.OpenOrCreate,
+                FileAccess.ReadWrite, FileShare.None))
+            {
+                Assert.Throws<IOException>(() => new SourceProfilesFileStore().Save(root,
+                    new[] { Profile(LegacyId, "Replacement") }));
+                Assert.That(File.Exists(primary), Is.EqualTo(existing));
+                if (existing) Assert.That(store.Load(root).Profiles.Single().DisplayName, Is.EqualTo("Original"));
+                Assert.That(Directory.GetFiles(root, "*.tmp"), Is.Empty);
+                Assert.That(store.ListBackupNames(root), Is.Empty);
+            }
+            store.Save(root, new[] { Profile(LegacyId, "Replacement") });
+            Assert.That(store.Load(root).Profiles.Single().DisplayName, Is.EqualTo("Replacement"));
+            Assert.That(File.Exists(lockPath), Is.True, "Never unlink the shared lock on release.");
+            Assert.That(store.ListBackupNames(root).Count, Is.EqualTo(existing ? 1 : 0));
+        }
+
+        [Test]
+        public void HardlinkedWriteLockRefusesWithoutModifyingEitherFile()
+        {
+            var primary = Path.Combine(root, SourceProfilesFileStore.FileName);
+            var sentinel = Path.Combine(root, "unrelated.txt");
+            File.WriteAllText(sentinel, "preserve");
+            Assert.That(CreateHardLinkNative(primary + ".write-lock", sentinel, IntPtr.Zero), Is.True);
+            Assert.Throws<IOException>(() => new SourceProfilesFileStore().Save(root,
+                new[] { Profile(LegacyId, "Replacement") }));
+            Assert.That(File.ReadAllText(sentinel), Is.EqualTo("preserve"));
+            Assert.That(File.Exists(primary), Is.False);
+            Assert.That(Directory.GetFiles(root, "*.tmp"), Is.Empty);
+        }
+
         [Test]
         public void UpdatingProfileAtomicallyKeepsPriorVersionInUniqueBackup()
         {

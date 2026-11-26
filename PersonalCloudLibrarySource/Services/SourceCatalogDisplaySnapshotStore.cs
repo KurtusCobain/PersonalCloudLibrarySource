@@ -108,28 +108,33 @@ namespace PersonalCloudLibrarySource
             var root = ValidateRoot(pluginDataDirectory);
             var doc = ToDocument(snapshot);
             var target = Path.Combine(root, FileName(doc.ProfileId));
-            RejectLinkedOrDirectory(target);
-            var replacing = File.Exists(target);
-            if (replacing && !ReadFile(target, doc.ProfileId).Succeeded)
-                throw new InvalidOperationException("Refusing to overwrite invalid display evidence.");
             var json = Serializer().Serialize(doc);
             var bytes = new UTF8Encoding(false, true).GetBytes(json);
             if (bytes.Length > MaxBytes)
                 throw new InvalidOperationException("Display evidence exceeds the size limit.");
-            if (!replacing)
+
+            using (var writeLock = TransferPartialPathPolicy.OpenPrivateRecordWriteLock(target))
             {
-                TransferPartialPathPolicy.WritePrivateRecord(target, json, MaxBytes,
-                    System.Threading.CancellationToken.None);
+                RejectLinkedOrDirectory(target);
+                var replacing = File.Exists(target);
+                if (replacing && !ReadFile(target, doc.ProfileId).Succeeded)
+                    throw new InvalidOperationException("Refusing to overwrite invalid display evidence.");
+    
+                if (!replacing)
+                {
+                    TransferPartialPathPolicy.WritePrivateRecord(target, json, MaxBytes,
+                        System.Threading.CancellationToken.None);
+                    return target;
+                }
+                var pending = Path.Combine(root, FilePrefix +
+                    Guid.NewGuid().ToString("N") + ".tmp");
+                var backup = Path.Combine(root, FilePrefix + "backup-" +
+                    Guid.NewGuid().ToString("N") + ".json");
+                TransferPartialPathPolicy.ReplacePrivateRecord(target, bytes, pending, backup,
+                    () => ReadFile(target, doc.ProfileId).Succeeded,
+                    "Refusing to overwrite invalid display evidence.");
                 return target;
             }
-            var pending = Path.Combine(root, FilePrefix +
-                Guid.NewGuid().ToString("N") + ".tmp");
-            var backup = Path.Combine(root, FilePrefix + "backup-" +
-                Guid.NewGuid().ToString("N") + ".json");
-            TransferPartialPathPolicy.ReplacePrivateRecord(target, bytes, pending, backup,
-                () => ReadFile(target, doc.ProfileId).Succeeded,
-                "Refusing to overwrite invalid display evidence.");
-            return target;
         }
 
         public SourceCatalogDisplayRead Load(string pluginDataDirectory, string profileId)
