@@ -139,10 +139,18 @@ namespace PersonalCloudLibrarySource
                     GetPluginDataDirectory(), "zip-mutable-data-baselines"));
                 var recovery = new ZipManagedRecoveryService(Path.Combine(
                     GetPluginDataDirectory(), "zip-recovery-journals"));
+                var journal = GetTransferRecoveryJournal();
                 var result = await Task.Run(() => extractor.ExecuteApproved(
-                    approvedPlan, true, receiptStore, token, null, mutableBaseline, recovery));
+                    approvedPlan, true, receiptStore, token, null, mutableBaseline, recovery, journal, gameId));
 
-                if (result.Cancelled)
+                if (result.NeedsManualAttention && result.ReceiptRecorded)
+                {
+                    playniteApi.Dialogs.ShowMessage(
+                        PclsResources.Get("LOCPLSTransferRecoveryDetail",
+                            "Preserved recovery evidence needs review. Do not retry or remove staging files automatically."),
+                        title);
+                }
+                else if (result.Cancelled)
                 {
                     playniteApi.Dialogs.ShowMessage(
                         PclsResources.Get("LOCPLSZipExtractCancelled",

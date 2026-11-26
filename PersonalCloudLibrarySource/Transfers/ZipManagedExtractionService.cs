@@ -93,14 +93,19 @@ namespace PersonalCloudLibrarySource
             CacheOwnershipReceiptStore receipts, CancellationToken cancellationToken,
             Action<long, long?> progress = null,
             ZipMutableDataBaselineStore mutableBaseline = null,
-            ZipManagedRecoveryService recovery = null)
+            ZipManagedRecoveryService recovery = null,
+            TransferRecoveryJournal transferJournal = null,
+            Guid hostGameId = default(Guid))
         {
             var refused = new ZipManagedExtractionResult
             {
                 Reason = "An explicit extraction choice and a valid new cache destination are required."
             };
-            if (!userConfirmedExtract || plan == null || receipts == null)
+            if (!userConfirmedExtract || plan == null || receipts == null ||
+                (transferJournal != null && hostGameId == Guid.Empty))
                 return refused;
+            CloudTransferJob reservation = null;
+            var reservationWritten = false;
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -124,16 +129,28 @@ namespace PersonalCloudLibrarySource
                             Reason = "Package extraction already exists or has an ownership receipt."
                         };
 
+                    // Share the queue's durable destination/game reservation
+                    // and use its exact job ID for the actual staging name.
+                    if (transferJournal != null)
+                    {
+                        reservation = new CloudTransferJob(hostGameId, plan.GameId,
+                            plan.ArchivePath, plan.Destination, "managed-zip", true);
+                        transferJournal.Begin(reservation);
+                        reservationWritten = true;
+                    }
                     var extraction = new ZipPackageReviewService().ExtractAfterExplicitChoice(
                         plan.Review, true, plan.ArchivePath, plan.CacheRoot,
-                        plan.Destination, Guid.NewGuid(), cancellationToken, progress);
+                        plan.Destination, reservation?.Id ?? Guid.NewGuid(), cancellationToken, progress);
                     if (!extraction.Succeeded)
-                        return new ZipManagedExtractionResult
+                    {
+                        var failure = new ZipManagedExtractionResult
                         {
                             Cancelled = extraction.Cancelled,
                             NeedsManualAttention = extraction.RequiresManualRecovery,
                             Reason = extraction.Message
                         };
+                        return FinishReservation(transferJournal, reservation, failure);
+                    }
 
                     // The ZIP has already been atomically committed. From this
                     // point a receipt failure must NEVER erase the new game files.
@@ -166,27 +183,50 @@ namespace PersonalCloudLibrarySource
                         outcome.Reason = "ZIP extracted, but its ownership inventory could not be recorded. " +
                             "Preserve the files and inspect the destination manually.";
                     }
-                    return outcome;
+                    return FinishReservation(transferJournal, reservation, outcome);
                 }
             }
             catch (OperationCanceledException)
             {
                 return new ZipManagedExtractionResult
                 {
-                    Cancelled = true, Reason = "ZIP extraction was cancelled."
+                    Cancelled = !reservationWritten,
+                    NeedsManualAttention = reservationWritten,
+                    Reason = reservationWritten
+                        ? "ZIP extraction was interrupted after reservation; preserve the recovery journal."
+                        : "ZIP extraction was cancelled."
                 };
             }
             catch (Exception ex) when (ex is IOException ||
                                        ex is UnauthorizedAccessException ||
                                        ex is InvalidOperationException ||
                                        ex is ArgumentException ||
-                                       ex is NotSupportedException)
+                                       ex is NotSupportedException ||
+                                       ex is TransferRetryRefusedException)
             {
+                var uncertain = reservationWritten || ex is TransferReservationWriteUncertainException;
                 return new ZipManagedExtractionResult
                 {
-                    Reason = "ZIP extraction could not be safely prepared."
+                    NeedsManualAttention = uncertain,
+                    Reason = uncertain
+                        ? "ZIP transfer reservation is unresolved; preserve the recovery journal."
+                        : "ZIP extraction could not be safely prepared."
                 };
             }
+        }
+
+        private static ZipManagedExtractionResult FinishReservation(TransferRecoveryJournal journal,
+            CloudTransferJob reservation, ZipManagedExtractionResult result)
+        {
+            if (reservation == null || result.NeedsManualAttention) return result;
+            try { journal.Complete(reservation); }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException ||
+                ex is ArgumentException || ex is InvalidOperationException || ex is NotSupportedException)
+            {
+                result.NeedsManualAttention = true;
+                result.Reason = "ZIP operation finished but its reservation could not be released. Preserve the recovery journal.";
+            }
+            return result;
         }
 
         // Stable receipt namespace used by both the extraction writer and

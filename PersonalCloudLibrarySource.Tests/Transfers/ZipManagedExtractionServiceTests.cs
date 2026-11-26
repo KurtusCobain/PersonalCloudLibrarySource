@@ -190,6 +190,50 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void HostedExtractionReservationBlocksCompetingTransferAndReleasesAfterSuccess()
+        {
+            var plan = Plan();
+            var journal = new TransferRecoveryJournal(Path.Combine(root, "transfer-journal"));
+            var hostId = Guid.NewGuid();
+            var observed = false;
+            var result = new ZipManagedExtractionService().ExecuteApproved(plan, true, receipts,
+                CancellationToken.None, (copied, total) =>
+                {
+                    if (observed) return;
+                    var snapshot = journal.Inspect();
+                    Assert.That(snapshot.Records, Has.Count.EqualTo(1));
+                    Assert.That(snapshot.Records[0].GameId, Is.EqualTo(hostId));
+                    Assert.That(snapshot.Records[0].StagingPath,
+                        Is.EqualTo(Directory.GetDirectories(cache, "*.pcls-partial-*")[0]));
+                    observed = true;
+                }, null, null, journal, hostId);
+            Assert.That(observed, Is.True);
+            Assert.That(result.Succeeded && result.ReceiptRecorded, Is.True, result.Reason);
+            Assert.That(result.NeedsManualAttention, Is.False, result.Reason);
+            Assert.That(journal.Inspect().Records, Is.Empty);
+        }
+
+        [Test]
+        public void HostedExtractionPreservesReservationWhenStagingContainsForeignContent()
+        {
+            var plan = Plan();
+            var journal = new TransferRecoveryJournal(Path.Combine(root, "transfer-journal"));
+            string foreign = null;
+            var result = new ZipManagedExtractionService().ExecuteApproved(plan, true, receipts,
+                CancellationToken.None, (copied, total) =>
+                {
+                    if (foreign != null) return;
+                    foreign = Path.Combine(Directory.GetDirectories(cache, "*.pcls-partial-*")[0], "user.sav");
+                    File.WriteAllText(foreign, "preserve");
+                }, null, null, journal, Guid.NewGuid());
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(result.NeedsManualAttention, Is.True);
+            Assert.That(File.ReadAllText(foreign), Is.EqualTo("preserve"));
+            Assert.That(new TransferRecoveryJournal(Path.Combine(root, "transfer-journal")).Inspect().Records,
+                Has.Count.EqualTo(1));
+        }
+
+        [Test]
         public void CorruptReceiptFootprintBlocksPreparedAndNewExtraction()
         {
             var service = new ZipManagedExtractionService();
