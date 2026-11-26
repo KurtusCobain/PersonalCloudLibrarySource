@@ -33,6 +33,46 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             finally { DeleteVerifiedTestRoot(root); }
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ReservationWriteRechecksAuthorizationAndCancellationBeforeExecutor(bool cancel)
+        {
+            var root = CreateVerifiedTestRoot();
+            try
+            {
+                var manager = new CloudTransferManager(1);
+                var executor = new BlockingExecutor(manager);
+                var journalPath = Path.Combine(root, "journal");
+                var allowed = 1;
+                var constructor = typeof(TransferRecoveryJournal).GetConstructor(
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic,
+                    null, new[] { typeof(string), typeof(Action<FileStream, byte[]>) }, null);
+                Assert.That(constructor, Is.Not.Null);
+                Action<FileStream, byte[]> writer = (stream, bytes) =>
+                {
+                    stream.Write(bytes, 0, bytes.Length);
+                    if (cancel) manager.Cancel(manager.Jobs.Single().Id);
+                    else Volatile.Write(ref allowed, 0);
+                };
+                var journal = (TransferRecoveryJournal)constructor.Invoke(new object[] { journalPath, writer });
+                using (var queue = new TransferQueueService(manager, executor, journal))
+                {
+                    var destination = Path.Combine(root, "destination");
+                    var job = queue.EnqueueLocal(Guid.NewGuid(), "Revoked during reserve",
+                        Path.Combine(root, "source"), destination, "LocalFolder", false,
+                        executionAuthorized: () => Volatile.Read(ref allowed) == 1);
+                    var completion = queue.GetCompletion(job.Id);
+                    Assert.That(completion.Wait(TimeSpan.FromSeconds(3)), Is.True);
+                    Assert.That(job.State, Is.EqualTo(cancel ? CloudTransferState.Cancelled : CloudTransferState.Failed));
+                    Assert.That(executor.ExecutedJobIds, Is.Empty);
+                    Assert.That(completion.Result.RequiresManualRecovery, Is.False);
+                    Assert.That(Directory.GetFiles(journalPath, "*.pending"), Is.Empty);
+                    Assert.That(File.Exists(destination) || Directory.Exists(destination), Is.False);
+                }
+            }
+            finally { DeleteVerifiedTestRoot(root); }
+        }
+
         [Test]
         public void RetryRetainsAuthorizationAndRefusesDrift()
         {

@@ -407,9 +407,20 @@ namespace PersonalCloudLibrarySource
                         recoveryJournal.Begin(request.Job);
                         reservationWritten = true;
                     }
-                    result = request.IsRclone
-                        ? executor.ExecuteRclone(request.Job.Id, request.Settings)
-                        : executor.ExecuteLocal(request.Job.Id, request.Job.IsDirectory);
+                    // Reservation creation can block on another journal
+                    // transaction. Revalidate after acquiring it, before
+                    // permitting any provider or destination I/O.
+                    if (request.Job.CancellationToken.IsCancellationRequested)
+                        result = CloudTransferExecutionResult.CancelledResult();
+                    else if (reservationWritten && !IsExecutionAuthorized(request))
+                        result = CloudTransferExecutionResult.Failure(
+                            "Transfer authorization expired during reservation. Refresh the library and start a new download.");
+                    else if (request.Job.CancellationToken.IsCancellationRequested)
+                        result = CloudTransferExecutionResult.CancelledResult();
+                    else
+                        result = request.IsRclone
+                            ? executor.ExecuteRclone(request.Job.Id, request.Settings)
+                            : executor.ExecuteLocal(request.Job.Id, request.Job.IsDirectory);
                     if (reservationWritten && !result.RequiresManualRecovery)
                     {
                         try { recoveryJournal.Complete(request.Job); }
