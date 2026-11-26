@@ -1,16 +1,16 @@
 # PCLS independent review handoff — 2026-11-25
 
-**Status: proposed pre-review code freeze, pending the exact final CI result. Not a release authorization or manual acceptance.**
+**Status: pre-review code freeze; Windows and archive passed, exact CodeQL pending at this entry. Not a release authorization or manual acceptance.**
 
 Repository: `KurtusCobain/PersonalCloudLibrarySource`. Branch: `audit/pcls-stabilization-20261124`.
 
-- **Proposed frozen code revision:** [`b090230dea6c9d5832dee3e222b579c7e84dd154`](https://github.com/KurtusCobain/PersonalCloudLibrarySource/tree/b090230dea6c9d5832dee3e222b579c7e84dd154). Review this exact tree, not a moving branch tip.
+- **Frozen code revision:** [`b090230dea6c9d5832dee3e222b579c7e84dd154`](https://github.com/KurtusCobain/PersonalCloudLibrarySource/tree/b090230dea6c9d5832dee3e222b579c7e84dd154). Review this exact tree, not a moving branch tip.
 - Starting integration ancestor: `e82a27862cb2cce10b1b635735c5de0467d978d7`.
 - Public main baseline: `d414e2f19375d3ba4a2142dd70a10aad323843d0`. Published v0.3.2 and installer feed remain unchanged.
 - 123 stabilization commits from combined integration to the proposed code freeze; 146 changed paths in that comparison. Documentation-only handoff commits may follow; do not mix revisions.
 - [Engineering history](stabilization-baseline-20261124.md) and [qualification register](stabilization-qualification-20261124.md).
-- [Exact code Windows run](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45732477687), [archive compatibility](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45732477526), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45732477534). At handoff preparation these are pending. Check exact conclusions before review.
-- Latest verified Windows runtime/benchmark checkpoint `3290bb85`: 952 standard tests passed, 2 standard opt-in skips separately executed with pinned rclone v1.76.0 (2/2 passed); zero failures/warnings. [Windows run](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45732251315). Larger mixed-tree qualification 1,024 files / 70 MiB in 8.276 s, one hosted synthetic measurement.
+- [Exact code Windows run](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45732477687), [archive compatibility](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45732477526), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45732477534). Windows and archive passed. CodeQL pending at this entry; check its exact conclusion before review.
+- Frozen code Windows checkpoint `b090230d`: 954 standard tests passed, 2 standard opt-in skips separately executed with pinned rclone v1.76.0 (2/2 passed); zero failures/warnings. Linked-output CLI regression passed. Larger mixed-tree qualification 1,024 files / 70 MiB in 8.414 s at this revision; previous hosted runs 8.276 s and 10.327 s. Synthetic correctness/timing observations, not actual NAS throughput.
 - Prior fully verified code checkpoint `43729f39`: 947 standard + 2 real-rclone, all three workflows passed.
 
 ## Scope and constraints
@@ -54,7 +54,7 @@ Optional Nova review: first-run workflow, plain-language UX, privacy/support and
 
 ## Acceptance sequence (do not run on a personal library)
 
-After both independent reviews, reconcile findings in a separate correction pass, rerun exact CI and identify the corrected frozen revision. Then owner performs a consolidated disposable Windows Playnite campaign per [existing acceptance plan](v1-code-complete-review-acceptance.md):
+After both independent reviews, reconcile findings in a separate correction pass, rerun exact CI and identify the corrected frozen revision. Use the [host acceptance evidence checklist](../tests/stabilization-host-acceptance-20261125.md). Then owner performs a consolidated disposable Windows Playnite campaign per [existing acceptance plan](v1-code-complete-review-acceptance.md):
 
 1. Start with a new portable or disposable Playnite instance, fixture source/cache roots, and backup; never install this development package into the regular profile. Candidate still carries the stable extension ID and v0.3.2 version, so it can replace a real installation if misused.
 2. Restore/build Debug, run NUnitLite and PowerShell contracts, build the exact Release package, record its SHA-256, and run official Toolbox separately. Missing Toolbox is BLOCKED, not PASS. Use documented commands in [DEVELOPMENT.md](../../DEVELOPMENT.md).

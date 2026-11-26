@@ -95,10 +95,12 @@
 | [cfad7bbd](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45732187988) | 951 standard pass, 0 fail, 2 standard skips; 0 warnings; 2/2 real-rclone | Manifest/report staging and backup identity; archive passed |
 | [3290bb85](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45732251315) | 952 standard pass, 0 fail, 2 standard skips; 0 warnings; 2/2 real-rclone | 1,024-file mixed-size qualification; archive passed |
 
-### Pending candidates (not qualified at this ledger entry)
+| [2bc8a11c](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45732388090) | 954 standard pass, 0 fail, 2 standard skips; 0 warnings; 2/2 real-rclone | Stable local catalog reads and UTF-16 BOM fixture; archive passed |
+| [b090230d](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45732477687) | 954 standard pass, 0 fail, 2 standard skips; 0 warnings; 2/2 real-rclone | CLI linked output refusal regression; archive passed; exact CodeQL pending at this entry |
 
-- [2bc8a11c](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45732388090): stable local manifest reads and BOM compatibility.
-- [b090230d](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45732477687): CLI output link refusal; proposed code freeze.
+### Review freeze
+
+Code revision `b090230dea6c9d5832dee3e222b579c7e84dd154` is the proposed pre-review freeze; Windows and archive passed. [Exact CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45732477534) pending at this entry. [Review handoff](review-handoff-20261125.md), [host evidence checklist](../tests/stabilization-host-acceptance-20261125.md). Documentation-only commits may follow, but reviewers must examine the same code revision.
 - Later CodeQL conclusions must be read against the exact candidate SHA; no success assumed.
 
 Windows build and CodeQL workflow conclusions are not proof of absence of vulnerabilities or native Playnite acceptance. A passing archive compatibility workflow only qualifies the isolated decoder probe, not shipping 7z/RAR install behavior. Review current run evidence by exact commit.
@@ -110,7 +112,7 @@ Windows build and CodeQL workflow conclusions are not proof of absence of vulner
 - 5,000 historical jobs, six reserved, 2,000 reservation snapshot reads: 108.283 ms reference / 0.120 ms indexed at 14e7ff8d, identical counts.
 - 550 sequential synthetic successful transfers, 518 history entries retained, 18.585 ms at 9d563062. Claimed completion remains valid and live reservations are empty. This is not real download throughput.
 - At c0ca3dc3, 256 files/3,145,728 bytes (including 64 empty files), 16 source subdirectories: 1,476.386 ms end-to-end verified copy on hosted Windows. Content and membership assertions passed. One run, no pre/post comparison.
-- At 3290bb85, 1,024 files / 73,400,320 bytes, 32 source subdirectories plus one empty directory: 8,275.645 ms end-to-end verified copy on hosted Windows. Independent full-byte and membership assertions passed. Single synthetic workload, no comparative speedup claim.
+- At 3290bb85, 1,024 files / 73,400,320 bytes, 32 source subdirectories plus one empty directory: 8,275.645 ms end-to-end verified copy on hosted Windows. Independent full-byte and membership assertions passed. Same fixture repeated at 2bc8a11c (10,327.268 ms) and b090230d (8,414.382 ms). These are three hosted runs of one synthetic workload, not a comparative speedup claim.
 - These are hosted synthetic measurements, not general application speed, actual disk/NAS throughput, startup latency or memory certifications.
 
 ## Remaining gate register
