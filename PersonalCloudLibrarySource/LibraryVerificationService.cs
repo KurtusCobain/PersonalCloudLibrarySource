@@ -106,6 +106,8 @@ namespace PersonalCloudLibrarySource
             lines.Add("Uncacheable or misconfigured items: " + report.UncacheableMisconfiguredCount.ToString(CultureInfo.InvariantCulture));
             lines.Add("Rclone path-doubling warnings: " + report.RclonePathDoublingWarningCount.ToString(CultureInfo.InvariantCulture));
             lines.Add("LocalFolder path warnings: " + report.LocalFolderPathWarningCount.ToString(CultureInfo.InvariantCulture));
+            lines.Add("External LocalFile sources requiring consent (not probed): " +
+                report.ExternalLocalSourceConsentCount.ToString(CultureInfo.InvariantCulture));
             lines.Add(string.Empty);
             lines.Add("Manifest Metadata Gaps");
             lines.Add("----------------------");
@@ -198,6 +200,19 @@ namespace PersonalCloudLibrarySource
                 if (!sourceResolvable)
                 {
                     report.InvalidOrMissingSourcePathCount++;
+                }
+
+                if (sourceResolvable && string.Equals(PersonalCloudLibrarySource.GetProviderType(settings),
+                    PersonalCloudLibrarySourceSettings.LocalFileProviderType, StringComparison.OrdinalIgnoreCase))
+                {
+                    var resolved = PersonalCloudLibrarySource.ResolveLocalFolderSourcePath(settings, sourcePath);
+                    if (SourcePathResolver.RequiresExternalLocalSourceConsent(settings, resolved))
+                    {
+                        report.ExternalLocalSourceConsentCount++;
+                        // Do not probe the path or disclose its server, share
+                        // or file name in the warning sample.
+                        AddWarning(report, "External LocalFile source requires explicit access consent; presence was not checked.");
+                    }
                 }
 
                 if (PersonalCloudLibrarySource.HasRcloneContentRootPathDoublingRisk(settings, sourcePath))

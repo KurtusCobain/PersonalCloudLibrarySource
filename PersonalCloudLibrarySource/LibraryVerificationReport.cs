@@ -27,6 +27,7 @@ namespace PersonalCloudLibrarySource
         public int UncacheableMisconfiguredCount { get; set; }
         public int RclonePathDoublingWarningCount { get; set; }
         public int LocalFolderPathWarningCount { get; set; }
+        public int ExternalLocalSourceConsentCount { get; set; }
         public int MissingDescriptionCount { get; set; }
         public int MissingPlatformCount { get; set; }
         public int MissingPlayActionCount { get; set; }

@@ -145,3 +145,7 @@ Expose a bounded current-session unreconciled job-ID collection in advisory reco
 ## Twentieth correction batch: read-only ZIP review responsiveness
 
 Move the ZIP inspection command into the ZIP host partial class, where other package workflows already await workers. Hashing and archive inspection now run on an awaited worker with a single-review concurrency guard and cooperative cancellation on plugin shutdown; suppress canceled/disposed or stale-configuration results. Ordinary transfer command code retains its no-detached-Task.Run contract. Add a repository wiring regression and contain failures from refreshed source-navigation lookup. No new extraction, deletion or launch permission. Actual Playnite dispatcher behavior, slow-provider cancellation and measured UI responsiveness remain host acceptance items. CI pending.
+
+## Twenty-first correction batch: report external-source consent separately
+
+Read-only verification already probed source existence only for configured LocalFolder paths; preserve that behavior. Add an exact count of lexically valid external LocalFile entries requiring consent, plus a capped generic warning with no source path, server or filename. Such entries remain download-eligible subject to execution-time consent and are not mislabeled as invalid. A disposable lexical UNC regression checks classification, no path disclosure and no created directory. No remote access or new transfer authority. CI pending.
