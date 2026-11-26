@@ -124,6 +124,23 @@ if ([string]::IsNullOrWhiteSpace($ReportPath)) {
     $ReportPath = [System.IO.Path]::ChangeExtension($OutputPath, ".report.txt")
 }
 
+function Assert-OrdinaryOutputPath {
+    param([string]$Path)
+    $full = [IO.Path]::GetFullPath($Path)
+    $leaf = Get-Item -LiteralPath $full -Force -ErrorAction SilentlyContinue
+    if ($null -ne $leaf -and ($leaf.PSIsContainer -or
+        ($leaf.Attributes -band [IO.FileAttributes]::ReparsePoint))) {
+        throw 'Catalog output must be an ordinary file.'
+    }
+    $parent = [IO.DirectoryInfo]::new([IO.Path]::GetDirectoryName($full))
+    while ($null -ne $parent) {
+        if ($parent.Exists -and ($parent.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            throw 'Catalog output directory must not be linked.'
+        }
+        $parent = $parent.Parent
+    }
+}
+
 if (-not $DryRun) {
     $OutputPath = [IO.Path]::GetFullPath($OutputPath)
     $ReportPath = [IO.Path]::GetFullPath($ReportPath)
@@ -133,6 +150,7 @@ if (-not $DryRun) {
     $targets = @($OutputPath)
     if (-not $NoReport) { $targets += $ReportPath }
     foreach ($target in $targets) {
+        Assert-OrdinaryOutputPath $target
         if ((Test-Path -LiteralPath $target) -and (-not $Overwrite)) {
             throw "Output file already exists. Use -Overwrite to replace it: $target"
         }
@@ -642,32 +660,33 @@ if ($DryRun) {
 
 function Write-CatalogText {
     param([string]$Path, [string]$Text)
+    Assert-OrdinaryOutputPath $Path
+    $existed = [IO.File]::Exists($Path)
+    if ($existed -and -not $Overwrite) { throw 'Output already exists; replacement refused.' }
     $directory = [IO.Path]::GetDirectoryName($Path)
     [void][IO.Directory]::CreateDirectory($directory)
-    $temp = Join-Path $directory ([IO.Path]::GetFileName($Path) + '.' + [guid]::NewGuid().ToString('N') + '.tmp')
-    $owned = $false
+    Assert-OrdinaryOutputPath $Path
+    $temp = Join-Path $directory ([guid]::NewGuid().ToString('N') + '.tmp')
+    $bytes = [Text.UTF8Encoding]::new($false, $true).GetBytes($Text)
+    $stream = [IO.FileStream]::new($temp, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
     try {
-        $bytes = [Text.UTF8Encoding]::new($false).GetBytes($Text)
-        $stream = [IO.FileStream]::new($temp, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
-        $owned = $true
-        try {
-            $stream.Write($bytes, 0, $bytes.Length)
-            $stream.Flush($true)
-        }
-        finally { $stream.Dispose() }
-        if ([IO.File]::Exists($Path)) {
-            if (-not $Overwrite) { throw 'Output already exists; replacement refused.' }
-            $backup = $Path + '.' + [guid]::NewGuid().ToString('N') + '.bak'
-            [IO.File]::Replace($temp, $Path, $backup)
-        }
-        else { [IO.File]::Move($temp, $Path) }
-        $owned = $false
+        $stream.Write($bytes, 0, $bytes.Length)
+        $stream.Flush($true)
     }
-    finally {
-        if ($owned) {
-            try { [IO.File]::Delete($temp) } catch { }
-        }
+    finally { $stream.Dispose() }
+
+    # Do not delete a staging pathname after failure. It may identify a
+    # substituted object. Replacement remains a pathname-based operation;
+    # use only a trusted output directory, never an adversarial workspace.
+    Assert-OrdinaryOutputPath $Path
+    Assert-OrdinaryOutputPath $temp
+    if ($existed) {
+        if (-not [IO.File]::Exists($Path)) { throw 'Prior output disappeared; staging retained.' }
+        $backup = $Path + '.' + [guid]::NewGuid().ToString('N') + '.bak'
+        if (Test-Path -LiteralPath $backup) { throw 'Backup destination is occupied.' }
+        [IO.File]::Replace($temp, $Path, $backup)
     }
+    else { [IO.File]::Move($temp, $Path) }
 }
 
 Write-CatalogText -Path $OutputPath -Text $json
