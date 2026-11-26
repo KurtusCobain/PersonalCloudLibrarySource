@@ -48,7 +48,7 @@ Before publishing a release:
 7. Run the documentation/link/version/YAML/image contracts.
 8. Complete the installed Desktop, Fullscreen, provider, and upgrade matrix rather than inferring it from unit tests.
 
-The live pre-1.0 version is `0.3.2`. Do not add a 1.0 installer entry or final package URL/date/checksum until release qualification is complete.
+The public pre-1.0 version is `0.3.2`. The isolated stabilization candidate uses internal version `0.3.2.1` and the same extension ID for disposable migration tests. Never install it into an everyday profile. Do not add a 1.0 installer entry or final package URL/date/checksum until release qualification is complete.
 
 ## Official Playnite release validation
 
@@ -68,7 +68,7 @@ non-mutating release gate:
 $env:PLAYNITE_TOOLBOX = 'C:\path\to\Playnite\Toolbox.exe'
 powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass `
   -File .\tools\validate-release.ps1 `
-  -PackagePath .\dist\PersonalCloudLibrarySource-0.3.2.pext
+  -Candidate -PackagePath .\dist\PersonalCloudLibrarySource-0.3.2.1.pext
 ```
 
 The script uses the official Playnite Toolbox syntax:
@@ -76,7 +76,7 @@ The script uses the official Playnite Toolbox syntax:
 `verify installer <manifest_path>`. Packing uses a temporary staging/output folder;
 the source manifests, workflow, and extension tree are not edited. The script also
 parses all three YAML documents structurally and inspects the package's exact files,
-identity, and manifest-derived version.
+identity, and manifest-derived version. Candidate mode additionally refuses published or older versions and checks the known v0.3.2 digest. Toolbox addon/installer verification checks the public feed, not registration of the unpublished candidate. For a historical public-release checkout, omit `-Candidate` and use its exact package version.
 
 If Toolbox cannot be found, the release gate prints `PREREQUISITE_MISSING` and exits
 with exit code 2. This is a blocked official qualification, not a pass. Hosted CI can

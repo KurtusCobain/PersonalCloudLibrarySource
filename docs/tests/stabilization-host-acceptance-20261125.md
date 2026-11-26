@@ -16,14 +16,14 @@
 | Independent review reports and resolved findings | |
 | Test operator and date | |
 
-Use a fresh checkout of the approved SHA, a fresh portable/disposable Playnite profile, separate fixture source/cache/plugin data and **no personal game files, credentials, saves or existing production Playnite installation**. The internal candidate intentionally retains public extension ID and version, so never install it into your everyday profile. Use harmless text/binary fixture files; for actual Play tests choose a known trusted disposable executable that can be closed immediately, not a random archive. Do not execute fake fixture scripts or unknown installers.
+Use a fresh checkout of the approved SHA, a fresh portable/disposable Playnite profile, separate fixture source/cache/plugin data and **no personal game files, credentials, saves or existing production Playnite installation**. The historical pre-review freeze retained the public version; the post-review internal candidate now uses version `0.3.2.1` but retains the public extension ID for migration testing. It can still upgrade a real installation, so never install it into your everyday profile. Use harmless text/binary fixture files; for actual Play tests choose a known trusted disposable executable that can be closed immediately, not a random archive. Do not execute fake fixture scripts or unknown installers.
 
 ## Prerequisites
 
 - [ ] Both independent reviews returned, findings triaged, blockers/high risks resolved or explicitly deferred by owner with disabled functionality.
 - [ ] Exact final Windows, archive and CodeQL workflows checked, no unresolved failing gate.
 - [ ] Fresh Debug/Release build and NUnitLite results recorded; run the release and standalone generator contracts and package inspection using [DEVELOPMENT.md](../../DEVELOPMENT.md).
-- [ ] Official Playnite Toolbox validation run for exact local package and metadata. Missing executable or inaccessible prerequisite is BLOCKED.
+- [ ] Official Playnite Toolbox candidate validation (`-Candidate`) run for exact local package and metadata; public feed verification recorded separately. Missing executable or inaccessible prerequisite is BLOCKED.
 - [ ] Record package digest with `Get-FileHash -Algorithm SHA256 -LiteralPath <candidate package>`.
 - [ ] Separate copies of public v0.2.0 and v0.3.2 disposable profiles with known IDs and hashes for upgrade tests.
 - [ ] Record expected fixture hashes and source/cache inventories before each mutation. Never change actual cloud data.

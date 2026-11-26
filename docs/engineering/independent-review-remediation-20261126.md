@@ -8,7 +8,7 @@ Qualified source: b090230dea6c9d5832dee3e222b579c7e84dd154. Pre-remediation bran
 
 | ID | Reported finding | Current disposition |
 |---|---|---|
-| P1 | Candidate version/identity collision | Open: distinct candidate package and Toolbox check, preserve public artifacts and migration |
+| P1 | Candidate version/identity collision | Internal candidate 0.3.2.1 (manifest and assembly), public feed unchanged; CI guard and validator fixture added. Official Toolbox and actual migration pending |
 | P2 | Narrow CodeQL gate | Baseline artifact downloaded and digest verified; zero results across full C# SARIF scan. All-result CI gate added; qualified at 39dc6f3 (zero reported findings) |
 | P3 | Free-space checks for UNC/ZIP/rclone | Local and ZIP now query actual destination ancestor capacity via Win32; Windows CI pending. Unknown capacity remains best effort; rclone without reliable expected size still needs separate design/host test |
 | P4 | ZIP32 limits vs advisory policy | Open; align shipping ZIP parser and documentation without narrowing unrelated archive advisory contracts unnecessarily |
@@ -72,3 +72,7 @@ Replace drive-letter-only capacity query with GetDiskFreeSpaceEx on the nearest 
 ## Fifth correction batch: shared private metadata replacement preflight
 
 Profile, catalog identity and display snapshot stores used three duplicated replacement writers without verified staging identity/content. All now preserve a single create-versus-replace decision and delegate existing-record replacement to TransferPartialPathPolicy. The common helper rejects occupied stage/backup names, holds the original read handle during schema validation and stage creation, captures file identity, verifies bytes and rechecks both identities and original validity before File.Replace. Shared stage creation/byte verification also serve create-only publication. Existing backup names, format and atomic File.Replace semantics remain. Two regression cases exercise invalid-original refusal with a locked original and occupied-backup refusal before staging. Uncertain temporary evidence is intentionally retained; no pathname cleanup. The final closed-handle File.Replace race, backup substitution and nonparticipating writer coordination are still unresolved, not represented as closed. CI pending.
+
+## Sixth correction batch: distinguish internal candidate
+
+Use numeric version 0.3.2.1 only on the isolated development branch (extension manifest and assembly/file version). Retain extension ID for real migration testing, so this is not safe to install into an ordinary profile. Public v0.3.2 artifacts, installer feed, add-on listing, main, tags, license and release-control remain unchanged. CI checks positive fourth component and strictly newer than every published installer version, and validates candidate package metadata and the known public v0.3.2 digest. The PowerShell fixture exercises rejected published/equivalent/older versions, valid candidate package, and accidental candidate feed inclusion. Official validator has explicit -Candidate mode and clearly separates candidate pack verification from public feed verification. Toolbox compatibility of the four-component version and disposable migration remain unqualified; no public version decision is made. CI pending.

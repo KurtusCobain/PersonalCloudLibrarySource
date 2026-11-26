@@ -39,6 +39,13 @@ jobs:
         shell: pwsh
         run: .\tools\test-release-baseline.ps1
 
+      - name: Validate unpublished stabilization candidate
+        if: github.ref == 'refs/heads/audit/pcls-stabilization-20261124'
+        shell: pwsh
+        run: |
+          Import-Module .\tools\ReleaseValidation.psm1 -Force
+          Assert-UnpublishedCandidate -ExtensionPath .\PersonalCloudLibrarySource\extension.yaml -AddonPath .\playnite-addon\addon-database.yaml -InstallerPath .\playnite-addon\installer.yaml
+
       - name: Run standalone manifest generator regressions
         shell: powershell
         run: .\tools\test-manifest-generator.ps1
@@ -143,6 +150,10 @@ jobs:
           }
 
           & .\tools\test-release-baseline.ps1 -PackagePath $package
+          if ($env:GITHUB_REF -eq 'refs/heads/audit/pcls-stabilization-20261124') {
+            Import-Module .\tools\ReleaseValidation.psm1 -Force
+            Assert-UnpublishedCandidate -ExtensionPath .\PersonalCloudLibrarySource\extension.yaml -AddonPath .\playnite-addon\addon-database.yaml -InstallerPath .\playnite-addon\installer.yaml -PackagePath $package
+          }
 
           $inspect = Join-Path $env:RUNNER_TEMP 'pcls-package-inspect'
           if (Test-Path -LiteralPath $inspect) {

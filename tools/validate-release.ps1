@@ -1,7 +1,8 @@
 param(
     [string]$RepositoryRoot = (Split-Path -Parent $PSScriptRoot),
     [string]$ToolboxPath,
-    [string]$PackagePath
+    [string]$PackagePath,
+    [switch]$Candidate
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,6 +14,10 @@ try {
     $addonPath = Join-Path $root 'playnite-addon\addon-database.yaml'
     $installerPath = Join-Path $root 'playnite-addon\installer.yaml'
     $surface = Assert-ReleaseSurfaces -ExtensionPath $extensionPath -AddonPath $addonPath -InstallerPath $installerPath
+
+    if ($Candidate) {
+        Assert-UnpublishedCandidate -ExtensionPath $extensionPath -AddonPath $addonPath -InstallerPath $installerPath -PackagePath $PackagePath
+    }
 
     $toolbox = Find-PlayniteToolbox -ExplicitPath $ToolboxPath
     if (-not $toolbox) {
@@ -48,7 +53,12 @@ try {
 
         Test-OfficialToolboxOutput -OutputDirectory $officialOutput -ExtensionPath $extensionPath | Out-Null
         if ($PackagePath) { Test-ReleasePackage -PackagePath $PackagePath -ExtensionPath $extensionPath | Out-Null }
-        Write-Host "OFFICIAL_VALIDATION_PASSED: Toolbox pack, verify addon, verify installer, YAML, and package inspection passed for $($surface.Version)."
+        if ($Candidate) {
+            Write-Host "OFFICIAL_CANDIDATE_VALIDATION_PASSED: candidate pack and package inspection passed for $($surface.Version); addon and installer verification covered the unchanged public feed only. Not release authorization."
+        }
+        else {
+            Write-Host "OFFICIAL_VALIDATION_PASSED: Toolbox pack, verify addon, verify installer, YAML, and package inspection passed for $($surface.Version)."
+        }
     }
     finally { Remove-Item -LiteralPath $workspace -Recurse -Force -ErrorAction SilentlyContinue }
 }

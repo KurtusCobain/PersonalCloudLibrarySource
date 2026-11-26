@@ -233,6 +233,41 @@ function Assert-ReleaseSurfaces {
     [pscustomobject]@{ Id = $id; Name = $name; Version = $version; PackageName = "PersonalCloudLibrarySource-$version.pext" }
 }
 
+# An internal candidate must exceed every published installer version.
+# Treat a missing fourth component as zero for comparison.
+function Assert-UnpublishedCandidate {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][string]$ExtensionPath,
+        [Parameter(Mandatory)][string]$AddonPath,
+        [Parameter(Mandatory)][string]$InstallerPath,
+        [string]$PackagePath
+    )
+    $surface = Assert-ReleaseSurfaces -ExtensionPath $ExtensionPath -AddonPath $AddonPath -InstallerPath $InstallerPath
+    $installer = Read-DistributionYaml $InstallerPath
+    $version = [version]$surface.Version
+    if ($version.Revision -lt 1) {
+        throw 'Internal candidate must use a positive fourth version component.'
+    }
+    foreach ($entry in $installer.Sequences['Packages']) {
+        $public = [version]([string]$entry['Version'])
+        $normalized = [version]::new($public.Major, $public.Minor,
+            [Math]::Max(0, $public.Build), [Math]::Max(0, $public.Revision))
+        if ($version -le $normalized) {
+            throw "Internal candidate version $version must exceed published installer version $normalized."
+        }
+    }
+    if ($PackagePath) {
+        Test-ReleasePackage -PackagePath $PackagePath -ExtensionPath $ExtensionPath | Out-Null
+        $digest = (Get-FileHash -LiteralPath $PackagePath -Algorithm SHA256).Hash
+        if ($digest -eq '1781fe630fad9398b8e810e3cf843309acc68a8a3dcfba720873042da41b2ed7') {
+            throw 'Candidate digest matches the published v0.3.2 package.'
+        }
+        Write-Host "Internal candidate SHA-256: $digest"
+    }
+    Write-Host "Internal candidate $version is distinct from published installer versions."
+}
+
 # Inspect a bounded ZIP directory without expanding untrusted paths. Keep the
 # baseline and official Toolbox validators on the same archive safety contract.
 function Open-PclsPackageArchive {
@@ -391,4 +426,4 @@ function Test-OfficialToolboxOutput {
     Test-PclsPackageContent -PackagePath $packages[0].FullName -Extension $extension -Version $version -ExpectedName "PersonalCloudLibrarySource-$version.pext"
 }
 
-Export-ModuleMember -Function Find-PlayniteToolbox, Read-DistributionYaml, Assert-ReleaseSurfaces, Test-ReleasePackage, Test-OfficialToolboxOutput, Open-PclsPackageArchive, Get-PclsPackageIndex, Read-PclsPackageMetadata
+Export-ModuleMember -Function Find-PlayniteToolbox, Read-DistributionYaml, Assert-ReleaseSurfaces, Assert-UnpublishedCandidate, Test-ReleasePackage, Test-OfficialToolboxOutput, Open-PclsPackageArchive, Get-PclsPackageIndex, Read-PclsPackageMetadata

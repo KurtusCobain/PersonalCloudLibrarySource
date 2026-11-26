@@ -12,7 +12,7 @@ namespace PersonalCloudLibrarySource.Tests.Repository
     public class LiveDocumentationContractTests
     {
         private const string AddonId = "PersonalCloudLibrarySource_61993828-67a8-4468-93a2-293442e36328";
-        private const string CurrentVersion = "0.3.2";
+        private const string CandidateVersion = "0.3.2.1";
         private const string V03TargetPattern = @"(?im)^\s*(?:-\s*)?(?:Target release:|\*\*Target release:\*\*)\s*`?0\.3\.0`?(?:\.(?=\s|$))?(?:\s|$)";
 
         [Test]
@@ -146,7 +146,7 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             Assert.That(extension.Scalar("Id"), Is.EqualTo(AddonId));
             Assert.That(addon.Scalar("AddonId"), Is.EqualTo(AddonId));
             Assert.That(installer.Scalar("AddonId"), Is.EqualTo(AddonId));
-            Assert.That(extension.Scalar("Version"), Is.EqualTo(CurrentVersion));
+            Assert.That(extension.Scalar("Version"), Is.EqualTo(CandidateVersion));
             StringAssert.Contains("## 0.3.2", File.ReadAllText(Path.Combine(Root(), "CHANGELOG.md")));
 
             Assert.That(extension.Mapping.ContainsKey("Links"), Is.True);
@@ -155,6 +155,7 @@ namespace PersonalCloudLibrarySource.Tests.Repository
             Assert.That(installer.Sequence("Packages").Any(item => item.Scalar("Version") == "0.3.2"), Is.True);
             Assert.That(installer.Sequence("Packages").Any(item => item.Scalar("Version") == "0.2.0"), Is.True);
             Assert.That(installer.Sequence("Packages").Any(item => item.Scalar("Version") == "1.0.0"), Is.False);
+            Assert.That(installer.Sequence("Packages").Any(item => item.Scalar("Version") == CandidateVersion), Is.False);
         }
 
         [TestCase("Root:\n   Child: value", TestName = "YamlParser_RejectsOddIndentation")]

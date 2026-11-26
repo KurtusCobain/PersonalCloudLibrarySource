@@ -174,6 +174,30 @@ try {
         } '0.2.0|package.*version|version.*package'
     }
 
+    Test-Case 'Internal candidate requires distinct positive fourth component and newer version' {
+        $root = Join-Path $testRoot 'candidate'
+        New-TestRepository $root
+        $extension = Join-Path $root 'PersonalCloudLibrarySource\extension.yaml'
+        $addon = Join-Path $root 'playnite-addon\addon-database.yaml'
+        $installer = Join-Path $root 'playnite-addon\installer.yaml'
+        (Get-Content $installer -Raw).Replace('0.2.0', '0.3.2') | Set-Content $installer
+        $original = Get-Content $extension -Raw
+        foreach ($bad in @('0.3.2', '0.3.2.0', '0.3.1.9')) {
+            $original.Replace('Version: 0.3.2', "Version: $bad") | Set-Content $extension
+            Assert-ThrowsLike {
+                Assert-UnpublishedCandidate -ExtensionPath $extension -AddonPath $addon -InstallerPath $installer
+            } 'candidate.*version|candidate.*component'
+        }
+        $original.Replace('Version: 0.3.2', 'Version: 0.3.2.1') | Set-Content $extension
+        $package = Join-Path $root 'PersonalCloudLibrarySource-0.3.2.1.pext'
+        New-TestPackage $root $package
+        Assert-UnpublishedCandidate -ExtensionPath $extension -AddonPath $addon -InstallerPath $installer -PackagePath $package
+        (Get-Content $installer -Raw).Replace('0.3.2', '0.3.2.1') | Set-Content $installer
+        Assert-ThrowsLike {
+            Assert-UnpublishedCandidate -ExtensionPath $extension -AddonPath $addon -InstallerPath $installer
+        } 'candidate.*version'
+    }
+
     Test-Case 'Package inspection derives name and rejects missing or extra files' {
         $root = Join-Path $testRoot 'package'
         New-TestRepository $root
