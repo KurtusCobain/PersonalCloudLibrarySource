@@ -42,7 +42,7 @@ namespace PersonalCloudLibrarySource
     // Reversible, same-cache-volume relocation only. No recursive deletion,
     // re-extraction, executable launch, receipt adoption, or metadata mutation.
     // Its immutable write-ahead journal survives a crash between preparation
-    // and Directory.Move, and every recovery action requires explicit consent.
+    // and verified handle publication, and every recovery action requires explicit consent.
     public sealed class ZipManagedRecoveryService
     {
         private const int MaxJournalBytes = 8192;
@@ -191,6 +191,7 @@ namespace PersonalCloudLibrarySource
                     approvals.HasApprovalFootprint(gameId, cacheRoot))
                     return false;
 
+                var originalIdentity = TransferPartialPathPolicy.ObserveDirectoryIdentity(original);
                 var report = new ZipManagedMaintenanceService().Assess(
                     cacheRoot, gameId, receipts, approvals, cancellationToken);
                 if (report.Status != ZipManagedMaintenanceStatus.CleanNeedsManualRemoval ||
@@ -235,7 +236,8 @@ namespace PersonalCloudLibrarySource
                     reason = "Journal saved but folder conditions changed. Review recovery state before retrying.";
                     return false;
                 }
-                Directory.Move(original, recovery);
+                if (HasFinalizationFootprint(journal)) return false;
+                MoveVerifiedDirectory(original, recovery, originalIdentity);
                 reason = "Managed ZIP moved to recovery quarantine without deleting files. Update Game Library; use Restore Managed ZIP Recovery to undo.";
                 return true;
             }
@@ -277,6 +279,7 @@ namespace PersonalCloudLibrarySource
                 if (!MatchingReceipt(cacheRoot, gameId, receipts, entry,
                     out receipt) || !SafeFolder(cacheRoot, original))
                     return false;
+                var originalIdentity = TransferPartialPathPolicy.ObserveDirectoryIdentity(original);
                 bool matches;
                 if (!receipts.TryCompareInventory(cacheRoot,
                     ZipManagedExtractionService.ReceiptKeyForGame(gameId),
@@ -287,7 +290,8 @@ namespace PersonalCloudLibrarySource
                     File.Exists(recovery) || Directory.Exists(recovery) ||
                     approvals.HasApprovalFootprint(gameId, cacheRoot))
                     return false;
-                Directory.Move(original, recovery);
+                if (HasFinalizationFootprint(journal)) return false;
+                MoveVerifiedDirectory(original, recovery, originalIdentity);
                 reason = "Prepared recovery move completed; original files preserved in quarantine.";
                 return true;
             }
@@ -333,6 +337,7 @@ namespace PersonalCloudLibrarySource
                 // Do not adopt added/modified user content as owned. A strict
                 // match is required for automated recovery. Nonmatching
                 // content must be preserved for manual recovery.
+                var recoveryIdentity = TransferPartialPathPolicy.ObserveDirectoryIdentity(recovery);
                 var snapshot = new CacheTreeInventoryScanner().Scan(
                     cacheRoot, recovery, cancellationToken);
                 if (snapshot.FileCount != receipt.InventoryFileCount ||
@@ -345,7 +350,8 @@ namespace PersonalCloudLibrarySource
                     File.Exists(original) || Directory.Exists(original) ||
                     approvals.HasApprovalFootprint(gameId, cacheRoot))
                     return false;
-                Directory.Move(recovery, original);
+                if (HasFinalizationFootprint(journal)) return false;
+                MoveVerifiedDirectory(recovery, original, recoveryIdentity);
                 var finalized = TryWriteRestoredMarker(
                     journal + ".restored", entry.TransactionId);
                 reason = finalized
@@ -365,6 +371,18 @@ namespace PersonalCloudLibrarySource
                 reason = "Recovery restore could not be completed safely. Preserve the journal and files.";
                 return false;
             }
+        }
+
+        // Preserve the identity observed before full inventory review. A
+        // same-name substituted folder must not become the source of a move.
+        // The native rename is no-replace; this does not pin every descendant
+        // or close all races in ancestor resolution.
+        private static void MoveVerifiedDirectory(string source, string target,
+            TransferPartialPathPolicy.FileIdentity expected)
+        {
+            TransferPartialPathPolicy.RequireVacant(target);
+            TransferPartialPathPolicy.PublishOwnedDirectory(source, target, expected);
+            TransferPartialPathPolicy.RequireDirectoryIdentity(target, expected);
         }
 
         private bool MatchingReceipt(string cacheRoot, string gameId,

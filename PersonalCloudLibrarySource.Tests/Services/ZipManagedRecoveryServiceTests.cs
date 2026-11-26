@@ -81,6 +81,27 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void VerifiedRecoveryMoveRefusesSubstitutedRootWithoutMovingEitherFolder()
+        {
+            var original = plan.Destination;
+            var preserved = Path.Combine(cache, "preserved-fixture");
+            var target = RecoveryDirectory();
+            var flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+            var observe = typeof(TransferPartialPathPolicy).GetMethod("ObserveDirectoryIdentity", flags);
+            var move = typeof(ZipManagedRecoveryService).GetMethod("MoveVerifiedDirectory", flags);
+            var identity = observe.Invoke(null, new object[] { original });
+            Directory.Move(original, preserved);
+            Directory.CreateDirectory(original);
+            File.WriteAllText(Path.Combine(original, "Game.exe"), "unrelated replacement");
+            var error = Assert.Throws<System.Reflection.TargetInvocationException>(() =>
+                move.Invoke(null, new[] { (object)original, target, identity }));
+            Assert.That(error.InnerException, Is.TypeOf<IOException>());
+            Assert.That(Directory.Exists(target), Is.False);
+            Assert.That(File.ReadAllText(Path.Combine(original, "Game.exe")), Is.EqualTo("unrelated replacement"));
+            Assert.That(File.ReadAllText(Path.Combine(preserved, "Game.exe")), Is.EqualTo("original game"));
+        }
+
+        [Test]
         public void ExplicitQuarantineMovesWholeCleanPackageWithImmutableJournal()
         {
             Assert.That(recovery.Inspect(cache, gameId).State,
