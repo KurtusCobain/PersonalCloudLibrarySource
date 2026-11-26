@@ -301,6 +301,9 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(process.KillCount, Is.EqualTo(1));
             Assert.That(process.TimedWaitCount, Is.EqualTo(1));
             Assert.That(result.ProcessExitConfirmed, Is.EqualTo(!killFails));
+            Assert.That(result.Message, Does.Contain("IOException"));
+            Assert.That(result.Message, Does.Contain("HRESULT 0x"));
+            Assert.That(result.Message, Does.Not.Contain("native launch may have occurred"));
             Assert.That(process.Disposed, Is.True);
         }
 

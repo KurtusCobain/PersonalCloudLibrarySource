@@ -208,9 +208,10 @@ namespace PersonalCloudLibrarySource
                             : RcloneProcessResult.Failure("rclone cancellation could not confirm process exit.",
                                 processExitConfirmed: false);
                     }
-                    catch (Exception)
+                    catch (Exception ex)
                     {
-                        return RcloneProcessResult.Failure("Unable to run rclone; review the executable and transfer settings.",
+                        return RcloneProcessResult.Failure(
+                            DescribeFailure("Unable to run rclone; review the executable and transfer settings.", ex),
                             processExitConfirmed: !launchAttempted || TryStop(process));
                     }
                     finally
@@ -224,11 +225,20 @@ namespace PersonalCloudLibrarySource
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                return RcloneProcessResult.Failure("Unable to initialize rclone process handling.",
+                return RcloneProcessResult.Failure(
+                    DescribeFailure("Unable to initialize rclone process handling.", ex),
                     processExitConfirmed: false);
             }
+        }
+
+        private static string DescribeFailure(string message, Exception error)
+        {
+            // Exception text, command lines and configuration may disclose
+            // paths or remote credentials. Report only diagnostic codes.
+            return message + " (" + error.GetType().Name + ", HRESULT 0x" +
+                error.HResult.ToString("X8") + ").";
         }
 
         private static void HandleLine(

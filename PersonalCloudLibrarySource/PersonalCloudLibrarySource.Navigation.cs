@@ -569,7 +569,7 @@ namespace PersonalCloudLibrarySource
                 return false;
             }
 
-            Process.Start("explorer.exe", path);
+            Process.Start("explorer.exe", RcloneCommandBuilder.QuoteArgument(path));
             return true;
         }
 

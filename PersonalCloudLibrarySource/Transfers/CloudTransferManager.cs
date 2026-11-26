@@ -368,9 +368,9 @@ namespace PersonalCloudLibrarySource
         {
             var availableSlots = Math.Max(0, maxConcurrentTransfers - activeJobs.Count);
             if (availableSlots == 0 || queuedJobs.Count == 0) return;
-            foreach (var queuedJob in queuedJobs
-                .OrderBy(job => job.CreatedAt)
-                .Take(availableSlots).ToArray())
+            // Registration appends under syncRoot. Dispatch by registration
+            // order rather than UTC timestamps that can jump backward.
+            foreach (var queuedJob in queuedJobs.Take(availableSlots).ToArray())
             {
                 SetStateLocked(queuedJob, CloudTransferState.Preparing, null);
             }

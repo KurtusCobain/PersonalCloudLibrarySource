@@ -9,23 +9,23 @@ Qualified source: b090230dea6c9d5832dee3e222b579c7e84dd154. Pre-remediation bran
 | ID | Reported finding | Current disposition |
 |---|---|---|
 | P1 | Candidate version/identity collision | Open: distinct candidate package and Toolbox check, preserve public artifacts and migration |
-| P2 | Narrow CodeQL gate | Baseline artifact downloaded and digest verified; zero results across full C# SARIF scan. All-result CI gate added; new run pending |
+| P2 | Narrow CodeQL gate | Baseline artifact downloaded and digest verified; zero results across full C# SARIF scan. All-result CI gate added; qualified at 39dc6f3 (zero reported findings) |
 | P3 | Free-space checks for UNC/ZIP/rclone | Open; distinguish unknown capacity from known insufficiency |
 | P4 | ZIP32 limits vs advisory policy | Open; align shipping ZIP parser and documentation without narrowing unrelated archive advisory contracts unnecessarily |
 | P5 | Temporary files retained on failures | Open; only remove verified owned files, preserve uncertain evidence |
 | P6 | rclone :local: production configuration | Open; assess supported provider semantics and tests before change |
-| P7 | Explorer argument quoting | Open |
-| P8 | Process diagnostics | Open; redact sensitive paths/credentials |
-| P9 | Queue ordering/concurrency settings | Open |
-| P10 | Worker fault containment | Open; preserve reservations on ambiguous publication |
+| P7 | Explorer argument quoting | Confirmed two raw directory arguments; now use existing Windows argument quoting. File selection already quoted; host behavior pending |
+| P8 | Process diagnostics | Added exception type/HRESULT only, with regression assertions against message disclosure; qualification pending |
+| P9 | Queue ordering/concurrency settings | Dispatch uses registration order; clock regression added. Invalid concurrency fallback to one is an explicit tested conservative contract, retained |
+| P10 | Worker fault containment | Executor and subscriber exceptions already handled/tested; repeated-failure test added. Unexpected internal bookkeeping fault remains investigation target |
 | P11 | Legacy process code | Open; reachability/test audit |
 | P12 | Old release workflow | Open; do not change main or public release controls without separate approval |
 | P13 | Absolute/UNC LocalFile source paths | Confirmed explicitly supported by existing test; design consent/trust boundary and migration before restricting |
 | P14 | Process environment contract | Open |
 | H1 | Handle inheritance | Open; adversarial host test |
 | H2 | Long paths | Open; fail safely and document/measure |
-| H3 | Overlapping ZIP member ranges | Confirmed missing range check; sorted local header/data interval validation and two regression cases added; Windows CI pending |
-| H4 | Superscript Windows device names | Confirmed in two inspected policies; corrected with 12 additional parameterized cases; Windows CI pending |
+| H3 | Overlapping ZIP member ranges | Confirmed missing range check; sorted local header/data interval validation and two regression cases added; Windows CI passed at 39dc6f3 |
+| H4 | Superscript Windows device names | Confirmed in two inspected policies; corrected with 12 additional parameterized cases; Windows CI passed at 39dc6f3 |
 | H5 | Encrypted rclone config | Open; test prompt/EOF behavior |
 | H6 | Extended Windows path roots | Open; inspect native path contracts |
 
@@ -58,3 +58,9 @@ Qualification pending for this batch. No Windows execution or Toolbox acceptance
 ## Second correction batch: ZIP local range validation
 
 The central inspector verified local offsets precede the central directory, but did not compare physical member intervals. A repeated offset or overlapping compressed range could pass that preliminary gate. The inspector now sorts offsets, reads bounded 30-byte local headers, validates their signatures and name/extra lengths, and refuses overlap or compressed data beyond the central-directory boundary. Two extraction regressions mutate central metadata to duplicate a local offset or extend a member beyond the data area. No stage or destination may be created and source bytes must remain unchanged. This checks header/data interval overlap, not the full semantics of optional data descriptors, and does not establish general malformed ZIP safety. Additional hosted Windows and provider compatibility qualification remains pending.
+
+## Third correction batch: queue order, navigation and diagnostics
+
+Both preceding correction commits passed all three workflows. Exact checkpoint 39dc6f3afa470a83e4163e72ef949bda0d29e04a: 972 standard tests and two separately executed real-rclone tests passed, zero warnings, zero full CodeQL results and archive compatibility passed. Evidence: https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45770962482 and https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45770962455 and https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45770962465.
+
+Remove wall-clock sorting from the queue's already ordered live list. Retain the tested invalid-concurrency fallback. Quote Explorer directory arguments in both entry points, leaving existing file selection syntax unchanged. Preserve exception class and HRESULT in rclone failures without emitting raw exception text, and strengthen existing launch-failure tests. Repeated executor exceptions are already caught inside ExecuteObserved; add a twelve-failure regression exceeding the worker count rather than rewrite terminal/recovery logic without a concrete defect. New batch CI pending; Explorer behavior requires Windows host acceptance. No release or CH-Rm changes.

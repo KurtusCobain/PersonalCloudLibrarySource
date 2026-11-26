@@ -437,6 +437,30 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void RepeatedExecutorExceptionsDoNotExhaustWorkerPool()
+        {
+            var manager = new CloudTransferManager(1);
+            using (var queue = new TransferQueueService(manager, new ThrowingExecutor()))
+            {
+                var terminalCount = 0;
+                queue.JobTerminated += (sender, args) => Interlocked.Increment(ref terminalCount);
+                for (var index = 0; index < 12; index++)
+                {
+                    var job = queue.EnqueueLocal(Guid.NewGuid(), "Broken", "source",
+                        "dest-" + index, "LocalFolder", false);
+                    var completion = queue.GetCompletion(job.Id);
+                    Assert.That(completion.Wait(TimeSpan.FromSeconds(3)), Is.True);
+                    Assert.That(completion.Result.Succeeded, Is.False);
+                    Assert.That(job.State, Is.EqualTo(CloudTransferState.Failed));
+                }
+                Assert.That(terminalCount, Is.EqualTo(12));
+                Assert.That(manager.ActiveCount, Is.Zero);
+                Assert.That(manager.QueuedCount, Is.Zero);
+                Assert.That(queue.Shutdown(TimeSpan.FromSeconds(3)), Is.True);
+            }
+        }
+
+        [Test]
         public void TerminalSubscriberException_DoesNotFaultWorkerOrStrandLaterJob()
         {
             var manager = new CloudTransferManager(1);

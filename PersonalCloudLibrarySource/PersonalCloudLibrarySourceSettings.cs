@@ -865,7 +865,7 @@ namespace PersonalCloudLibrarySource
                 Directory.CreateDirectory(folderPath);
             }
 
-            Process.Start("explorer.exe", folderPath);
+            Process.Start("explorer.exe", RcloneCommandBuilder.QuoteArgument(folderPath));
         }
 
         private static void OpenFileInExplorer(string path, string emptyPathMessage)

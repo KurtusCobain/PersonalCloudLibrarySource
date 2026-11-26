@@ -54,6 +54,24 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void DispatchUsesRegistrationOrderEvenWhenWallClockGoesBackward()
+        {
+            var manager = new CloudTransferManager(1);
+            var active = manager.Enqueue(Guid.NewGuid(), "Active", "s0", "d0", "LocalFolder");
+            var first = manager.Enqueue(Guid.NewGuid(), "First queued", "s1", "d1", "LocalFolder");
+            var second = manager.Enqueue(Guid.NewGuid(), "Second queued", "s2", "d2", "LocalFolder");
+            var createdAt = typeof(CloudTransferJob).GetField("<CreatedAt>k__BackingField",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            Assert.That(createdAt, Is.Not.Null);
+            createdAt.SetValue(second, first.CreatedAt.AddHours(-1));
+            Assert.That(second.CreatedAt, Is.LessThan(first.CreatedAt));
+            manager.Transition(active.Id, CloudTransferState.Transferring);
+            manager.Transition(active.Id, CloudTransferState.Completed);
+            Assert.That(first.State, Is.EqualTo(CloudTransferState.Preparing));
+            Assert.That(second.State, Is.EqualTo(CloudTransferState.Queued));
+        }
+
+        [Test]
         public void Transition_TerminalJob_RejectsFurtherChanges()
         {
             var manager = new CloudTransferManager(1);
