@@ -81,6 +81,25 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void HeldLifecycleLockPreventsCompetingRecoveryMove()
+        {
+            var method = typeof(ZipManagedRecoveryService).GetMethod("AcquireLifecycleLock",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            using (var held = (FileStream)method.Invoke(recovery, new object[] { cache, gameId, CancellationToken.None }))
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var second = new ZipManagedRecoveryService(Path.Combine(root, "journals"));
+                cancellation.CancelAfter(100);
+                string reason;
+                Assert.That(second.TryQuarantine(cache, gameId, receipts, approvals, true,
+                    cancellation.Token, out reason), Is.False);
+                Assert.That(Directory.Exists(plan.Destination), Is.True);
+                Assert.That(second.HasJournalFootprint(cache, gameId), Is.False);
+            }
+            Assert.That(Quarantine(), Is.True);
+        }
+
+        [Test]
         public void VerifiedRecoveryMoveRefusesSubstitutedRootWithoutMovingEitherFolder()
         {
             var original = plan.Destination;

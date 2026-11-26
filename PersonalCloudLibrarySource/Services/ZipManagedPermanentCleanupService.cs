@@ -104,126 +104,130 @@ namespace PersonalCloudLibrarySource
             try
             {
                 token.ThrowIfCancellationRequested();
-                if (receipts == null || approvals == null ||
-                    approvals.HasApprovalFootprint(gameId, cacheRoot))
-                    return Refuse(result, "Launcher approval remains or cannot be verified absent.");
-
-                var state = recovery.Inspect(cacheRoot, gameId);
-                if (state.State != ZipRecoveryState.Quarantined &&
-                    state.State != ZipRecoveryState.CleanupPending)
-                    return Refuse(result, "A matching quarantine or in-progress cleanup is required.");
-                if (string.IsNullOrWhiteSpace(state.TransactionId))
-                    return Refuse(result, "Recovery journal is not verifiable.");
-                string manifestPath;
-                if (!TryManifestPath(cacheRoot, gameId, out manifestPath))
-                    return Refuse(result, "Invalid cleanup journal location.");
-
-                ZipCleanupManifest manifest;
-                if (File.Exists(manifestPath))
+                if (receipts == null || approvals == null)
+                    return Refuse(result, "Receipt and approval stores are required.");
+                using (recovery.AcquireLifecycleLock(cacheRoot, gameId, token))
                 {
-                    if (!TryReadManifest(manifestPath, cacheRoot, gameId, state,
-                        receipts, out manifest))
-                        return Refuse(result, "Cleanup journal is invalid; manual review is required.");
-                }
-                else
-                {
-                    if (state.State != ZipRecoveryState.Quarantined ||
-                        !BuildManifest(cacheRoot, gameId, state, receipts,
-                            token, out manifest) ||
-                        !WriteCreateOnly(manifestPath, Serialize(manifest)))
-                        return Refuse(result, "Could not create the verified cleanup journal. No files were removed.");
-                }
-                result.TotalFiles = manifest.Files.Count;
-                token.ThrowIfCancellationRequested();
-
-                // Before every deletion batch, require that all *present*
-                // entries are in the original immutable manifest. A newly
-                // added save, mod, executable, junction, or unknown folder
-                // causes refusal BEFORE another file is removed.
-                if (!CheckCurrentTree(manifest, manifestPath, token))
-                    return Refuse(result, "Unrecognized content or unrecorded missing files: preserve the package for review.");
-
-                var destination = manifest.RecoveryDirectory;
-                var files = manifest.Files;
-                for (var index = 0; index < files.Count; index++)
-                {
-                    token.ThrowIfCancellationRequested();
                     if (approvals.HasApprovalFootprint(gameId, cacheRoot))
-                        return Refuse(result, "Launcher approval appeared during cleanup.");
-                    if (!CheckCurrentTree(manifest, manifestPath, token))
-                        return Refuse(result, "Package content changed during cleanup; remaining files were preserved.");
+                        return Refuse(result, "Launcher approval remains or cannot be verified absent.");
 
-                    var expected = files[index];
-                    var path = Located(destination, expected.RelativePath);
-                    if (string.IsNullOrEmpty(path))
-                        return Refuse(result, "Untrusted original file path in cleanup journal.");
-                    var marker = IntentPath(manifestPath, index);
-                    if (!File.Exists(path))
+                    var state = recovery.Inspect(cacheRoot, gameId);
+                    if (state.State != ZipRecoveryState.Quarantined &&
+                        state.State != ZipRecoveryState.CleanupPending)
+                        return Refuse(result, "A matching quarantine or in-progress cleanup is required.");
+                    if (string.IsNullOrWhiteSpace(state.TransactionId))
+                        return Refuse(result, "Recovery journal is not verifiable.");
+                    string manifestPath;
+                    if (!TryManifestPath(cacheRoot, gameId, out manifestPath))
+                        return Refuse(result, "Invalid cleanup journal location.");
+
+                    ZipCleanupManifest manifest;
+                    if (File.Exists(manifestPath))
                     {
-                        if (!ValidIntent(marker, manifest.TransactionId, expected))
-                            return Refuse(result, "Original file is missing without its deletion-intent record.");
-                        continue;
+                        if (!TryReadManifest(manifestPath, cacheRoot, gameId, state,
+                            receipts, out manifest))
+                            return Refuse(result, "Cleanup journal is invalid; manual review is required.");
                     }
-                    if (!SafeFile(cacheRoot, path))
-                        return Refuse(result, "Original file is linked or unsafe.");
-
-                    // A present file with a pre-existing intent may be a
-                    // replacement or a crash before disposition. Do not replay
-                    // that uncertain operation against a present pathname.
-                    if (CacheOwnershipReceiptStore.ExistsOrCannotVerifyAbsence(marker))
-                        return Refuse(result, "A present file has a prior deletion intent; preserve it for manual review.");
-                    using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, true))
+                    else
                     {
-                        TransferPartialPathPolicy.CapturePrivateFileIdentity(input.SafeFileHandle);
-                        if (input.Length != expected.Length ||
-                            !string.Equals(Digest(input, token), expected.Sha256,
-                                StringComparison.Ordinal))
-                            return Refuse(result, "Original file content changed; no further deletions.");
-                        if (!WriteCreateOnly(marker, IntentText(
-                            manifest.TransactionId, expected)))
-                            return Refuse(result, "Could not save file deletion intent.");
-                        if (!ValidIntent(marker, manifest.TransactionId, expected))
-                            return Refuse(result, "File deletion intent is corrupt.");
-                        token.ThrowIfCancellationRequested();
-                        if (!SafeFile(cacheRoot, path))
-                            return Refuse(result, "File path became unsafe.");
-                        TransferPartialPathPolicy.CapturePrivateFileIdentity(input.SafeFileHandle);
-                        TransferPartialPathPolicy.DeleteVerifiedFileHandle(input.SafeFileHandle);
+                        if (state.State != ZipRecoveryState.Quarantined ||
+                            !BuildManifest(cacheRoot, gameId, state, receipts,
+                                token, out manifest) ||
+                            !WriteCreateOnly(manifestPath, Serialize(manifest)))
+                            return Refuse(result, "Could not create the verified cleanup journal. No files were removed.");
                     }
-                    TransferPartialPathPolicy.RequireVacant(path);
-                    result.RemovedFiles++;
-                    onFileRemoved?.Invoke(result.RemovedFiles);
-                }
-
-                token.ThrowIfCancellationRequested();
-                if (!CheckCurrentTree(manifest, manifestPath, token))
-                    return Refuse(result, "Unexpected content appeared before directory cleanup.");
-                foreach (var relative in manifest.Directories
-                    .OrderByDescending(x => x.Length).ThenByDescending(x => x,
-                        StringComparer.Ordinal))
-                {
+                    result.TotalFiles = manifest.Files.Count;
                     token.ThrowIfCancellationRequested();
-                    var directory = Located(destination, relative);
-                    if (string.IsNullOrEmpty(directory) ||
-                        !new SafeCacheDeletionPolicy()
-                            .Authorize(cacheRoot, directory, false).Allowed)
-                        return Refuse(result, "Unsafe directory during cleanup.");
-                    if (Directory.Exists(directory))
-                        TransferPartialPathPolicy.DeleteOwnedEmptyDirectory(directory,
-                            TransferPartialPathPolicy.ObserveDirectoryIdentity(directory)); // empty ONLY
+
+                    // Before every deletion batch, require that all *present*
+                    // entries are in the original immutable manifest. A newly
+                    // added save, mod, executable, junction, or unknown folder
+                    // causes refusal BEFORE another file is removed.
+                    if (!CheckCurrentTree(manifest, manifestPath, token))
+                        return Refuse(result, "Unrecognized content or unrecorded missing files: preserve the package for review.");
+
+                    var destination = manifest.RecoveryDirectory;
+                    var files = manifest.Files;
+                    for (var index = 0; index < files.Count; index++)
+                    {
+                        token.ThrowIfCancellationRequested();
+                        if (approvals.HasApprovalFootprint(gameId, cacheRoot))
+                            return Refuse(result, "Launcher approval appeared during cleanup.");
+                        if (!CheckCurrentTree(manifest, manifestPath, token))
+                            return Refuse(result, "Package content changed during cleanup; remaining files were preserved.");
+
+                        var expected = files[index];
+                        var path = Located(destination, expected.RelativePath);
+                        if (string.IsNullOrEmpty(path))
+                            return Refuse(result, "Untrusted original file path in cleanup journal.");
+                        var marker = IntentPath(manifestPath, index);
+                        if (!File.Exists(path))
+                        {
+                            if (!ValidIntent(marker, manifest.TransactionId, expected))
+                                return Refuse(result, "Original file is missing without its deletion-intent record.");
+                            continue;
+                        }
+                        if (!SafeFile(cacheRoot, path))
+                            return Refuse(result, "Original file is linked or unsafe.");
+
+                        // A present file with a pre-existing intent may be a
+                        // replacement or a crash before disposition. Do not replay
+                        // that uncertain operation against a present pathname.
+                        if (CacheOwnershipReceiptStore.ExistsOrCannotVerifyAbsence(marker))
+                            return Refuse(result, "A present file has a prior deletion intent; preserve it for manual review.");
+                        using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(path, true))
+                        {
+                            TransferPartialPathPolicy.CapturePrivateFileIdentity(input.SafeFileHandle);
+                            if (input.Length != expected.Length ||
+                                !string.Equals(Digest(input, token), expected.Sha256,
+                                    StringComparison.Ordinal))
+                                return Refuse(result, "Original file content changed; no further deletions.");
+                            if (!WriteCreateOnly(marker, IntentText(
+                                manifest.TransactionId, expected)))
+                                return Refuse(result, "Could not save file deletion intent.");
+                            if (!ValidIntent(marker, manifest.TransactionId, expected))
+                                return Refuse(result, "File deletion intent is corrupt.");
+                            token.ThrowIfCancellationRequested();
+                            if (!SafeFile(cacheRoot, path))
+                                return Refuse(result, "File path became unsafe.");
+                            TransferPartialPathPolicy.CapturePrivateFileIdentity(input.SafeFileHandle);
+                            TransferPartialPathPolicy.DeleteVerifiedFileHandle(input.SafeFileHandle);
+                        }
+                        TransferPartialPathPolicy.RequireVacant(path);
+                        result.RemovedFiles++;
+                        onFileRemoved?.Invoke(result.RemovedFiles);
+                    }
+
+                    token.ThrowIfCancellationRequested();
+                    if (!CheckCurrentTree(manifest, manifestPath, token))
+                        return Refuse(result, "Unexpected content appeared before directory cleanup.");
+                    foreach (var relative in manifest.Directories
+                        .OrderByDescending(x => x.Length).ThenByDescending(x => x,
+                            StringComparer.Ordinal))
+                    {
+                        token.ThrowIfCancellationRequested();
+                        var directory = Located(destination, relative);
+                        if (string.IsNullOrEmpty(directory) ||
+                            !new SafeCacheDeletionPolicy()
+                                .Authorize(cacheRoot, directory, false).Allowed)
+                            return Refuse(result, "Unsafe directory during cleanup.");
+                        if (Directory.Exists(directory))
+                            TransferPartialPathPolicy.DeleteOwnedEmptyDirectory(directory,
+                                TransferPartialPathPolicy.ObserveDirectoryIdentity(directory)); // empty ONLY
+                    }
+                    if (Directory.Exists(destination))
+                        TransferPartialPathPolicy.DeleteOwnedEmptyDirectory(destination,
+                            TransferPartialPathPolicy.ObserveDirectoryIdentity(destination)); // empty ONLY
+                    if (Directory.Exists(destination) || File.Exists(destination))
+                        return Refuse(result, "Cleanup folder still contains files; preserve it.");
+                    var finalMarker = manifestPath.Substring(0,
+                        manifestPath.Length - ".purge.json".Length) + ".purged";
+                    if (!WriteCreateOnly(finalMarker, manifest.TransactionId))
+                        return Refuse(result, "Files removed, but cleanup finalization marker failed; resume only after review.");
+                    result.Succeeded = true;
+                    result.Reason = "Verified original ZIP files permanently removed. Original ZIP source, receipt and audit journals remain.";
+                    return result;
                 }
-                if (Directory.Exists(destination))
-                    TransferPartialPathPolicy.DeleteOwnedEmptyDirectory(destination,
-                        TransferPartialPathPolicy.ObserveDirectoryIdentity(destination)); // empty ONLY
-                if (Directory.Exists(destination) || File.Exists(destination))
-                    return Refuse(result, "Cleanup folder still contains files; preserve it.");
-                var finalMarker = manifestPath.Substring(0,
-                    manifestPath.Length - ".purge.json".Length) + ".purged";
-                if (!WriteCreateOnly(finalMarker, manifest.TransactionId))
-                    return Refuse(result, "Files removed, but cleanup finalization marker failed; resume only after review.");
-                result.Succeeded = true;
-                result.Reason = "Verified original ZIP files permanently removed. Original ZIP source, receipt and audit journals remain.";
-                return result;
             }
             catch (OperationCanceledException)
             {

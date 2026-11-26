@@ -91,6 +91,22 @@ namespace PersonalCloudLibrarySource.Tests.Services
         }
 
         [Test]
+        public void HeldRecoveryLifecycleLockBlocksCleanupBeforeIntentOrDeletion()
+        {
+            var method = typeof(ZipManagedRecoveryService).GetMethod("AcquireLifecycleLock",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            using (var held = (FileStream)method.Invoke(recover, new object[] { cache, gameId, CancellationToken.None }))
+            using (var cancellation = new CancellationTokenSource())
+            {
+                cancellation.CancelAfter(100);
+                Assert.That(Purge(true, cancellation.Token).Succeeded, Is.False);
+                Assert.That(Directory.GetFiles(recoveryRoot, "*.purge.json"), Is.Empty);
+                Assert.That(File.Exists(Path.Combine(quarantine, "Game.exe")), Is.True);
+            }
+            Assert.That(Purge().Succeeded, Is.True);
+        }
+
+        [Test]
         public void ExplicitRemovalReclaimsOnlyQuarantinedOriginalFilesAndKeepsSource()
         {
             var preview = Preview();

@@ -55,6 +55,32 @@ namespace PersonalCloudLibrarySource
             this.storeRoot = Path.GetFullPath(storeRoot);
         }
 
+        // All cooperating recovery writers and cleanup share this per-game
+        // lock in the same journal store. Do not remove the persistent lock
+        // pathname on release; doing so could create competing lock objects.
+        // This does not serialize external filesystem changes or approvals
+        // written by an independent service.
+        internal FileStream AcquireLifecycleLock(string cacheRoot, string gameId, CancellationToken token)
+        {
+            token.ThrowIfCancellationRequested();
+            string root, original, recovery, journal;
+            if (!TryLocations(cacheRoot, gameId, out root, out original, out recovery, out journal))
+                throw new IOException("Recovery lifecycle location cannot be verified.");
+            TransferPartialPathPolicy.RequireSafePath(storeRoot);
+            Directory.CreateDirectory(storeRoot);
+            var lockPath = Path.ChangeExtension(journal, ".lock");
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            while (true)
+            {
+                token.ThrowIfCancellationRequested();
+                try { return TransferPartialPathPolicy.OpenJournalLock(lockPath); }
+                catch (IOException ex) when ((ex.HResult & 0xffff) == 32 && timer.ElapsedMilliseconds < 2000)
+                {
+                    if (token.WaitHandle.WaitOne(25)) token.ThrowIfCancellationRequested();
+                }
+            }
+        }
+
         public bool HasJournalFootprint(string cacheRoot, string gameId)
         {
             try
@@ -182,64 +208,67 @@ namespace PersonalCloudLibrarySource
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                string root, original, recovery, journal;
-                if (!TryLocations(cacheRoot, gameId, out root, out original,
-                    out recovery, out journal)) return false;
-                if (File.Exists(journal) || Directory.Exists(journal) ||
-                    File.Exists(recovery) || Directory.Exists(recovery) ||
-                    !Directory.Exists(original) ||
-                    approvals.HasApprovalFootprint(gameId, cacheRoot))
-                    return false;
-
-                var originalIdentity = TransferPartialPathPolicy.ObserveDirectoryIdentity(original);
-                var report = new ZipManagedMaintenanceService().Assess(
-                    cacheRoot, gameId, receipts, approvals, cancellationToken);
-                if (report.Status != ZipManagedMaintenanceStatus.CleanNeedsManualRemoval ||
-                    !report.HasVerifiedInventory)
-                    return false;
-                CacheOwnershipReceipt receipt;
-                var key = ZipManagedExtractionService.ReceiptKeyForGame(gameId);
-                if (!receipts.TryRead(cacheRoot, key, out receipt) ||
-                    receipt.Version != 2 ||
-                    !string.Equals(PathBoundary.Normalize(receipt.Destination),
-                        original, StringComparison.OrdinalIgnoreCase))
-                    return false;
-                cancellationToken.ThrowIfCancellationRequested();
-
-                // Re-check before committing a write-ahead record. A folder
-                // that changes later will still be MOVED, never deleted.
-                if (!SafeFolder(cacheRoot, original) ||
-                    File.Exists(recovery) || Directory.Exists(recovery) ||
-                    approvals.HasApprovalFootprint(gameId, cacheRoot))
-                    return false;
-                var entry = new ZipRecoveryJournalEntry
+                using (AcquireLifecycleLock(cacheRoot, gameId, cancellationToken))
                 {
-                    Version = 1, GameId = gameId, CacheRoot = root,
-                    OriginalDirectory = original, RecoveryDirectory = recovery,
-                    InventoryFingerprint = receipt.InventoryFingerprint,
-                    TransactionId = Guid.NewGuid().ToString("N")
-                };
-                if (!TryCreateJournal(journal, entry))
-                {
-                    reason = "Recovery journal could not be recorded; no folder was moved.";
-                    return false;
+                    string root, original, recovery, journal;
+                    if (!TryLocations(cacheRoot, gameId, out root, out original,
+                        out recovery, out journal)) return false;
+                    if (File.Exists(journal) || Directory.Exists(journal) ||
+                        File.Exists(recovery) || Directory.Exists(recovery) ||
+                        !Directory.Exists(original) ||
+                        approvals.HasApprovalFootprint(gameId, cacheRoot))
+                        return false;
+
+                    var originalIdentity = TransferPartialPathPolicy.ObserveDirectoryIdentity(original);
+                    var report = new ZipManagedMaintenanceService().Assess(
+                        cacheRoot, gameId, receipts, approvals, cancellationToken);
+                    if (report.Status != ZipManagedMaintenanceStatus.CleanNeedsManualRemoval ||
+                        !report.HasVerifiedInventory)
+                        return false;
+                    CacheOwnershipReceipt receipt;
+                    var key = ZipManagedExtractionService.ReceiptKeyForGame(gameId);
+                    if (!receipts.TryRead(cacheRoot, key, out receipt) ||
+                        receipt.Version != 2 ||
+                        !string.Equals(PathBoundary.Normalize(receipt.Destination),
+                            original, StringComparison.OrdinalIgnoreCase))
+                        return false;
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    // Re-check before committing a write-ahead record. A folder
+                    // that changes later will still be MOVED, never deleted.
+                    if (!SafeFolder(cacheRoot, original) ||
+                        File.Exists(recovery) || Directory.Exists(recovery) ||
+                        approvals.HasApprovalFootprint(gameId, cacheRoot))
+                        return false;
+                    var entry = new ZipRecoveryJournalEntry
+                    {
+                        Version = 1, GameId = gameId, CacheRoot = root,
+                        OriginalDirectory = original, RecoveryDirectory = recovery,
+                        InventoryFingerprint = receipt.InventoryFingerprint,
+                        TransactionId = Guid.NewGuid().ToString("N")
+                    };
+                    if (!TryCreateJournal(journal, entry))
+                    {
+                        reason = "Recovery journal could not be recorded; no folder was moved.";
+                        return false;
+                    }
+
+                    // Crash after journal and before rename is recognizable as
+                    // Prepared. The move is on the same filesystem, is reversible,
+                    // and refuses replacing an occupied destination.
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!SafeFolder(cacheRoot, original) ||
+                        File.Exists(recovery) || Directory.Exists(recovery) ||
+                        approvals.HasApprovalFootprint(gameId, cacheRoot))
+                    {
+                        reason = "Journal saved but folder conditions changed. Review recovery state before retrying.";
+                        return false;
+                    }
+                    if (HasFinalizationFootprint(journal)) return false;
+                    MoveVerifiedDirectory(original, recovery, originalIdentity);
+                    reason = "Managed ZIP moved to recovery quarantine without deleting files. Update Game Library; use Restore Managed ZIP Recovery to undo.";
+                    return true;
                 }
-
-                // Crash after journal and before rename is recognizable as
-                // Prepared. The move is on the same filesystem, is reversible,
-                // and refuses replacing an occupied destination.
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!SafeFolder(cacheRoot, original) ||
-                    File.Exists(recovery) || Directory.Exists(recovery) ||
-                    approvals.HasApprovalFootprint(gameId, cacheRoot))
-                {
-                    reason = "Journal saved but folder conditions changed. Review recovery state before retrying.";
-                    return false;
-                }
-                if (HasFinalizationFootprint(journal)) return false;
-                MoveVerifiedDirectory(original, recovery, originalIdentity);
-                reason = "Managed ZIP moved to recovery quarantine without deleting files. Update Game Library; use Restore Managed ZIP Recovery to undo.";
-                return true;
             }
             catch (OperationCanceledException)
             {
@@ -265,35 +294,38 @@ namespace PersonalCloudLibrarySource
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                string root, original, recovery, journal;
-                if (!TryLocations(cacheRoot, gameId, out root, out original,
-                    out recovery, out journal)) return false;
-                ZipRecoveryJournalEntry entry;
-                if (!TryReadJournal(cacheRoot, gameId, out entry) ||
-                    HasFinalizationFootprint(journal) ||
-                    !Directory.Exists(original) || File.Exists(recovery) ||
-                    Directory.Exists(recovery) ||
-                    approvals.HasApprovalFootprint(gameId, cacheRoot))
-                    return false;
-                CacheOwnershipReceipt receipt;
-                if (!MatchingReceipt(cacheRoot, gameId, receipts, entry,
-                    out receipt) || !SafeFolder(cacheRoot, original))
-                    return false;
-                var originalIdentity = TransferPartialPathPolicy.ObserveDirectoryIdentity(original);
-                bool matches;
-                if (!receipts.TryCompareInventory(cacheRoot,
-                    ZipManagedExtractionService.ReceiptKeyForGame(gameId),
-                    original, out matches, cancellationToken) || !matches)
-                    return false;
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!SafeFolder(cacheRoot, original) ||
-                    File.Exists(recovery) || Directory.Exists(recovery) ||
-                    approvals.HasApprovalFootprint(gameId, cacheRoot))
-                    return false;
-                if (HasFinalizationFootprint(journal)) return false;
-                MoveVerifiedDirectory(original, recovery, originalIdentity);
-                reason = "Prepared recovery move completed; original files preserved in quarantine.";
-                return true;
+                using (AcquireLifecycleLock(cacheRoot, gameId, cancellationToken))
+                {
+                    string root, original, recovery, journal;
+                    if (!TryLocations(cacheRoot, gameId, out root, out original,
+                        out recovery, out journal)) return false;
+                    ZipRecoveryJournalEntry entry;
+                    if (!TryReadJournal(cacheRoot, gameId, out entry) ||
+                        HasFinalizationFootprint(journal) ||
+                        !Directory.Exists(original) || File.Exists(recovery) ||
+                        Directory.Exists(recovery) ||
+                        approvals.HasApprovalFootprint(gameId, cacheRoot))
+                        return false;
+                    CacheOwnershipReceipt receipt;
+                    if (!MatchingReceipt(cacheRoot, gameId, receipts, entry,
+                        out receipt) || !SafeFolder(cacheRoot, original))
+                        return false;
+                    var originalIdentity = TransferPartialPathPolicy.ObserveDirectoryIdentity(original);
+                    bool matches;
+                    if (!receipts.TryCompareInventory(cacheRoot,
+                        ZipManagedExtractionService.ReceiptKeyForGame(gameId),
+                        original, out matches, cancellationToken) || !matches)
+                        return false;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!SafeFolder(cacheRoot, original) ||
+                        File.Exists(recovery) || Directory.Exists(recovery) ||
+                        approvals.HasApprovalFootprint(gameId, cacheRoot))
+                        return false;
+                    if (HasFinalizationFootprint(journal)) return false;
+                    MoveVerifiedDirectory(original, recovery, originalIdentity);
+                    reason = "Prepared recovery move completed; original files preserved in quarantine.";
+                    return true;
+                }
             }
             catch (OperationCanceledException)
             {
@@ -319,45 +351,48 @@ namespace PersonalCloudLibrarySource
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                string root, original, recovery, journal;
-                if (!TryLocations(cacheRoot, gameId, out root, out original,
-                    out recovery, out journal)) return false;
-                ZipRecoveryJournalEntry entry;
-                if (!TryReadJournal(cacheRoot, gameId, out entry) ||
-                    HasFinalizationFootprint(journal) ||
-                    File.Exists(original) || Directory.Exists(original) ||
-                    !Directory.Exists(recovery) ||
-                    approvals.HasApprovalFootprint(gameId, cacheRoot))
-                    return false;
-                CacheOwnershipReceipt receipt;
-                if (!MatchingReceipt(cacheRoot, gameId, receipts, entry,
-                    out receipt) || !SafeFolder(cacheRoot, recovery))
-                    return false;
+                using (AcquireLifecycleLock(cacheRoot, gameId, cancellationToken))
+                {
+                    string root, original, recovery, journal;
+                    if (!TryLocations(cacheRoot, gameId, out root, out original,
+                        out recovery, out journal)) return false;
+                    ZipRecoveryJournalEntry entry;
+                    if (!TryReadJournal(cacheRoot, gameId, out entry) ||
+                        HasFinalizationFootprint(journal) ||
+                        File.Exists(original) || Directory.Exists(original) ||
+                        !Directory.Exists(recovery) ||
+                        approvals.HasApprovalFootprint(gameId, cacheRoot))
+                        return false;
+                    CacheOwnershipReceipt receipt;
+                    if (!MatchingReceipt(cacheRoot, gameId, receipts, entry,
+                        out receipt) || !SafeFolder(cacheRoot, recovery))
+                        return false;
 
-                // Do not adopt added/modified user content as owned. A strict
-                // match is required for automated recovery. Nonmatching
-                // content must be preserved for manual recovery.
-                var recoveryIdentity = TransferPartialPathPolicy.ObserveDirectoryIdentity(recovery);
-                var snapshot = new CacheTreeInventoryScanner().Scan(
-                    cacheRoot, recovery, cancellationToken);
-                if (snapshot.FileCount != receipt.InventoryFileCount ||
-                    snapshot.DirectoryCount != receipt.InventoryDirectoryCount ||
-                    !string.Equals(snapshot.Fingerprint,
-                        receipt.InventoryFingerprint, StringComparison.Ordinal))
-                    return false;
-                cancellationToken.ThrowIfCancellationRequested();
-                if (!SafeFolder(cacheRoot, recovery) ||
-                    File.Exists(original) || Directory.Exists(original) ||
-                    approvals.HasApprovalFootprint(gameId, cacheRoot))
-                    return false;
-                if (HasFinalizationFootprint(journal)) return false;
-                MoveVerifiedDirectory(recovery, original, recoveryIdentity);
-                var finalized = TryWriteRestoredMarker(
-                    journal + ".restored", entry.TransactionId);
-                reason = finalized
-                    ? "Managed ZIP restored and recorded. No files were deleted or launcher approval created."
-                    : "Managed ZIP files were restored safely, but its finalization marker could not be saved. Review recovery state manually.";
-                return true;
+                    // Do not adopt added/modified user content as owned. A strict
+                    // match is required for automated recovery. Nonmatching
+                    // content must be preserved for manual recovery.
+                    var recoveryIdentity = TransferPartialPathPolicy.ObserveDirectoryIdentity(recovery);
+                    var snapshot = new CacheTreeInventoryScanner().Scan(
+                        cacheRoot, recovery, cancellationToken);
+                    if (snapshot.FileCount != receipt.InventoryFileCount ||
+                        snapshot.DirectoryCount != receipt.InventoryDirectoryCount ||
+                        !string.Equals(snapshot.Fingerprint,
+                            receipt.InventoryFingerprint, StringComparison.Ordinal))
+                        return false;
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (!SafeFolder(cacheRoot, recovery) ||
+                        File.Exists(original) || Directory.Exists(original) ||
+                        approvals.HasApprovalFootprint(gameId, cacheRoot))
+                        return false;
+                    if (HasFinalizationFootprint(journal)) return false;
+                    MoveVerifiedDirectory(recovery, original, recoveryIdentity);
+                    var finalized = TryWriteRestoredMarker(
+                        journal + ".restored", entry.TransactionId);
+                    reason = finalized
+                        ? "Managed ZIP restored and recorded. No files were deleted or launcher approval created."
+                        : "Managed ZIP files were restored safely, but its finalization marker could not be saved. Review recovery state manually.";
+                    return true;
+                }
             }
             catch (OperationCanceledException)
             {
