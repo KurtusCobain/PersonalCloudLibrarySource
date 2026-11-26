@@ -83,6 +83,64 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void CopyDirectory_LargerMixedTreeQualifiesMembershipAndContent()
+        {
+            const int count = 1024;
+            var source = Path.Combine(testRoot, "mixed-scale-source");
+            var destination = Path.Combine(testRoot, "mixed-scale-destination");
+            var payload = new byte[4 * 1024 * 1024];
+            long expectedBytes = 0;
+            for (var i = 0; i < count; i++)
+            {
+                var folder = Path.Combine(source, (i / 32).ToString("D2"));
+                Directory.CreateDirectory(folder);
+                payload[0] = (byte)i;
+                payload[1] = (byte)(i >> 8);
+                var length = i % 64 == 0 ? payload.Length : i % 4 == 0 ? 0 : 8192;
+                using (var stream = File.Create(Path.Combine(folder, i.ToString("D4") + ".bin")))
+                    stream.Write(payload, 0, length);
+                expectedBytes += length;
+            }
+            Directory.CreateDirectory(Path.Combine(source, "empty"));
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            var result = new LocalTransferAdapter().CopyDirectory(source, destination,
+                Guid.NewGuid(), CancellationToken.None, null);
+            timer.Stop();
+            Assert.That(result.Succeeded, Is.True, result.Message);
+            Assert.That(result.BytesTransferred, Is.EqualTo(expectedBytes));
+            Assert.That(Directory.Exists(Path.Combine(destination, "empty")), Is.True);
+            var files = Directory.GetFiles(destination, "*.bin", SearchOption.AllDirectories);
+            Assert.That(files.Length, Is.EqualTo(count));
+            var buffer = new byte[65536];
+            foreach (var file in files)
+            {
+                var i = int.Parse(Path.GetFileNameWithoutExtension(file));
+                var length = i % 64 == 0 ? payload.Length : i % 4 == 0 ? 0 : 8192;
+                Assert.That(Path.GetFileName(Path.GetDirectoryName(file)), Is.EqualTo((i / 32).ToString("D2")));
+                using (var input = File.OpenRead(file))
+                {
+                    Assert.That(input.Length, Is.EqualTo(length));
+                    long position = 0;
+                    int read;
+                    while ((read = input.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        // Independently validate all bytes, not just size or
+                        // the adapter's own digest. Avoid per-byte NUnit calls.
+                        for (var n = 0; n < read; n++, position++)
+                        {
+                            var expected = position == 0 ? (byte)i : position == 1 ? (byte)(i >> 8) : (byte)0;
+                            if (buffer[n] != expected)
+                                Assert.Fail("Copied payload mismatch at fixture {0}, offset {1}.", i, position);
+                        }
+                    }
+                    Assert.That(position, Is.EqualTo(length));
+                }
+            }
+            TestContext.WriteLine("PCLS_LOCAL_MIXED_TREE files={0} bytes={1} elapsed_ms={2:F3}",
+                count, expectedBytes, timer.Elapsed.TotalMilliseconds);
+        }
+
+        [Test]
         public void CopyDirectory_MixedFileSizesAndEmptyDirectoryPreserveContent()
         {
             var source = Path.Combine(testRoot, "source");
