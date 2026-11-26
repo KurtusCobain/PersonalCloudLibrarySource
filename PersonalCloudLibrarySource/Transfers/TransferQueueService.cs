@@ -195,6 +195,16 @@ namespace PersonalCloudLibrarySource
                 if (previous.Job.CanRetry &&
                     !ReferenceEquals(manager.GetLatestRetryableJobForGame(previous.Job.GameId), previous.Job))
                     throw new TransferRetryRefusedException("Select the latest retryable attempt.");
+                // External LocalFile consent is per operation, not a durable
+                // permission that can be carried into a direct queue retry.
+                // Hosted retries construct a new install controller and ask
+                // for an affirmative decision before enqueuing the new job.
+                if (!previous.IsRclone && previous.Settings != null &&
+                    string.Equals(previous.Job.ProviderType, PersonalCloudLibrarySourceSettings.LocalFileProviderType,
+                        StringComparison.OrdinalIgnoreCase) &&
+                    SourcePathResolver.RequiresExternalLocalSourceConsent(previous.Settings, previous.Job.Source))
+                    throw new TransferRetryRefusedException(
+                        "External source access requires a fresh install action and explicit consent.");
                 if (previous.Settings != null &&
                     !MatchesRetryConfiguration(previous.Settings, settingsSnapshot))
                     throw new TransferRetryRefusedException(

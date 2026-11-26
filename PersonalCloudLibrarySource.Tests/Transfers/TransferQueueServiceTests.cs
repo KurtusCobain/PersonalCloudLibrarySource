@@ -253,6 +253,40 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void ExternalLocalFileCannotReuseDirectRetryAuthorization()
+        {
+            var root = CreateVerifiedTestRoot();
+            try
+            {
+                var manager = new CloudTransferManager(1);
+                var executor = new BlockingExecutor(manager);
+                var settings = new PersonalCloudLibrarySourceSettingsV3
+                {
+                    Enabled = true, AllowDownloads = true,
+                    SourceProviderType = PersonalCloudLibrarySourceSettings.LocalFileProviderType,
+                    LocalLibraryRoot = Path.Combine(root, "trusted")
+                };
+                var source = Path.Combine(root, "external", "game.zip");
+                var destination = Path.Combine(root, "cache", "game.zip");
+                using (var queue = new TransferQueueService(manager, executor))
+                {
+                    var first = queue.EnqueueLocal(Guid.NewGuid(), "External", source, destination,
+                        settings.SourceProviderType, false, settings, () => false);
+                    Assert.That(queue.GetCompletion(first.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                    Assert.Throws<TransferRetryRefusedException>(() => queue.Retry(first.Id, settings));
+                    Assert.That(manager.Jobs.Count, Is.EqualTo(1));
+                    Assert.That(queue.PrepareHostedRetry(first.Id, settings), Is.EqualTo(first.GameId));
+                    var fresh = queue.EnqueueLocal(first.GameId, "External", source, destination,
+                        settings.SourceProviderType, false, settings, () => false);
+                    Assert.That(fresh.PreviousAttemptId, Is.EqualTo(first.Id));
+                    Assert.That(queue.GetCompletion(fresh.Id).Wait(TimeSpan.FromSeconds(3)), Is.True);
+                    Assert.That(executor.ExecutedJobIds, Is.Empty);
+                }
+            }
+            finally { DeleteVerifiedTestRoot(root); }
+        }
+
+        [Test]
         public void HostedRetryRefusesDifferentFreshRouteWithoutStartingTransfer()
         {
             var manager = new CloudTransferManager(1);
