@@ -125,27 +125,35 @@ namespace PersonalCloudLibrarySource.Tests.Services
             mapper.Map(warm.ValidItems, settings, null);
 
             for (var sample = 1; sample <= 3; sample++)
-            {
-                var before = GC.GetTotalMemory(true);
-                var timer = System.Diagnostics.Stopwatch.StartNew();
-                var parsed = parser.Parse(json);
-                var parseMs = timer.Elapsed.TotalMilliseconds;
-                Assert.That(parsed.Succeeded, Is.True, parsed.Error);
-                Assert.That(parsed.Issues, Is.Empty);
-                timer.Restart();
-                var games = mapper.Map(parsed.ValidItems, settings, null);
-                var mapMs = timer.Elapsed.TotalMilliseconds;
-                Assert.That(games.Count, Is.EqualTo(count));
-                Assert.That(games[0].GameId, Is.EqualTo("g0"));
-                Assert.That(games[count - 1].GameId, Is.EqualTo("g" + (count - 1)));
-                Assert.That(games.TrueForAll(game => !game.IsInstalled), Is.True);
-                var retained = GC.GetTotalMemory(true) - before;
-                GC.KeepAlive(parsed);
-                GC.KeepAlive(games);
-                Console.WriteLine("PCLS_BENCHMARK catalog items={0} sample={1} json_chars={2} parse_ms={3:F3} map_ms={4:F3} retained_managed_bytes_delta={5}",
-                    count, sample, json.Length, parseMs, mapMs, retained);
-            }
+                MeasureCatalogSample(parser, mapper, settings, json, count, sample);
             Assert.That(Directory.Exists(settings.LocalCacheFolder), Is.False);
+        }
+
+        // Keep each sample's parsed and mapped objects within its own stack
+        // frame so the next baseline does not retain the previous workload.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static void MeasureCatalogSample(ManifestParserValidator parser,
+            ManifestItemMapper mapper, PersonalCloudLibrarySourceSettings settings,
+            string json, int count, int sample)
+        {
+            var before = GC.GetTotalMemory(true);
+            var timer = System.Diagnostics.Stopwatch.StartNew();
+            var parsed = parser.Parse(json);
+            var parseMs = timer.Elapsed.TotalMilliseconds;
+            Assert.That(parsed.Succeeded, Is.True, parsed.Error);
+            Assert.That(parsed.Issues, Is.Empty);
+            timer.Restart();
+            var games = mapper.Map(parsed.ValidItems, settings, null);
+            var mapMs = timer.Elapsed.TotalMilliseconds;
+            Assert.That(games.Count, Is.EqualTo(count));
+            Assert.That(games[0].GameId, Is.EqualTo("g0"));
+            Assert.That(games[count - 1].GameId, Is.EqualTo("g" + (count - 1)));
+            Assert.That(games.TrueForAll(game => !game.IsInstalled), Is.True);
+            var retained = GC.GetTotalMemory(true) - before;
+            GC.KeepAlive(parsed);
+            GC.KeepAlive(games);
+            Console.WriteLine("PCLS_BENCHMARK catalog items={0} sample={1} json_chars={2} parse_ms={3:F3} map_ms={4:F3} retained_managed_bytes_delta={5}",
+                count, sample, json.Length, parseMs, mapMs, retained);
         }
 
         [Test]
