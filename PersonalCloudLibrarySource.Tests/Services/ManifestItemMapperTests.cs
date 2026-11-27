@@ -96,6 +96,58 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(new ManifestItemMapper().Map(items, settings, new List<string>()), Has.Count.EqualTo(2));
         }
 
+        [TestCase(1000)]
+        [TestCase(10000)]
+        public void ParseAndMap_LargeLocalFixtureRecordsRepeatableTimingAndManagedMemory(int count)
+        {
+            var settings = new PersonalCloudLibrarySourceSettingsV3
+            {
+                LocalCacheFolder = Path.Combine(testRoot, "cache"),
+                SourceProviderType = PersonalCloudLibrarySourceSettings.RcloneRemoteProviderType,
+                RcloneRemoteName = "fixture",
+                TreatMissingFilesAsUninstalled = true,
+                AllowDownloads = true
+            };
+            var builder = new System.Text.StringBuilder("{\"version\":3,\"items\":[");
+            for (var i = 0; i < count; i++)
+            {
+                if (i != 0) builder.Append(',');
+                builder.Append("{\"id\":\"g").Append(i).Append("\",\"title\":\"Fixture ")
+                    .Append(i).Append("\",\"sourcePath\":\"g").Append(i)
+                    .Append(".exe\",\"cachePath\":\"g").Append(i).Append(".exe\"}");
+            }
+            var json = builder.Append("]}").ToString();
+            var parser = new ManifestParserValidator();
+            var mapper = new ManifestItemMapper();
+            // Warm up the managed parser and mapper separately from the samples.
+            var warm = parser.Parse("{\"version\":3,\"items\":[{\"id\":\"warm\",\"title\":\"Warm\",\"cachePath\":\"warm.exe\"}]}");
+            Assert.That(warm.Succeeded, Is.True);
+            mapper.Map(warm.ValidItems, settings, null);
+
+            for (var sample = 1; sample <= 3; sample++)
+            {
+                var before = GC.GetTotalMemory(true);
+                var timer = System.Diagnostics.Stopwatch.StartNew();
+                var parsed = parser.Parse(json);
+                var parseMs = timer.Elapsed.TotalMilliseconds;
+                Assert.That(parsed.Succeeded, Is.True, parsed.Error);
+                Assert.That(parsed.Issues, Is.Empty);
+                timer.Restart();
+                var games = mapper.Map(parsed.ValidItems, settings, null);
+                var mapMs = timer.Elapsed.TotalMilliseconds;
+                Assert.That(games.Count, Is.EqualTo(count));
+                Assert.That(games[0].GameId, Is.EqualTo("g0"));
+                Assert.That(games[count - 1].GameId, Is.EqualTo("g" + (count - 1)));
+                Assert.That(games.TrueForAll(game => !game.IsInstalled), Is.True);
+                var retained = GC.GetTotalMemory(true) - before;
+                GC.KeepAlive(parsed);
+                GC.KeepAlive(games);
+                Console.WriteLine("PCLS_BENCHMARK catalog items={0} sample={1} json_chars={2} parse_ms={3:F3} map_ms={4:F3} retained_managed_bytes_delta={5}",
+                    count, sample, json.Length, parseMs, mapMs, retained);
+            }
+            Assert.That(Directory.Exists(settings.LocalCacheFolder), Is.False);
+        }
+
         [Test]
         public void Map_RemoteOnlyItem_IsUninstalledWithoutPlayAction()
         {

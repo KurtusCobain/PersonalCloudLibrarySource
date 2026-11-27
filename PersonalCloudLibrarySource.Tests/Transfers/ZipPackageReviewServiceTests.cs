@@ -53,6 +53,28 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void Review_LargeArchiveRecordsTimingWithoutExtraction()
+        {
+            const int count = 1024;
+            var names = Enumerable.Range(0, count)
+                .Select(index => "assets/file-" + index + ".bin").ToArray();
+            WriteZip(names);
+            var service = new ZipPackageReviewService();
+            for (var sample = 1; sample <= 3; sample++)
+            {
+                var timer = System.Diagnostics.Stopwatch.StartNew();
+                var review = service.Inspect(source, "Fixture archive");
+                timer.Stop();
+                Assert.That(review.PassedPreflight, Is.True, review.Reason);
+                Assert.That(review.FileCount, Is.EqualTo(count));
+                Assert.That(review.MemberPaths.Count, Is.EqualTo(count));
+                Console.WriteLine("PCLS_BENCHMARK zip_review entries={0} sample={1} archive_bytes={2} elapsed_ms={3:F3}",
+                    count, sample, new FileInfo(source).Length, timer.Elapsed.TotalMilliseconds);
+            }
+            Assert.That(Directory.GetFileSystemEntries(cache), Is.Empty);
+        }
+
+        [Test]
         public void SingleRomZipIsKeepCandidateButNeverAutoExtracted()
         {
             WriteZip("game.gba");
