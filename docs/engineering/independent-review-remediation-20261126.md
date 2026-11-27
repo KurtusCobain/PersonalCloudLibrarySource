@@ -254,3 +254,7 @@ An existing Playnite Play action could survive an uncertain transfer even when i
 ## Fortieth correction batch: recheck launch admission and record host gates
 
 Recheck in-memory reservations after the bounded journal observation to catch a queued job admitted before its marker is created. Retain the scoped journal policy and no destination probing. Add acceptance scenarios R24-R25 and troubleshooting for deferred launch. Starting qualified checkpoint 9adfe20: 1060 distinct passing tests, all three workflows successful; package SHA-256 C0D65A53682C301E40D06552E786AD3AE9FA87BE00C2FD878C7DAFFBAF2B9112 belongs only to that exact candidate. New revisions require fresh CI and real host acceptance. The refresh/launch checks remain point-in-time fences; neither native Playnite startup nor cross-process ZIP/transfer mutation atomicity has been established. Permanent cleanup and recursive hosted uninstall remain disabled; CH-Rm deferred.
+
+## Assignment 01 — structural ZIP32 closure batch
+
+At 3fbeba7 all three workflows passed (1065 standard + 2 real-rclone tests; zero reported SARIF findings). Extend central/local interval validation to exact local flags, compression, raw filename, CRC and lengths. For bit-3 entries verify the signed or unsigned ZIP32 descriptor, reject ambiguous interpretations, and bound its interval by the next member or central directory. Padding remains supported. Ten fixtures cover six mismatches and signed/unsigned valid/corrupted descriptors. No ZIP64 or new extraction permissions; CI pending.

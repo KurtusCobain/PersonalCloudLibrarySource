@@ -24,7 +24,12 @@ namespace PersonalCloudLibrarySource
         private sealed class LocalMember
         {
             public long Offset;
-            public long CompressedBytes;
+            public uint CompressedBytes;
+            public uint UncompressedBytes;
+            public uint Crc32;
+            public ushort Flags;
+            public ushort Compression;
+            public byte[] NameBytes;
         }
         private const int MaxCentralBytes = 32 * 1024 * 1024;
 
@@ -136,7 +141,12 @@ namespace PersonalCloudLibrarySource
                     members.Add(new LocalMember
                     {
                         Offset = localOffset,
-                        CompressedBytes = compressed
+                        CompressedBytes = compressed,
+                        UncompressedBytes = uncompressed,
+                        Crc32 = crc32,
+                        Flags = flags,
+                        Compression = compression,
+                        NameBytes = nameBytes
                     });
                     entries.Add(new ZipCentralEntry
                     {
@@ -152,38 +162,82 @@ namespace PersonalCloudLibrarySource
             return entries;
         }
 
-        // The ZIP reader seeks to local headers using offsets supplied by
-        // central metadata. A per-entry expansion limit is insufficient if
-        // many entries refer to the same compressed bytes. Inspect actual
-        // local header lengths and require disjoint header/data intervals,
-        // all before the central directory and before any extraction writes.
-        // Data descriptors (if present) are not consumed by the extractor;
-        // gaps between member data ranges remain allowed.
+        // Compare the central and local representations of every member.
+        // Require disjoint header, payload and optional ZIP32 descriptor
+        // intervals. Unclaimed padding is allowed; ZIP64 is not supported.
         private static void ValidateLocalRanges(Stream source, long centralOffset,
             List<LocalMember> members)
         {
             members.Sort((left, right) => left.Offset.CompareTo(right.Offset));
             var header = new byte[30];
             long previousEnd = 0;
-            foreach (var member in members)
+            for (var index = 0; index < members.Count; index++)
             {
-                if (member.Offset < previousEnd ||
-                    member.Offset > centralOffset - header.Length)
+                var member = members[index];
+                var limit = index + 1 < members.Count ? members[index + 1].Offset : centralOffset;
+                if (member.Offset < previousEnd || limit > centralOffset ||
+                    member.Offset > limit - header.Length)
                     throw new InvalidDataException("ZIP local member ranges overlap or exceed the data area.");
 
                 source.Position = member.Offset;
                 ReadExactly(source, header, 0, header.Length);
-                if (UInt32(header, 0) != LocalEntrySignature)
-                    throw new InvalidDataException("ZIP local member header is invalid.");
+                if (UInt32(header, 0) != LocalEntrySignature ||
+                    UInt16(header, 6) != member.Flags ||
+                    UInt16(header, 8) != member.Compression)
+                    throw new InvalidDataException("ZIP local member header disagrees with central metadata.");
                 var nameLength = UInt16(header, 26);
                 var extraLength = UInt16(header, 28);
                 var dataStart = member.Offset + header.Length + nameLength + extraLength;
-                if (nameLength == 0 || dataStart > centralOffset ||
-                    member.CompressedBytes > centralOffset - dataStart)
-                    throw new InvalidDataException("ZIP local member data exceeds the data area.");
+                if (nameLength != member.NameBytes.Length || dataStart > limit ||
+                    member.CompressedBytes > limit - dataStart)
+                    throw new InvalidDataException("ZIP local member data exceeds the data area or has an inconsistent name.");
+                var name = new byte[nameLength];
+                ReadExactly(source, name, 0, name.Length);
+                for (var i = 0; i < name.Length; i++)
+                    if (name[i] != member.NameBytes[i])
+                        throw new InvalidDataException("ZIP local filename disagrees with central metadata.");
+
+                var descriptor = (member.Flags & 8) != 0;
+                if (!MatchesLocalValue(UInt32(header, 14), member.Crc32, descriptor) ||
+                    !MatchesLocalValue(UInt32(header, 18), member.CompressedBytes, descriptor) ||
+                    !MatchesLocalValue(UInt32(header, 22), member.UncompressedBytes, descriptor))
+                    throw new InvalidDataException("ZIP local CRC or length disagrees with central metadata.");
+
                 previousEnd = dataStart + member.CompressedBytes;
+                if (descriptor)
+                    previousEnd = ValidateDescriptor(source, previousEnd, limit, member);
             }
         }
+
+        private static bool MatchesLocalValue(uint local, uint central, bool descriptor)
+            => local == central || (descriptor && local == 0);
+
+        private static long ValidateDescriptor(Stream source, long offset, long limit, LocalMember member)
+        {
+            // The optional signature is not an unambiguous delimiter:
+            // an unsigned descriptor may itself have that CRC value.
+            // Accept precisely one matching ZIP32 interpretation.
+            if (limit - offset < 12)
+                throw new InvalidDataException("ZIP data descriptor is truncated.");
+            source.Position = offset;
+            var bytes = new byte[16];
+            ReadExactly(source, bytes, 0, 12);
+            var unsigned = DescriptorMatches(bytes, 0, member);
+            var signed = false;
+            if (UInt32(bytes, 0) == 0x08074B50 && limit - offset >= 16)
+            {
+                ReadExactly(source, bytes, 12, 4);
+                signed = DescriptorMatches(bytes, 4, member);
+            }
+            if (unsigned == signed)
+                throw new InvalidDataException("ZIP data descriptor is inconsistent or ambiguous.");
+            return offset + (signed ? 16 : 12);
+        }
+
+        private static bool DescriptorMatches(byte[] bytes, int offset, LocalMember member)
+            => UInt32(bytes, offset) == member.Crc32 &&
+               UInt32(bytes, offset + 4) == member.CompressedBytes &&
+               UInt32(bytes, offset + 8) == member.UncompressedBytes;
 
         private static void ReadExactly(Stream input, byte[] buffer, int start, int length)
         {

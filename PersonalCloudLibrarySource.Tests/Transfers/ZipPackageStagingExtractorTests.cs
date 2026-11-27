@@ -547,6 +547,68 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             Assert.That(File.ReadAllBytes(source), Is.EqualTo(bytes));
         }
 
+        [TestCase(6)]
+        [TestCase(8)]
+        [TestCase(14)]
+        [TestCase(18)]
+        [TestCase(22)]
+        [TestCase(30)]
+        public void InconsistentLocalHeaderRefusesBeforeStaging(int offset)
+        {
+            WriteArchive(zip => AddFile(zip, "payload.txt", "fixture contents"));
+            var bytes = File.ReadAllBytes(source);
+            bytes[offset] ^= 1;
+            File.WriteAllBytes(source, bytes);
+            var job = Guid.NewGuid();
+            var result = new ZipPackageStagingExtractor().ExtractApprovedZip(
+                source, cache, destination, job, CancellationToken.None);
+            Assert.That(result.Succeeded, Is.False);
+            Assert.That(Directory.Exists(destination), Is.False);
+            Assert.That(Directory.Exists(TransferPartialPathPolicy.Create(destination, job)), Is.False);
+            Assert.That(File.ReadAllBytes(source), Is.EqualTo(bytes));
+        }
+
+        [TestCase(false, false)]
+        [TestCase(true, false)]
+        [TestCase(false, true)]
+        [TestCase(true, true)]
+        public void Zip32DescriptorMustMatchCentralMetadata(bool signed, bool corrupt)
+        {
+            WriteArchive(zip => AddFile(zip, "payload.txt", "fixture contents"));
+            var original = File.ReadAllBytes(source);
+            var central = (int)BitConverter.ToUInt32(original, original.Length - 6);
+            Assert.That(BitConverter.ToUInt32(original, central), Is.EqualTo(0x02014B50u));
+            var descriptorBytes = signed ? 16 : 12;
+            var bytes = new byte[original.Length + descriptorBytes];
+            Buffer.BlockCopy(original, 0, bytes, 0, central);
+            Buffer.BlockCopy(original, central, bytes, central + descriptorBytes, original.Length - central);
+            var values = central;
+            if (signed)
+            {
+                Buffer.BlockCopy(BitConverter.GetBytes(0x08074B50u), 0, bytes, central, 4);
+                values += 4;
+            }
+            Buffer.BlockCopy(original, central + 16, bytes, values, 12);
+            if (corrupt) bytes[values] ^= 1;
+            // The local header now uses deferred metadata. Keep the actual
+            // central CRC/lengths and relocate its EOCD offset.
+            bytes[6] |= 8;
+            bytes[central + descriptorBytes + 8] |= 8;
+            Array.Clear(bytes, 14, 12);
+            Buffer.BlockCopy(BitConverter.GetBytes((uint)(central + descriptorBytes)), 0,
+                bytes, bytes.Length - 6, 4);
+            File.WriteAllBytes(source, bytes);
+            var job = Guid.NewGuid();
+            var result = new ZipPackageStagingExtractor().ExtractApprovedZip(
+                source, cache, destination, job, CancellationToken.None);
+            Assert.That(result.Succeeded, Is.EqualTo(!corrupt), result.Message);
+            Assert.That(Directory.Exists(TransferPartialPathPolicy.Create(destination, job)), Is.False);
+            if (!corrupt)
+                Assert.That(File.ReadAllText(Path.Combine(destination, "payload.txt")), Is.EqualTo("fixture contents"));
+            else Assert.That(Directory.Exists(destination), Is.False);
+            Assert.That(File.ReadAllBytes(source), Is.EqualTo(bytes));
+        }
+
         [Test]
         public void PreexistingPartialStageIsNeverAdoptedOrDeleted()
         {
