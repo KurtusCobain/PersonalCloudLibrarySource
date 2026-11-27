@@ -510,6 +510,55 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             }
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void ContradictoryExecutorSuccessRetainsDurableRecoveryEvidence(bool terminalCancelled)
+        {
+            var root = CreateVerifiedTestRoot();
+            try
+            {
+                var manager = new CloudTransferManager(1);
+                var directory = Path.Combine(root, "journal");
+                var journal = new TransferRecoveryJournal(directory);
+                using (var queue = new TransferQueueService(manager,
+                    new ContradictorySuccessExecutor(manager, terminalCancelled), journal))
+                {
+                    var job = queue.EnqueueLocal(Guid.NewGuid(), "Invalid result",
+                        "source", Path.Combine(root, "destination"), "LocalFolder", false);
+                    var task = queue.GetCompletion(job.Id);
+                    Assert.That(task.Wait(TimeSpan.FromSeconds(3)), Is.True);
+                    Assert.That(task.Result.Succeeded, Is.False);
+                    Assert.That(task.Result.RequiresManualRecovery, Is.True);
+                    Assert.That(job.RequiresManualRecovery, Is.True);
+                    Assert.That(job.CanRetry, Is.False);
+                    Assert.That(journal.Inspect().Records.Count, Is.EqualTo(1));
+                    Assert.That(new TransferRecoveryJournal(directory).IsClearForCatalogPublication(), Is.False);
+                    Assert.That(queue.Shutdown(TimeSpan.FromSeconds(3)), Is.True);
+                }
+            }
+            finally { DeleteVerifiedTestRoot(root); }
+        }
+
+        private sealed class ContradictorySuccessExecutor : ICloudTransferExecutor
+        {
+            private readonly CloudTransferManager manager;
+            private readonly bool terminalCancelled;
+            public ContradictorySuccessExecutor(CloudTransferManager manager, bool terminalCancelled)
+            {
+                this.manager = manager;
+                this.terminalCancelled = terminalCancelled;
+            }
+            public CloudTransferExecutionResult ExecuteLocal(Guid jobId, bool isDirectory)
+            {
+                if (terminalCancelled) manager.Transition(jobId, CloudTransferState.Cancelled);
+                // Otherwise deliberately leave the job Preparing. Neither
+                // state is consistent with a successful provider publication.
+                return CloudTransferExecutionResult.Success(1, 1);
+            }
+            public CloudTransferExecutionResult ExecuteRclone(Guid jobId, PersonalCloudLibrarySourceSettings settings)
+                => ExecuteLocal(jobId, false);
+        }
+
         [Test]
         public void RepeatedExecutorExceptionsDoNotExhaustWorkerPool()
         {

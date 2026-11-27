@@ -431,22 +431,39 @@ namespace PersonalCloudLibrarySource
                         result = request.IsRclone
                             ? executor.ExecuteRclone(request.Job.Id, request.Settings)
                             : executor.ExecuteLocal(request.Job.Id, request.Job.IsDirectory);
-                    if (reservationWritten && !result.RequiresManualRecovery)
+                }
+
+                if (result == null || (result.Succeeded && result.Cancelled))
+                    throw new InvalidOperationException("Transfer executor returned an invalid result.");
+                if (result.RequiresManualRecovery) manager.MarkRequiresManualRecovery(request.Job.Id);
+                // Do not remove durable evidence before terminal bookkeeping
+                // has succeeded. An impossible state/result combination after
+                // provider execution is itself an uncertain outcome.
+                EnsureTerminal(request.Job, result);
+                if (reservationWritten && !result.RequiresManualRecovery)
+                {
+                    var terminalMatches = result.Succeeded
+                        ? request.Job.State == CloudTransferState.Completed
+                        : result.Cancelled
+                            ? request.Job.State == CloudTransferState.Cancelled
+                            : request.Job.State == CloudTransferState.Failed;
+                    if (!terminalMatches)
+                    {
+                        result.RequiresManualRecovery = true;
+                        manager.MarkRequiresManualRecovery(request.Job.Id);
+                    }
+                    else
                     {
                         try { recoveryJournal.Complete(request.Job); }
                         catch (Exception)
                         {
-                            // The adapter may already have published a successful
-                            // install. Preserve that outcome, but quarantine future
-                            // attempts until the retained reservation is reviewed.
+                            // Publication may have succeeded, but completion
+                            // of the durable reservation could not be proven.
                             result.RequiresManualRecovery = true;
                             manager.MarkRequiresManualRecovery(request.Job.Id);
                         }
                     }
                 }
-
-                if (result.RequiresManualRecovery) manager.MarkRequiresManualRecovery(request.Job.Id);
-                EnsureTerminal(request.Job, result);
             }
             catch (Exception ex)
             {

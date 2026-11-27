@@ -258,3 +258,7 @@ Recheck in-memory reservations after the bounded journal observation to catch a 
 ## Assignment 01 — structural ZIP32 closure batch
 
 At 3fbeba7 all three workflows passed (1065 standard + 2 real-rclone tests; zero reported SARIF findings). Extend central/local interval validation to exact local flags, compression, raw filename, CRC and lengths. For bit-3 entries verify the signed or unsigned ZIP32 descriptor, reject ambiguous interpretations, and bound its interval by the next member or central directory. Padding remains supported. Ten fixtures cover six mismatches and signed/unsigned valid/corrupted descriptors. No ZIP64 or new extraction permissions; CI pending.
+
+## Assignment 01 — terminal outcome and durable reservation ordering
+
+The queue could complete a durable reservation before confirming the executor result could be committed to the manager's terminal state. Move reservation completion after terminal validation; mismatched state/outcome retains evidence and marks manual recovery. Null or contradictory results fail closed. Two deterministic executor-contract fixtures cover a success returned from Preparing and a success after cancellation; the journal must remain present across new-instance inspection and retry must refuse. This addresses a concrete bookkeeping failure, not arbitrary memory corruption or a promise of recovery from every possible process failure. CI pending.
