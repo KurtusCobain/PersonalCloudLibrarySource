@@ -26,6 +26,10 @@ jobs:
           New-Item -ItemType Directory -Path $target -Force | Out-Null
           & curl.exe -fL --retry 3 --retry-delay 3 -o $archive $url
           if ($LASTEXITCODE -ne 0) { throw 'Unable to download official Playnite portable release.' }
+          if ((Get-Item -LiteralPath $archive).Length -ne 133044541 -or
+              (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne '9AF9A0DB330C97879697BEAC9F819C16F9F544E712261A83FA4E62A8F9A2C787') {
+            throw 'Pinned official Playnite archive identity mismatch.'
+          }
           $sevenZip = (Get-Command '7z.exe' -ErrorAction SilentlyContinue).Source
           if (-not $sevenZip) { $sevenZip = 'C:\Program Files\7-Zip\7z.exe' }
           if (-not (Test-Path -LiteralPath $sevenZip)) { throw '7-Zip executable is absent from Windows runner.' }

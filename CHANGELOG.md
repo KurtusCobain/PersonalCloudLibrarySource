@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased internal candidate (0.3.2.1)
+
+Development and review only; not available through the stable installer feed.
+The public extension ID is retained for disposable migration testing, not everyday installation.
+
+- Source-scoped catalog identity and opt-in multi-source planning; explicit external LocalFile consent.
+- Durable transfer reservations, verified staging publication, conservative recovery deferral and scoped launch checks.
+- Bounded ZIP32 review and extraction with local/central metadata and descriptor verification; launcher approval and reversible recovery remain separate.
+- File-only hosted uninstall and guarded metadata staging; automatic recursive and permanent ZIP cleanup remain disabled.
+- Queue lifecycle, path resolution, process containment, performance measurements and qualification evidence.
+- Pinned real-rclone local-only fixtures, full reported CodeQL gate and official Toolbox candidate validation attempt.
+
+See the engineering exit gate for unresolved risks and native acceptance requirements. This section does not claim 1.0 completion or release authorization.
+
 ## 0.3.2 - 2026-11-01 (Public Release)
 
 **Published release — includes the hardening and Windows QA fixes merged from PR #10:**

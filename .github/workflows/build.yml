@@ -188,6 +188,32 @@ jobs:
 
           Write-Host 'Package inspection passed.'
 
+      - name: Qualify candidate with pinned official Playnite Toolbox
+        if: github.event_name == 'push' && github.ref == 'refs/heads/audit/pcls-stabilization-20261124'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = Join-Path $env:RUNNER_TEMP ('pcls-toolbox-' + [Guid]::NewGuid().ToString('N'))
+          New-Item -ItemType Directory -Path $root | Out-Null
+          $archive = Join-Path $root 'Playnite-10.63.7z'
+          $target = Join-Path $root 'portable'
+          $url = 'https://github.com/JosefNemec/Playnite/releases/download/10.63/10.63.7z'
+          Invoke-WebRequest -Uri $url -OutFile $archive -TimeoutSec 180
+          if ((Get-Item -LiteralPath $archive).Length -ne 133044541 -or
+              (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne '9AF9A0DB330C97879697BEAC9F819C16F9F544E712261A83FA4E62A8F9A2C787') {
+            throw 'Pinned official Playnite archive identity mismatch.'
+          }
+          New-Item -ItemType Directory -Path $target | Out-Null
+          $sevenZip = 'C:\Program Files\7-Zip\7z.exe'
+          if (-not (Test-Path -LiteralPath $sevenZip)) { throw '7-Zip is unavailable.' }
+          & $sevenZip x $archive "-o$target" -y | Select-Object -Last 6
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned Playnite archive extraction failed.' }
+          $toolboxes = @(Get-ChildItem -LiteralPath $target -Filter 'Toolbox.exe' -File -Recurse)
+          if ($toolboxes.Count -ne 1) { throw 'Expected exactly one official Toolbox executable.' }
+          $package = ".\dist\PersonalCloudLibrarySource-$env:PCLS_VERSION.pext"
+          & .\tools\validate-release.ps1 -Candidate -ToolboxPath $toolboxes[0].FullName -PackagePath $package
+          if ($LASTEXITCODE -ne 0) { throw 'Official candidate validation failed.' }
+
       - name: Upload test package
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

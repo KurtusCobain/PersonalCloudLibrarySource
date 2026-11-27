@@ -12,7 +12,7 @@ Windows acceptance covered the Desktop and Fullscreen game workflow, an isolated
 
 ### Unreleased engineering candidate
 
-The isolated stabilization branch contains ongoing work toward 1.0, including transfer recovery, source-profile isolation, bounded archive handling and performance improvements. It is **not a new public release** and its automated test artifacts must not be treated as the stable installer. See [candidate qualification](docs/engineering/stabilization-qualification-20261124.md) for evidence, limitations and remaining release gates. The [independent review handoff](docs/engineering/review-handoff-20261125.md) is for reviewers of the isolated development candidate only.
+The isolated stabilization branch contains ongoing work toward 1.0, including transfer recovery, source-profile isolation, bounded archive handling and performance improvements. It is **not a new public release** and its automated test artifacts must not be treated as the stable installer. See the [engineering exit gate](docs/engineering/internal-engineering-exit-gate.md) and [candidate qualification](docs/engineering/stabilization-qualification-20261124.md) for evidence, limitations and remaining release gates. The [independent review handoff](docs/engineering/review-handoff-20261125.md) is for reviewers of the isolated development candidate only.
 
 ## v0.3.2 UI tour
 

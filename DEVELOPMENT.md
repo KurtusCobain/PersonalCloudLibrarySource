@@ -79,9 +79,12 @@ parses all three YAML documents structurally and inspects the package's exact fi
 identity, and manifest-derived version. Candidate mode additionally refuses published or older versions and checks the known v0.3.2 digest. Toolbox addon/installer verification checks the public feed, not registration of the unpublished candidate. For a historical public-release checkout, omit `-Candidate` and use its exact package version.
 
 If Toolbox cannot be found, the release gate prints `PREREQUISITE_MISSING` and exits
-with exit code 2. This is a blocked official qualification, not a pass. Hosted CI can
-run the non-mutating contracts below, but a release still requires a recorded local
-run with the official executable:
+with exit code 2. This is a blocked official qualification, not a pass. The isolated stabilization push workflow now also attempts the official candidate
+validation with Playnite 10.63 portable, pinned to the upstream release asset's
+size and SHA-256 before extraction/execution. This is a hosted packaging gate,
+not installed Playnite acceptance or public release authorization. The historical
+v0.3.2 publishing workflow has been retired on the candidate branch only.
+Run the non-mutating validator contracts locally as well:
 
 ```powershell
 powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass `

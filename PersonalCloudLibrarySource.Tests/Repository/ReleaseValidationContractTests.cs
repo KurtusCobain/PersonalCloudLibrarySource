@@ -22,6 +22,20 @@ namespace PersonalCloudLibrarySource.Tests.Repository
         }
 
         [Test]
+        public void InternalCandidateHasNoOneTimePublicationWorkflowAndUsesPinnedToolbox()
+        {
+            var root = Root();
+            Assert.That(File.Exists(Path.Combine(root, ".github", "workflows", "publish-v032.yml")), Is.False,
+                "The retired public-release workflow must not accompany the internal candidate.");
+            var workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "build.yml"));
+            StringAssert.Contains("9AF9A0DB330C97879697BEAC9F819C16F9F544E712261A83FA4E62A8F9A2C787", workflow);
+            StringAssert.Contains("Pinned official Playnite archive identity mismatch.", workflow);
+            StringAssert.Contains("validate-release.ps1 -Candidate -ToolboxPath", workflow);
+            StringAssert.DoesNotContain("contents: write", workflow);
+            StringAssert.DoesNotContain("gh release create", workflow);
+        }
+
+        [Test]
         public void OfficialToolboxSyntaxAndPrerequisiteAreDocumented()
         {
             var root = Root();
