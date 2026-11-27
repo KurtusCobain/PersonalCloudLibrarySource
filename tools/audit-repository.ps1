@@ -22,6 +22,8 @@ try {
     $candidates = [System.Collections.Generic.List[object]]::new()
     $tokens = [System.Collections.Generic.Dictionary[string,int]]::new([StringComparer]::Ordinal)
     $sources = [System.Collections.Generic.List[object]]::new()
+    $reviewSites = [System.Collections.Generic.List[object]]::new()
+    $sourceLines = 0
     $distributionFiles = @(
         'PersonalCloudLibrarySource/extension.yaml',
         'playnite-addon/addon-database.yaml',
@@ -92,6 +94,22 @@ try {
                 if ($kind -eq '.cs' -and $relative.StartsWith('PersonalCloudLibrarySource/')) {
                     $sources.Add([pscustomobject]@{ path = $relative; text = $source })
                     $checks.Add('private-member-triage')
+                    # Record every textual review site, including comments and
+                    # compatibility APIs. This is a review index, not a proof
+                    # of reachability or permission to remove code.
+                    $lines = $source -split '\r?\n'
+                    $sourceLines += $lines.Count
+                    $sitePattern = 'File\.(Delete|Replace|Move|WriteAll\w*|Copy)|Directory\.(Delete|Move|CreateDirectory)|Process\.Start|DllImport|SafeCacheDeletionExecutor|DeleteInspectedDirectory|RcloneProcessFactory|WindowsJobProcessFactory|SetFileInformationByHandle|CreateProcessW'
+                    for ($lineIndex = 0; $lineIndex -lt $lines.Count; $lineIndex++) {
+                        foreach ($site in [regex]::Matches($lines[$lineIndex], $sitePattern)) {
+                            $reviewSites.Add([pscustomobject]@{
+                                path = $relative
+                                line = $lineIndex + 1
+                                identifier = $site.Value
+                            })
+                        }
+                    }
+                    $checks.Add('security-sensitive-reference-index')
                 }
             }
         }
@@ -117,12 +135,15 @@ try {
         commit = $commit
         tracked_files = $records.Count
         production_csharp_files = $sources.Count
+        production_csharp_physical_lines = $sourceLines
+        security_sensitive_review_sites = @($reviewSites.ToArray())
         failure_count = $failures.Count
         failures = @($failures.ToArray())
         private_member_candidates = @($candidates.ToArray())
         files = @($records.ToArray())
         limitations = @(
             'Lexical candidate identification is not semantic dead-code proof.',
+            'Security-sensitive review sites include textual references; they are not an exhaustive call graph or proof of authorization.',
             'YAML outside distribution subset is inventoried only.',
             'C# compilation, WPF compilation, CodeQL, dependency and runtime gates are separate.',
             'Markdown and binary assets are hashed, not semantically or visually validated.'
@@ -132,6 +153,7 @@ try {
     [IO.Directory]::CreateDirectory($parent) | Out-Null
     $report | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $reportFullPath -Encoding utf8
     Write-Host "PCLS_REPOSITORY_AUDIT files=$($records.Count) production_cs=$($sources.Count) candidates=$($candidates.Count) failures=$($failures.Count)"
+    Write-Host "PCLS_SOURCE_REVIEW_INDEX lines=$sourceLines sites=$($reviewSites.Count)"
     foreach ($candidate in $candidates) {
         Write-Host "PCLS_AUDIT_CANDIDATE $($candidate.path):$($candidate.line) $($candidate.identifier)"
     }

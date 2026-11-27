@@ -15,6 +15,8 @@ namespace PersonalCloudLibrarySource
             var games = new List<GameMetadata>();
             var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var destinations = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var cachePaths = new CachePathResolver();
+            var itemStates = new LibraryItemStateResolver();
             foreach (var item in items ?? new PersonalCloudLibraryItem[0])
             {
                 if (item == null)
@@ -33,7 +35,7 @@ namespace PersonalCloudLibrarySource
                     continue;
                 }
 
-                var paths = new CachePathResolver().Resolve(item, settings);
+                var paths = cachePaths.Resolve(item, settings);
                 if (!paths.Succeeded)
                 {
                     // Failing the entire import preserves existing Playnite games.
@@ -54,7 +56,7 @@ namespace PersonalCloudLibrarySource
                     destinations.Add(destination, item.Id);
                 }
 
-                var state = new LibraryItemStateResolver().Resolve(
+                var state = itemStates.Resolve(
                     item,
                     paths.LaunchPath,
                     paths.InstallDirectory,
