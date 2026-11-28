@@ -100,6 +100,48 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             finally { Directory.Delete(root, true); }
         }
 
+        [Test]
+        public void ReplacementRetainsVerifiedStageIdentityAndOriginalBackupIdentity()
+        {
+            var root = Path.Combine(Path.GetTempPath(), "PCLS-RecordIdentityTests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            try
+            {
+                var primary = Path.Combine(root, "record.json");
+                var stage = Path.Combine(root, "stage.tmp");
+                var backup = Path.Combine(root, "backup.json");
+                File.WriteAllText(primary, "original");
+                var flags = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static;
+                var capture = typeof(TransferPartialPathPolicy).GetMethod("CapturePrivateFileIdentity", flags);
+                var same = typeof(TransferPartialPathPolicy).GetMethod("SameIdentity", flags);
+                var replace = typeof(TransferPartialPathPolicy).GetMethod("ReplacePrivateRecord", flags);
+                Assert.That(capture, Is.Not.Null);
+                Assert.That(same, Is.Not.Null);
+                Assert.That(replace, Is.Not.Null);
+                Func<string, object> identity = path =>
+                {
+                    using (var stream = File.OpenRead(path))
+                        return capture.Invoke(null, new object[] { stream.SafeFileHandle });
+                };
+                var originalIdentity = identity(primary);
+                object stageIdentity = null;
+                Func<bool> validate = () =>
+                {
+                    if (File.Exists(stage)) stageIdentity = identity(stage);
+                    return true;
+                };
+                var payload = System.Text.Encoding.UTF8.GetBytes("replacement");
+                replace.Invoke(null, new object[] { primary, payload, stage, backup, validate, "invalid", 1024 });
+                Assert.That(stageIdentity, Is.Not.Null);
+                Assert.That(same.Invoke(null, new[] { stageIdentity, identity(primary) }), Is.EqualTo(true));
+                Assert.That(same.Invoke(null, new[] { originalIdentity, identity(backup) }), Is.EqualTo(true));
+                Assert.That(File.ReadAllText(primary), Is.EqualTo("replacement"));
+                Assert.That(File.ReadAllText(backup), Is.EqualTo("original"));
+                Assert.That(File.Exists(stage), Is.False);
+            }
+            finally { Directory.Delete(root, true); }
+        }
+
         [TestCase(false)]
         [TestCase(true)]
         public void CancellationRemovesOnlyVerifiedUnpublishedPrivateStage(bool changed)
