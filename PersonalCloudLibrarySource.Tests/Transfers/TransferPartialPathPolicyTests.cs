@@ -100,6 +100,38 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
             finally { Directory.Delete(root, true); }
         }
 
+        [TestCase(0)]
+        [TestCase(1)]
+        [TestCase(2)]
+        public void ReplacementRejectsAliasedPathsBeforeValidationOrStaging(int alias)
+        {
+            var root = Path.Combine(Path.GetTempPath(), "PCLS-RecordAliasTests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            try
+            {
+                var primary = Path.Combine(root, "record.json");
+                var stage = Path.Combine(root, "stage.tmp");
+                var backup = Path.Combine(root, "backup.json");
+                File.WriteAllText(primary, "original");
+                if (alias == 0) stage = Path.Combine(root, ".", "RECORD.JSON");
+                if (alias == 1) backup = primary;
+                if (alias == 2) backup = Path.Combine(root, ".", "STAGE.TMP");
+                var replace = typeof(TransferPartialPathPolicy).GetMethod("ReplacePrivateRecord",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                Assert.That(replace, Is.Not.Null);
+                var validationCalls = 0;
+                Func<bool> validate = () => { validationCalls++; return true; };
+                var failure = Assert.Throws<System.Reflection.TargetInvocationException>(() =>
+                    replace.Invoke(null, new object[] { primary, new byte[] { 42 }, stage,
+                        backup, validate, "invalid", 1024 }));
+                Assert.That(failure.InnerException, Is.TypeOf<IOException>());
+                Assert.That(validationCalls, Is.Zero);
+                Assert.That(File.ReadAllText(primary), Is.EqualTo("original"));
+                Assert.That(Directory.GetFileSystemEntries(root).Length, Is.EqualTo(1));
+            }
+            finally { Directory.Delete(root, true); }
+        }
+
         [Test]
         public void ReplacementRetainsVerifiedStageIdentityAndOriginalBackupIdentity()
         {

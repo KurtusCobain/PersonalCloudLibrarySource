@@ -569,13 +569,24 @@ namespace PersonalCloudLibrarySource
             if (payload == null || payload.Length == 0 || payload.Length > maxRecordBytes)
                 throw new IOException("Private record replacement payload exceeds its size limit or is empty.");
             if (validateOriginal == null) throw new ArgumentNullException(nameof(validateOriginal));
-            var parent = Path.GetDirectoryName(Path.GetFullPath(path));
-            var temporaryParent = Path.GetDirectoryName(Path.GetFullPath(temporary));
-            var backupParent = Path.GetDirectoryName(Path.GetFullPath(backup));
+            // Validate each supplied name before normalization can conceal an
+            // ambiguous Windows alias. Require three distinct absolute siblings.
+            RequireSafePath(path);
+            RequireSafePath(temporary);
+            RequireSafePath(backup);
+            path = Path.GetFullPath(path);
+            temporary = Path.GetFullPath(temporary);
+            backup = Path.GetFullPath(backup);
+            var parent = Path.GetDirectoryName(path);
+            var temporaryParent = Path.GetDirectoryName(temporary);
+            var backupParent = Path.GetDirectoryName(backup);
             if (string.IsNullOrWhiteSpace(parent) ||
                 !string.Equals(parent, temporaryParent, StringComparison.OrdinalIgnoreCase) ||
-                !string.Equals(parent, backupParent, StringComparison.OrdinalIgnoreCase))
-                throw new IOException("Private record replacement requires sibling staging and backup paths.");
+                !string.Equals(parent, backupParent, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(path, temporary, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(path, backup, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(temporary, backup, StringComparison.OrdinalIgnoreCase))
+                throw new IOException("Private record replacement requires distinct sibling paths.");
             using (var ancestors = PinPublicationAncestors(parent))
             {
                 RequireVacant(temporary);

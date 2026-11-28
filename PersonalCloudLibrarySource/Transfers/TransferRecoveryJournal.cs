@@ -319,6 +319,8 @@ namespace PersonalCloudLibrarySource
         public void Begin(CloudTransferJob job)
         {
             if (job == null) throw new ArgumentNullException(nameof(job));
+            if (job.GameId == Guid.Empty)
+                throw new IOException("Transfer recovery requires a nonempty game identity.");
             TransferPartialPathPolicy.RequireSafePath(job.Destination);
             var destination = PathBoundary.Normalize(job.Destination);
             var partial = TransferPartialPathPolicy.Create(destination, job.Id);
@@ -496,7 +498,7 @@ namespace PersonalCloudLibrarySource
             }
             Guid gameId, jobId;
             if (fields.Length != 4 || fields[0] != "PCLS-TRANSFER-1" ||
-                !Guid.TryParseExact(fields[1], "N", out gameId) ||
+                !Guid.TryParseExact(fields[1], "N", out gameId) || gameId == Guid.Empty ||
                 !Guid.TryParseExact(fields[2], "N", out jobId) || jobId == Guid.Empty ||
                 !string.Equals(Path.GetFileNameWithoutExtension(path), jobId.ToString("N"), StringComparison.OrdinalIgnoreCase))
                 throw new IOException("Transfer recovery record is invalid.");

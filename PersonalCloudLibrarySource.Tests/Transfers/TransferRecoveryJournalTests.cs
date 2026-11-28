@@ -458,6 +458,38 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void EmptyGameIdentityCannotCreateRecoveryReservation()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var job = manager.Enqueue(Guid.Empty, "Fixture", "source",
+                Path.Combine(root, "file.zip"), "LocalFolder");
+            Assert.Throws<IOException>(() => journal.Begin(job));
+            Assert.That(Directory.Exists(records), Is.False);
+        }
+
+        [Test]
+        public void EmptyGameIdentityMarkerFailsClosedAndPreservesEvidence()
+        {
+            Directory.CreateDirectory(records);
+            var id = Guid.NewGuid();
+            var marker = Path.Combine(records, id.ToString("N") + ".pending");
+            var text = "PCLS-TRANSFER-1\n" + Guid.Empty.ToString("N") + "\n" +
+                id.ToString("N") + "\n" + Path.Combine(root, "file.zip");
+            File.WriteAllText(marker, text, new System.Text.UTF8Encoding(false));
+            var journal = new TransferRecoveryJournal(records);
+            var snapshot = journal.Inspect();
+            Assert.That(snapshot.IsComplete, Is.False);
+            Assert.That(snapshot.UnreadableCount, Is.EqualTo(1));
+            Assert.That(journal.IsClearForCatalogPublication(), Is.False);
+            var launch = typeof(TransferRecoveryJournal).GetMethod("IsClearForGameLaunch",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            Assert.That(launch, Is.Not.Null);
+            Assert.That(launch.Invoke(journal, new object[] { Guid.NewGuid(), "", "" }), Is.False);
+            Assert.Throws<IOException>(() => journal.Begin(Job("unrelated.zip")));
+            Assert.That(File.ReadAllText(marker), Is.EqualTo(text));
+        }
+
+        [Test]
         public void MalformedRecordBlocksExecutionWithoutDeletingEvidence()
         {
             Directory.CreateDirectory(records);
