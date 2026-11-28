@@ -440,6 +440,10 @@ namespace PersonalCloudLibrarySource
                 // has succeeded. An impossible state/result combination after
                 // provider execution is itself an uncertain outcome.
                 EnsureTerminal(request.Job, result);
+                // The manager may already have quarantined this attempt,
+                // independently of the executor's returned result. Never
+                // let an ordinary result clear its durable recovery evidence.
+                result.RequiresManualRecovery |= request.Job.RequiresManualRecovery;
                 if (reservationWritten && !result.RequiresManualRecovery)
                 {
                     var terminalMatches = result.Succeeded

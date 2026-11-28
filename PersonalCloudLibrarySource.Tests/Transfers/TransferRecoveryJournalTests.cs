@@ -33,6 +33,24 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void QuarantinedJobCannotReleaseItsOwnedReservation()
+        {
+            var journal = new TransferRecoveryJournal(records);
+            var job = Job("file.zip");
+            journal.Begin(job);
+            var marker = Path.Combine(records, job.Id.ToString("N") + ".pending");
+            var original = File.ReadAllBytes(marker);
+            var method = typeof(CloudTransferManager).GetMethod("MarkRequiresManualRecovery",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            Assert.That(method, Is.Not.Null);
+            method.Invoke(manager, new object[] { job.Id });
+            Assert.That(job.RequiresManualRecovery, Is.True);
+            Assert.Throws<IOException>(() => journal.Complete(job));
+            Assert.That(File.ReadAllBytes(marker), Is.EqualTo(original));
+            Assert.That(new TransferRecoveryJournal(records).IsClearForCatalogPublication(), Is.False);
+        }
+
+        [Test]
         public void Inspect_MissingJournalDoesNotCreateAnyFiles()
         {
             var snapshot = new TransferRecoveryJournal(records).Inspect();

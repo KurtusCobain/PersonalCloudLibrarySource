@@ -694,6 +694,50 @@ namespace PersonalCloudLibrarySource.Tests.Transfers
         }
 
         [Test]
+        public void ManagerQuarantineOverridesOrdinaryExecutorFailureAndRetainsJournal()
+        {
+            var root = CreateVerifiedTestRoot();
+            try
+            {
+                var manager = new CloudTransferManager(1);
+                var directory = Path.Combine(root, "journal");
+                var journal = new TransferRecoveryJournal(directory);
+                using (var queue = new TransferQueueService(manager, new QuarantiningExecutor(manager), journal))
+                {
+                    var job = queue.EnqueueLocal(Guid.NewGuid(), "Quarantined",
+                        "source", Path.Combine(root, "destination"), "LocalFolder", false);
+                    var task = queue.GetCompletion(job.Id);
+                    Assert.That(task.Wait(TimeSpan.FromSeconds(3)), Is.True);
+                    Assert.That(task.Result.Succeeded, Is.False);
+                    Assert.That(task.Result.RequiresManualRecovery, Is.True);
+                    Assert.That(job.RequiresManualRecovery, Is.True);
+                    Assert.That(job.CanRetry, Is.False);
+                    var restarted = new TransferRecoveryJournal(directory);
+                    Assert.That(restarted.Inspect().Records.Count, Is.EqualTo(1));
+                    Assert.That(restarted.IsClearForCatalogPublication(), Is.False);
+                    Assert.That(queue.Shutdown(TimeSpan.FromSeconds(3)), Is.True);
+                }
+            }
+            finally { DeleteVerifiedTestRoot(root); }
+        }
+
+        private sealed class QuarantiningExecutor : ICloudTransferExecutor
+        {
+            private readonly CloudTransferManager manager;
+            public QuarantiningExecutor(CloudTransferManager manager) { this.manager = manager; }
+            public CloudTransferExecutionResult ExecuteLocal(Guid jobId, bool isDirectory)
+            {
+                var method = typeof(CloudTransferManager).GetMethod("MarkRequiresManualRecovery",
+                    System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                if (method == null) throw new InvalidOperationException("Missing manager quarantine contract.");
+                method.Invoke(manager, new object[] { jobId });
+                return CloudTransferExecutionResult.Failure("ordinary failure");
+            }
+            public CloudTransferExecutionResult ExecuteRclone(Guid jobId, PersonalCloudLibrarySourceSettings settings)
+                => ExecuteLocal(jobId, false);
+        }
+
+        [Test]
         public void Shutdown_IsBoundedIdempotentCancelsActiveAndRejectsNewWork()
         {
             var manager = new CloudTransferManager(1);

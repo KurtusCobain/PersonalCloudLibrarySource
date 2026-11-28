@@ -380,6 +380,8 @@ namespace PersonalCloudLibrarySource
             lock (syncRoot)
             using (Acquire())
             {
+                if (job.RequiresManualRecovery)
+                    throw new IOException("A quarantined transfer cannot release its recovery reservation.");
                 var marker = Marker(job.Id);
                 OwnedReservation expected;
                 if (!ownedMarkers.TryGetValue(job.Id, out expected))
@@ -397,6 +399,8 @@ namespace PersonalCloudLibrarySource
                     // its absence cannot be established. Delete only the handle
                     // that passed both identity and bounded payload checks.
                     TransferPartialPathPolicy.RequireVacant(TransferPartialPathPolicy.Create(destination, job.Id));
+                    if (job.RequiresManualRecovery)
+                        throw new IOException("Transfer requires manual recovery; preserve the reservation.");
                     TransferPartialPathPolicy.DeleteVerifiedFileHandle(stream.SafeFileHandle);
                 }
                 TransferPartialPathPolicy.RequireVacant(marker);
