@@ -67,18 +67,19 @@ namespace PersonalCloudLibrarySource
 
                 // Hold the original through staging, verification and backup.
                 // The final File.Replace call still requires closed leaf handles.
+                TransferPartialPathPolicy.FileIdentity stagedReplacement;
                 using (var original = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
                 {
                     TransferPartialPathPolicy.CapturePrivateFileIdentity(original.SafeFileHandle);
-                    var staged = TransferPartialPathPolicy.WriteRecordStage(temporary, bytes);
+                    stagedReplacement = TransferPartialPathPolicy.WriteRecordStage(temporary, bytes);
                     using (var input = TransferPartialPathPolicy.OpenPrivateFileForReview(temporary, false))
                     {
-                        TransferPartialPathPolicy.VerifyRecordStage(input, staged, bytes, System.Threading.CancellationToken.None);
+                        TransferPartialPathPolicy.VerifyRecordStage(input, stagedReplacement, bytes, System.Threading.CancellationToken.None);
                         if (createBackup && !string.IsNullOrWhiteSpace(backupDirectory))
                             PublishBackup(original, path, backupDirectory);
                         ancestors.Verify();
                         input.Position = 0;
-                        TransferPartialPathPolicy.VerifyRecordStage(input, staged, bytes, System.Threading.CancellationToken.None);
+                        TransferPartialPathPolicy.VerifyRecordStage(input, stagedReplacement, bytes, System.Threading.CancellationToken.None);
                     }
                 }
                 File.Replace(temporary, path, null);
@@ -87,8 +88,8 @@ namespace PersonalCloudLibrarySource
                 TransferPartialPathPolicy.RequireVacant(temporary);
                 using (var result = TransferPartialPathPolicy.OpenPrivateFileForReview(path, false))
                 {
-                    var identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(result.SafeFileHandle);
-                    TransferPartialPathPolicy.VerifyRecordStage(result, identity, bytes, System.Threading.CancellationToken.None);
+                    // Require the same verified stage, not just equal bytes.
+                    TransferPartialPathPolicy.VerifyRecordStage(result, stagedReplacement, bytes, System.Threading.CancellationToken.None);
                 }
             }
         }
