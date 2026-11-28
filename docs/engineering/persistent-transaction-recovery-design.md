@@ -34,3 +34,28 @@ Test boundaries: two instances, live workers, descendant/job failure, process de
 4. Qualify same-commit Windows, archive and CodeQL plus disposable native host and provider tests. Obtain independent adjudication of residual constraints before marking G1/G2 or G3/G4/G7 closed.
 
 No implementation or approval is implied by this design record.
+
+
+## Prototype implementation checkpoint
+
+At `90f4caaf66a9ea260899366a97745c95ea52f8e8` the isolated internal ImmutableRecordGenerationStore was added to the .NET Framework project and its tests registered. At `0ad3c888577da36227bb2e76fc80ecfb2221dd78` additional interference and capacity regressions were added. Total 13 new test cases (not yet a passing count at inspection). [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/46123916841), [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/46123916864), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/46123916855) in progress. Prior exact checkpoint `eee9a224` passed all three workflows, with 1089 standard + 2 real-rclone tests passing, zero failures/warnings and official Toolbox candidate validation.
+
+Implemented: one existing dedicated directory per logical GUID; exclusive guarded cooperative lock (readers also acquire it and may create the persistent lock file); 64 canonical sequential filenames; strict UTF-8, canonical base64 and SHA-256 payload/predecessor chain; explicit expected-head compare-and-append; private pending file, flushed stage, verified no-replace native publication and post-publication identity/content check; full chain revalidation; defensive payload copies. A pending or unrecognized object, malformed/gapped chain, wrong logical key, or exhausted capacity refuses operations without deleting evidence. Regression fixtures exercise interruption after staging and after publication, same-byte stage replacement, occupied target, invalid input, stale head, competing reader/writer, and corrupt/foreign evidence. These are deterministic exception fixtures, not physical power-loss tests.
+
+Limitations: no trusted external head anchor, so deletion of an entire valid suffix or malicious rewriting of a whole valid chain cannot be detected solely from this directory. The cooperative lock does not serialize nonparticipants; scans are not a filesystem snapshot. A complete published record can be visible after an interrupted caller; callers must reload and reconcile before retry. A pending stage requires future recovery protocol, not automatic removal. Current limits are 1 MiB payload, 2 MiB envelope, 64 generations; no rotation or garbage collection. This prototype is not used by live settings, imports, controllers, receipts, or transfer recovery. No migration, downgrade protection, restart-release authority or production activation has been implemented.
+
+### Initial live-storage contract inventory
+
+| Component | Current contract and migration disposition |
+|---|---|
+| SourceProfilesFileStore | One source-profiles.v1.json; 128 Ki-character codec, up to 512 KiB encoded; canonical baseline comparison and unique backup/restore. Candidate for first isolated migration design, preserving backup preview and legacy ID rules. |
+| SourceCatalogSnapshotStore | Per-profile identity records, 2 MiB max and 10,000 games. Prototype payload limit insufficient. Preserve profile binding and cross-record consistency. |
+| SourceCatalogDisplaySnapshotStore | Per-profile display-only records, 4 MiB max. Prototype payload limit insufficient. Preserve exact identity matching, never confer launch authority. |
+| CacheOwnershipReceiptStore | Hash-derived key, no-replace WritePrivateRecord; receipt binds cache root, item and destination, and inventory. Not an ordinary mutable replacement caller. Do not introduce automatic new-generation ownership grants. |
+| ZipMutableDataBaselineStore | No-replace private record, 2 MiB max, up to 12,000 original entries and linked receipt checks. Do not change deletion or save-data semantics. |
+| SafeFileWriteService / ManifestGenerationService | Fixed user-selected manifest and optional report filenames; backup-enabled replacement. Cannot silently substitute private versioned filenames. |
+| SafeFileWriteService / PersonalCloudLibrarySource | last-import-diagnostics.txt and verification report exports; latter uses backups. Explicit fixed-path compatibility policy required. |
+| TransferRecoveryJournal | Separate pending record and release protocol; no migration to ordinary generation head without dedicated execution and disposition rules. |
+| SetupStatePersistenceService / DashboardStateStore | Setup changes settings; dashboard is observable in-memory state. Neither is a direct replacement caller in the inspected code. |
+
+This is a focused contract inventory of the inspected components, not a proof that every persistence call site has been inventoried. Next: qualify the primitive, implement explicit legacy migration/activation and downgrade refusal for the first eligible store, and resolve separate restart-recovery and fixed-path export protocols. Do not replace live stores before those gates.
