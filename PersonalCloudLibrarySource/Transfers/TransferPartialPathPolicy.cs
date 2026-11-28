@@ -611,12 +611,14 @@ namespace PersonalCloudLibrarySource
                 RequireVacant(temporary);
                 using (var check = OpenPrivateFileForReview(path, false))
                 {
-                    var identity = CapturePrivateFileIdentity(check.SafeFileHandle);
-                    VerifyRecordStage(check, identity, payload, System.Threading.CancellationToken.None);
+                    // ReplaceFile retains the replacement file's ID. Matching
+                    // bytes alone cannot establish that the staged object survived.
+                    VerifyRecordStage(check, staged, payload, System.Threading.CancellationToken.None);
                 }
                 using (var check = OpenPrivateFileForReview(backup, false))
                 {
-                    CapturePrivateFileIdentity(check.SafeFileHandle);
+                    if (!MatchesPrivateFileIdentity(check.SafeFileHandle, original))
+                        throw new IOException("Private record backup identity changed during replacement.");
                     RequireRecordDigest(check, originalDigest, maxRecordBytes);
                 }
             }
