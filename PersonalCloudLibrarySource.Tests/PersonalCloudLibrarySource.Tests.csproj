@@ -75,6 +75,7 @@
     <Compile Include="Services\SourceProfilesConfigurationCodecTests.cs" />
     <Compile Include="Services\SourceProfilesFileStoreTests.cs" />
     <Compile Include="Services\ImmutableRecordGenerationStoreTests.cs" />
+    <Compile Include="Services\SourceProfilesGenerationPreparationTests.cs" />
     <Compile Include="Services\MultiSourceControllerFactoryTests.cs" />
     <Compile Include="Services\SourceProfilesManagementServiceTests.cs" />
     <Compile Include="Services\SourceProfileHealthProbeTests.cs" />

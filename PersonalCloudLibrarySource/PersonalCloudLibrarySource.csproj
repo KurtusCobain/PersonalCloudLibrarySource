@@ -118,6 +118,7 @@
     <Compile Include="Services\SourceProfilesConfigurationCodec.cs" />
     <Compile Include="Services\SourceProfilesFileStore.cs" />
     <Compile Include="Services\ImmutableRecordGenerationStore.cs" />
+    <Compile Include="Services\SourceProfilesGenerationPreparation.cs" />
     <Compile Include="Services\MultiSourceControllerFactory.cs" />
     <Compile Include="Services\SourceProfilesManagementService.cs" />
     <Compile Include="Services\SourceProfileHealthProbe.cs" />
