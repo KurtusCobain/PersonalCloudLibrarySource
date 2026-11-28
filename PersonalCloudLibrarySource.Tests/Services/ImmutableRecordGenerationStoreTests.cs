@@ -124,6 +124,49 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(Property<byte[]>(head, "Payload"), Is.EqualTo(Bytes("original")));
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void StagedObjectSubstitutionOrOccupiedTargetPreservesEvidence(bool occupiedTarget)
+        {
+            var first = Call(Store(), "Append", "", Bytes("first"));
+            var original = File.ReadAllBytes(Record(1));
+            var digest = Property<string>(first, "Digest");
+            var pending = Path.Combine(root, "generation.pending");
+            var displaced = Path.Combine(root, "displaced-stage");
+            var store = Store(point =>
+            {
+                if (point != "staged") return;
+                if (occupiedTarget) File.WriteAllText(Record(2), "unrelated");
+                else
+                {
+                    File.Move(pending, displaced);
+                    File.WriteAllBytes(pending, File.ReadAllBytes(displaced));
+                }
+            });
+            Assert.Throws<IOException>(() => Call(store, "Append", digest, Bytes("second")));
+            Assert.That(File.ReadAllBytes(Record(1)), Is.EqualTo(original));
+            Assert.That(File.Exists(pending), Is.True);
+            if (occupiedTarget) Assert.That(File.ReadAllText(Record(2)), Is.EqualTo("unrelated"));
+            else
+            {
+                Assert.That(File.Exists(Record(2)), Is.False);
+                Assert.That(File.ReadAllBytes(pending), Is.EqualTo(File.ReadAllBytes(displaced)));
+            }
+            Assert.Throws<IOException>(() => Call(Store(), "ReadHead"));
+        }
+
+        [Test]
+        public void NamespaceLimitRefusesWithoutDeletingAnyEntry()
+        {
+            for (var i = 1; i <= 65; i++) File.WriteAllText(Record(i), "preserve");
+            var store = Store();
+            Assert.Throws<IOException>(() => Call(store, "ReadHead"));
+            Assert.Throws<IOException>(() => Call(store, "Append", "", Bytes("new")));
+            Assert.That(Directory.GetFiles(root, "*.record").Length, Is.EqualTo(65));
+            Assert.That(File.ReadAllText(Record(65)), Is.EqualTo("preserve"));
+            Assert.That(File.Exists(Path.Combine(root, "generation.pending")), Is.False);
+        }
+
         [Test]
         public void ExistingWriterLockRefusesCompetingReaderAndWriter()
         {
