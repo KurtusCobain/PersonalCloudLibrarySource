@@ -100,6 +100,22 @@ At exact `be17840c`, all five historical divergent heads were re-compared; their
 
 These are targeted branch-change dispositions, not proof of whole-codebase semantic completeness. No merge, PR closure, branch deletion, CH-Rm inspection, release or owner acceptance has occurred. No native Windows test host available in this session; hosted CI is the available build/test authority.
 
+## Continuation evidence — 2026-11-28
+
+Exact checkpoint `8d749bc794f743e4740e9e445141514b9809adfb` passed all three push workflows: [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/46105180061), [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/46105180024), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/46105180052). The Windows raw log confirms 1084 standard + 2 opt-in real-rclone tests passed, zero failures and compiler warnings, and official Toolbox candidate qualification passed. The prior recovery-quarantine commit `1b6e688` independently passed all three workflows. Synthetic retained memory remains approximately 399256 bytes for 1k and 4111576 bytes for 10k entries; timing varies between hosted runners and is not a regression threshold.
+
+### Additional hardening
+
+At `9f4f64d6a1d00d5882ff0e44e6b52d95f471d591`, transfer recovery rejects an empty game GUID before reservation creation and treats a persisted empty game GUID as malformed, preserving evidence and refusing unrelated launch/reservation. Private record replacement validates all raw paths, normalizes them once, and rejects any pair of case-insensitive canonical sibling aliases before validation or staging. Five new regression cases; [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/46116705021), [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/46116705014), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/46116705069) in progress at inspection. These are defensive improvements, not closure of the residual metadata transaction or restart release architecture.
+
+### Historical branch disposition follow-up
+
+Compared the 40 changed paths in multisource branch `56664f9` against `8d749bc`. 19 exact blob matches; all 21 evolved paths present. All added nonblank lines of the old project registrations, localization, settings migration, settings data, settings view model, workflow test and three persistence test files are present. Reviewed the changed controller factory (current source/plan guards, scoped receipt identity, ZIP protection and explicit external-source confirmation), profile management service (baseline-locked save and explicit backup preview/restore), and profile/display/catalog persistence deltas (bounded handle reads, exclusive writer locks, verified stage publication replacing older pathname cleanup). The identity match now copies display entries once rather than twice. The remaining old plugin route and controller changes are integrated in evolved code; the older documentation link references appear in newer dated verification sections. No additional wholesale import indicated by this focused review; not a complete semantic equivalence proof. Preserve all branch heads and drafts.
+
+The sole unique backup commit at `db8f14d` adds two historical research reports (playnite-library-addon-research.md and romcade-audit-report.md) and changes two outdated public feed manifests; it contains no additional production source. Preserve it in its historical branch, do not import obsolete feed or unreviewed research. Internal branch-reconciliation disposition is now recorded for all five divergent heads; destructive retirement remains separate.
+
+See [persistent transaction and restart-recovery protocol design](persistent-transaction-recovery-design.md) for the remaining engineering constraints. It is a design, not implemented closure or release approval.
+
 ## Exit authority
 
 Freeze an exact candidate only after all four assignments have documented dispositions and the complete CI matrix passes on the same commit. Remaining risks must be corrected or explicitly adjudicated, not silently accepted by the implementation agent. Preserve source and artifacts, then obtain separate approval for CH-Rm, final independent reviews, disposable host acceptance and release.
