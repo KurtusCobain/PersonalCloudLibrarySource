@@ -138,6 +138,42 @@ namespace PersonalCloudLibrarySource.Tests.Services
             Assert.That(Directory.GetFiles(generations, "*.record").Length, Is.EqualTo(1));
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void OccupiedGenerationNamespaceIsNeverAdopted(bool directory)
+        {
+            WriteLegacy();
+            var service = Service();
+            var review = Call(service, "Preview");
+            var original = File.ReadAllBytes(legacy);
+            if (directory)
+            {
+                Directory.CreateDirectory(generations);
+                File.WriteAllText(Path.Combine(generations, "unrelated.txt"), "preserve");
+            }
+            else File.WriteAllText(generations, "preserve");
+            Assert.Throws<IOException>(() => Call(service, "Prepare", review));
+            Assert.That(File.ReadAllBytes(legacy), Is.EqualTo(original));
+            Assert.That(File.ReadAllText(directory ? Path.Combine(generations, "unrelated.txt") : generations),
+                Is.EqualTo("preserve"));
+            if (directory) Assert.That(Directory.GetFileSystemEntries(generations).Length, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void ReviewFromAnotherDirectoryCannotAuthorizePreparation()
+        {
+            WriteLegacy();
+            var review = Call(Service(), "Preview");
+            var other = Path.Combine(root, "other");
+            Directory.CreateDirectory(other);
+            var otherLegacy = Path.Combine(other, SourceProfilesFileStore.FileName);
+            File.Copy(legacy, otherLegacy);
+            var otherService = Activator.CreateInstance(serviceType, new object[] { other, null });
+            Assert.Throws<InvalidOperationException>(() => Call(otherService, "Prepare", review));
+            Assert.That(Directory.GetFileSystemEntries(other).Length, Is.EqualTo(1));
+            Assert.That(File.ReadAllBytes(otherLegacy), Is.EqualTo(File.ReadAllBytes(legacy)));
+        }
+
         [Test]
         public void CompetingLegacyWriterRefusesPreparation()
         {

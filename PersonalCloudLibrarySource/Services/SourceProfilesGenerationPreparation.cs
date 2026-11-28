@@ -109,13 +109,17 @@ namespace PersonalCloudLibrarySource
             {
                 var identity = TransferPartialPathPolicy.CapturePrivateFileIdentity(file.SafeFileHandle);
                 var bytes = ReadValidated(file);
-                var store = new ImmutableRecordGenerationStore(generations, LogicalKey, null);
-                var head = store.ReadHead();
-                if (head == null || head.Sequence != 1 || !Equal(head.Payload, Encode(identity, bytes)))
-                    throw new IOException("Prepared generation cannot be reconciled with the legacy profile file.");
-                TransferPartialPathPolicy.RequireInspectedFilePath(legacy, file.SafeFileHandle);
-                ancestors.Verify();
-                return head.Digest;
+                using (var generationAncestors = TransferPartialPathPolicy.PinPublicationAncestors(generations))
+                {
+                    var store = new ImmutableRecordGenerationStore(generations, LogicalKey, null);
+                    var head = store.ReadHead();
+                    if (head == null || head.Sequence != 1 || !Equal(head.Payload, Encode(identity, bytes)))
+                        throw new IOException("Prepared generation cannot be reconciled with the legacy profile file.");
+                    TransferPartialPathPolicy.RequireInspectedFilePath(legacy, file.SafeFileHandle);
+                    generationAncestors.Verify();
+                    ancestors.Verify();
+                    return head.Digest;
+                }
             }
         }
 
