@@ -73,6 +73,33 @@ Published releases at inspection: v0.3.2 stable, v0.2.0 stable, v0.1.1 prereleas
 - CodeQL local SARIF gate covers all reported results; permission/runtime warnings must be recorded. Zero reported findings does not mean no vulnerabilities.
 - [Disposable host acceptance worksheet](../tests/stabilization-host-acceptance-20261125.md) remains NOT RUN.
 
+## Continuation evidence — 2026-11-27
+
+Exact prior checkpoint `4a91826bb40d2ad30bba917513306f4dc2e60908` is preserved and all three push workflows completed successfully: [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45939431077), [archive compatibility](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45939431097), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/45939431113). Windows log: 1081 standard + 2 real-rclone passing, zero compiler warnings/failures. Official Playnite Toolbox 10.63 candidate qualification passed (unchanged public feed only). Corrected retained-memory samples were 399276/399256/399256 bytes for 1k entries and 4111552/4111576/4111576 bytes for 10k entries; median parse/map 3.741/53.940 ms and 46.876/550.488 ms respectively. These are synthetic managed-memory deltas, not peak memory or host throughput.
+
+### Assignment 01 additional corrections
+
+- `0cbaa394`: require post-replacement target identity to match the verified stage and backup identity to match the inspected original, in addition to content verification.
+- `0656a483`: retain and enforce the verified stage identity in SafeFileWriteService.
+- `be17840c8264c8fd0e125d1ae786180fecbeabe7`: Windows regression qualifies replacement and backup identity. [Microsoft ReplaceFile contract](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilea). [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/46104965786) completed successfully: 1082 standard + 2 real-rclone, zero failures/compiler warnings, candidate Toolbox PASS; [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/46104965782) PASS; [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/46104965795) pending at inspection.
+- `1b6e68842a455d6cb2b07feb482f95bdbf593c20`: independently set manager quarantine now overrides a conflicting ordinary executor result before reservation completion; the journal independently refuses release for quarantined jobs. Two targeted tests cover the queue and direct journal boundary. [Windows](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/46105142018), [archive](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/46105141998), [CodeQL](https://github.com/KurtusCobain/PersonalCloudLibrarySource/actions/runs/46105141996) started; outcomes not yet qualified at inspection.
+
+Identity verification detects substitution after replacement; it does NOT close the closed-handle pathname race. Retain G1/G2 as open. The quarantine correction prevents an ordinary result from releasing known uncertain evidence; it does NOT authorize release of an orphaned reservation by a new journal instance. Retain G3/G4/G7 as open. No storage-format change or restart-release path implemented. Require migration/rollback and fault-injection qualification before adopting a new persistent protocol. In particular a missing stage, process ID alone, or successful read-only review is insufficient evidence of safe release. Legacy markers must continue to fail closed.
+
+### Assignment 04 historical branch reconciliation
+
+At exact `be17840c`, all five historical divergent heads were re-compared; their unique counts remain 1/13/108/9/14 respectively, with every head retained. The candidate was 949 commits ahead of the backup merge base, 442 ahead of the common public baseline for the other four branches. Reviewed the following branch changes against candidate source rather than merging old code:
+
+| Historical branch | Disposition of its changes |
+|---|---|
+| docs/v032-public-polish-20261101 (#11) | 9/11 exact blob matches; the two evolved paths (README and external-link-checks) retain the UI tour, Fullscreen caveat, roadmap link and issue references. No additional import indicated. |
+| fix/v033-implicit-file-size-20261101 (#15) | InstallDirectory/working-directory separation, exact owned file bytes, mapper/controller integration and corresponding shared-cache/explicit-directory regressions present. The current ResolveGame additionally preserves the real play action working directory. ADR and host worksheet preserved; native Playnite size/migration and UX trade-off remain open. No old code import indicated. |
+| safety/v1-readonly-cleanup-review-20261101 (#16) | 3/9 exact blob matches; both project registrations and the added regression lines retained. Evolved diff service requires HasDetailedEntries and matching counts; scanner retains detailed read-only observations while adding bounded handle-based hashing and added-save rules. Automatic deletion remains forbidden. No additional import indicated by this focused review. |
+| feature/v1-multisource-identity-foundation-20261101 (#22) | 19/40 exact blobs, all 21 evolved paths present; semantic review of evolved integration, stores, settings, tests and localization remains open. |
+| backup/pre-kubuntu-20260818 | Preserve as historical backup; no blind import of research or historical public feed files. |
+
+These are targeted branch-change dispositions, not proof of whole-codebase semantic completeness. No merge, PR closure, branch deletion, CH-Rm inspection, release or owner acceptance has occurred. No native Windows test host available in this session; hosted CI is the available build/test authority.
+
 ## Exit authority
 
 Freeze an exact candidate only after all four assignments have documented dispositions and the complete CI matrix passes on the same commit. Remaining risks must be corrected or explicitly adjudicated, not silently accepted by the implementation agent. Preserve source and artifacts, then obtain separate approval for CH-Rm, final independent reviews, disposable host acceptance and release.
